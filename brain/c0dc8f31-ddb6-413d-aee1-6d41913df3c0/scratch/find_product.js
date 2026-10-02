@@ -4,7 +4,7 @@ const path = require('path');
 
 dotenv.config({ path: path.join(__dirname, '../backend/.env') });
 
-const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/geetaecommerce';
+const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/Unnatiecommerce';
 
 async function findProduct() {
     try {

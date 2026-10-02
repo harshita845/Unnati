@@ -43,7 +43,7 @@
 |--------|-------|
 | **Platform** | Vercel (vercel.com) |
 | **What It Hosts** | The customer-facing website, seller portal, admin portal, delivery app |
-| **Production URL** | `https://geeta.today` / `https://www.geeta.today` |
+| **Production URL** | `https://Unnati.today` / `https://www.Unnati.today` |
 | **Build Command** | `npm run build:vercel` |
 | **Output Directory** | `dist/` |
 | **Framework** | React + Vite (TypeScript) |
@@ -65,7 +65,7 @@
 | **Runtime** | Node.js with Express.js |
 | **Language** | TypeScript (compiled to JavaScript) |
 | **Port** | `5001` (development) |
-| **Production API URL** | `https://api.geeta.today` |
+| **Production API URL** | `https://api.Unnati.today` |
 | **Start Command** | `npm start` (runs `node dist/server.js`) |
 | **Dev Command** | `npm run dev` (uses `tsx watch`) |
 
@@ -84,7 +84,7 @@
 | **Service** | MongoDB Atlas (cloud.mongodb.com) |
 | **Type** | Cloud-hosted NoSQL database |
 | **Cluster** | `Cluster1.moyfuna.mongodb.net` |
-| **Database Name** | `geeta-ecom` |
+| **Database Name** | `Unnati-ecom` |
 | **Connection User** | `allokfarms_db_user` |
 
 ### What MongoDB Stores:
@@ -130,7 +130,7 @@ Every piece of data in the platform is stored in MongoDB:
 
 ### Environment Variable:
 ```
-MONGODB_URI=mongodb+srv://<user>:<password>@cluster1.moyfuna.mongodb.net/geeta-ecom
+MONGODB_URI=mongodb+srv://<user>:<password>@cluster1.moyfuna.mongodb.net/Unnati-ecom
 ```
 
 ### Where to Manage:
@@ -268,17 +268,17 @@ Cloudinary is the **image and media storage platform**. All images uploaded to t
 
 | Content | Cloudinary Folder |
 |---------|------------------|
-| Product images (main + gallery) | `Geeta Stores/products/` |
-| Category images | `Geeta Stores/categories/` |
-| Subcategory images | `Geeta Stores/subcategories/` |
-| Seller logo/profile | `Geeta Stores/sellers/profile/` |
-| Seller documents (ID proof, address proof) | `Geeta Stores/sellers/documents/` |
-| Delivery agent photos | `Geeta Stores/delivery/` |
-| Delivery agent documents | `Geeta Stores/delivery/documents/` |
-| Coupon images | `Geeta Stores/coupons/` |
-| Customer profile photos | `Geeta Stores/users/` |
-| Store/shop images | `Geeta Stores/stores/` |
-| Bill attachments | `Geeta Stores/` |
+| Product images (main + gallery) | `Unnati Stores/products/` |
+| Category images | `Unnati Stores/categories/` |
+| Subcategory images | `Unnati Stores/subcategories/` |
+| Seller logo/profile | `Unnati Stores/sellers/profile/` |
+| Seller documents (ID proof, address proof) | `Unnati Stores/sellers/documents/` |
+| Delivery agent photos | `Unnati Stores/delivery/` |
+| Delivery agent documents | `Unnati Stores/delivery/documents/` |
+| Coupon images | `Unnati Stores/coupons/` |
+| Customer profile photos | `Unnati Stores/users/` |
+| Store/shop images | `Unnati Stores/stores/` |
+| Bill attachments | `Unnati Stores/` |
 
 ### How Uploads Work:
 ```
@@ -416,7 +416,7 @@ VITE_GOOGLE_MAPS_API_KEY=AIzaSyDaQfoCtcWZm4mLuSivwdcOzDKfkjS5SOw
 - Enable APIs: Maps JavaScript API, Places API, Geocoding API
 - Set API Key restrictions (restrict to your domain for security).
 
-> ⚠️ **IMPORTANT:** Restrict the API key to your domain (`geeta.today`) to prevent misuse by others. An unrestricted key can be exploited.
+> ⚠️ **IMPORTANT:** Restrict the API key to your domain (`Unnati.today`) to prevent misuse by others. An unrestricted key can be exploited.
 
 ---
 
@@ -845,7 +845,7 @@ Rate limiting **prevents abuse** of the API — if someone sends too many reques
 | Detail | Value |
 |--------|-------|
 | **Platform** | Vercel |
-| **Production URL** | `https://geeta.today` |
+| **Production URL** | `https://Unnati.today` |
 | **Deployment Method** | Git-connected auto-deploy |
 
 ### Vercel Configuration:
@@ -876,16 +876,16 @@ Rate limiting **prevents abuse** of the API — if someone sends too many reques
 | Environment | API URL |
 |-------------|---------|
 | Development (Local) | `http://localhost:5001/api/v1` |
-| Production | `https://api.geeta.today/api/v1` |
+| Production | `https://api.Unnati.today/api/v1` |
 
 ### CORS (Who Can Access the API):
 
 The API is configured to accept requests from:
 - `http://localhost:5173` (local dev)
 - `http://localhost:3000` (local dev)
-- `https://geeta.today` (production)
-- `https://www.geeta.today` (production)
-- `https://api.geeta.today` (API self)
+- `https://Unnati.today` (production)
+- `https://www.Unnati.today` (production)
+- `https://api.Unnati.today` (API self)
 - Any `*.vercel.app` domain (for preview deployments)
 
 ---
@@ -922,7 +922,7 @@ Go to **Admin → App Settings → Mail Setting tab**:
 
 ```env
 # ── DATABASE ──────────────────────────────────────────
-MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/geeta-ecom
+MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/Unnati-ecom
 
 # ── SERVER ────────────────────────────────────────────
 PORT=5001
@@ -962,13 +962,13 @@ SMS_INDIA_HUB_DLT_TEMPLATE_ID=...
 USE_MOCK_OTP=false                      # set true for dev (OTP will be 1234)
 
 # ── FRONTEND URL (for CORS) ───────────────────────────
-FRONTEND_URL=https://geeta.today
+FRONTEND_URL=https://Unnati.today
 ```
 
 ### Frontend `.env` Complete List:
 
 ```env
-VITE_API_BASE_URL=http://localhost:5001/api/v1    # or https://api.geeta.today/api/v1
+VITE_API_BASE_URL=http://localhost:5001/api/v1    # or https://api.Unnati.today/api/v1
 VITE_GOOGLE_MAPS_API_KEY=AIzaSy...
 ```
 
@@ -1007,7 +1007,7 @@ VITE_GOOGLE_MAPS_API_KEY=AIzaSy...
 Before going live, ensure:
 
 - [ ] **Razorpay:** Switch from `rzp_test_...` to `rzp_live_...` keys
-- [ ] **Google Maps API Key:** Restrict to `geeta.today` domain only
+- [ ] **Google Maps API Key:** Restrict to `Unnati.today` domain only
 - [ ] **Firebase:** Keep Service Account JSON file private (never commit to Git)
 - [ ] **MongoDB URI:** Use a strong password for the database user
 - [ ] **JWT Secrets:** Use long, random 64+ character strings

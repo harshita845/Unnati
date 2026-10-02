@@ -70,9 +70,9 @@ export const getOrderDetails = async (id: string) => {
     }
 };
 
-export const updateOrderStatus = async (id: string, status: string) => {
+export const updateOrderStatus = async (id: string, status: string, extra?: { pickupCode?: string }) => {
     try {
-        const response = await api.put(`${BASE_URL}/orders/${id}/status`, { status });
+        const response = await api.put(`${BASE_URL}/orders/${id}/status`, { status, ...(extra || {}) });
         return response.data;
     } catch (error) {
         throw handleApiError(error);

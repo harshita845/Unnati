@@ -6,6 +6,8 @@ import Order from "../../../models/Order";
 import OrderItem from "../../../models/OrderItem";
 import Delivery from "../../../models/Delivery";
 import DeliveryAssignment from "../../../models/DeliveryAssignment";
+import { cancelOrderAndRestoreStock, markOrderDelivered } from "../../../services/orderLifecycleService";
+import { OrderPlacementError } from "../../../services/orderPlacementService";
 import Return from "../../../models/Return";
 import { notifySellersOfOrderUpdate } from "../../../services/sellerNotificationService";
 import Product from "../../../models/Product";
@@ -311,17 +313,27 @@ export const updateOrderStatus = asyncHandler(
       });
     }
 
-    const updateData: any = { status };
+    // Delivered / Cancelled / Rejected go through the shared lifecycle so stock and money stay correct
+    try {
+      if (status === "Delivered") {
+        await markOrderDelivered(id);
+      } else if (status === "Cancelled" || status === "Rejected") {
+        await cancelOrderAndRestoreStock(id, {
+          finalStatus: status,
+          reason: adminNotes || `${status} by admin`,
+          cancelledBy: req.user?.userId,
+        });
+      }
+    } catch (error: any) {
+      if (error instanceof OrderPlacementError) {
+        return res.status(error.statusCode).json({ success: false, message: error.message });
+      }
+      throw error;
+    }
+
+    const updateData: any = {};
+    if (!["Delivered", "Cancelled", "Rejected"].includes(status)) updateData.status = status;
     if (adminNotes) updateData.adminNotes = adminNotes;
-
-    if (status === "Delivered") {
-      updateData.deliveredAt = new Date();
-    }
-
-    if (status === "Cancelled") {
-      updateData.cancelledAt = new Date();
-      updateData.cancelledBy = req.user?.userId;
-    }
 
     const order = await Order.findByIdAndUpdate(id, updateData, {
       new: true,

@@ -186,21 +186,20 @@ export default function SellerReplaceRequests() {
   const handleUpdateStatus = async (newStatus: 'Approved' | 'Rejected' | 'Completed') => {
     if (!selectedRequest) return;
     setActionLoading(true);
+    let serverWarning = '';
     try {
       if (selectedRequest.id && !selectedRequest.id.startsWith('rep_')) {
-        await updateReturnStatus(selectedRequest.id, { status: newStatus });
+        const response = await updateReturnStatus(selectedRequest.id, { status: newStatus });
+        serverWarning = (response as any)?.warning || '';
       }
       setRequests(prev =>
         prev.map(r => (r.id === selectedRequest.id ? { ...r, status: newStatus } : r))
       );
       setSelectedRequest(prev => (prev ? { ...prev, status: newStatus } : null));
-      showToast(`Replacement #${selectedRequest.orderId} marked as ${newStatus}`, 'success');
-    } catch {
-      setRequests(prev =>
-        prev.map(r => (r.id === selectedRequest.id ? { ...r, status: newStatus } : r))
-      );
-      setSelectedRequest(prev => (prev ? { ...prev, status: newStatus } : null));
-      showToast(`Status updated to ${newStatus}`, 'success');
+      showToast(serverWarning || `Replacement #${selectedRequest.orderId} marked as ${newStatus}`, serverWarning ? 'info' : 'success');
+    } catch (err: any) {
+      // Keep the current status — the server did not accept the change
+      showToast(err?.response?.data?.message || 'Failed to update status', 'error');
     } finally {
       setActionLoading(false);
     }

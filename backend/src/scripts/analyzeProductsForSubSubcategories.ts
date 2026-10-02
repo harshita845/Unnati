@@ -8,7 +8,7 @@ import HeaderCategory from "../models/HeaderCategory";
 // Explicitly load .env from backend root
 dotenv.config({ path: path.join(__dirname, "../../.env") });
 
-const MONGO_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/Geeta Stores";
+const MONGO_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/Unnati Stores";
 const FRONTEND_ASSETS_PATH = path.join(__dirname, "../../../frontend/assets");
 const PRODUCT_IMAGES_PATH = path.join(
   FRONTEND_ASSETS_PATH,

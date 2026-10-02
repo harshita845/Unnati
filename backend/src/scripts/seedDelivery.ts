@@ -19,9 +19,9 @@ async function seedDelivery() {
     await Delivery.create({
       name: "Demo Delivery Partner",
       mobile: mobile,
-      email: "delivery@Geeta Stores.com",
+      email: "delivery@Unnati Stores.com",
       password: "password123",
-      address: "123 Geeta Stores Street",
+      address: "123 Unnati Stores Street",
       city: "Mumbai",
       status: "Active",
       balance: 100,

@@ -124,6 +124,7 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
             },
             quantity: qty,
             variant: item.variant !== undefined ? String(item.variant) : undefined,
+            variantId: (item as any).variantId,
             isFreeGift: (item as any).isFreeGift,
             price: (item as any).price,
             freeGiftReason: (item as any).freeGiftReason
@@ -133,6 +134,9 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
           deliveryFee: order.fees?.deliveryFee || 0,
           platformFee: order.fees?.platformFee || 0,
         },
+        couponCode: order.couponCode,
+        tipAmount: order.tipAmount,
+        giftPackaging: order.giftPackaging,
       };
 
       const response = await createOrder(payload);

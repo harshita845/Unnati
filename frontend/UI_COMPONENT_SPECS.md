@@ -1,4 +1,4 @@
-# Geeta Stores UI Component Specifications
+# Unnati Stores UI Component Specifications
 
 ## Loaders
 

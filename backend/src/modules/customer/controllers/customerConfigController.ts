@@ -22,7 +22,7 @@ export const getPublicConfig = asyncHandler(
       estimatedDeliveryTime: "12-15 mins",
       deliveryRadius: 10,
       serviceType: "Delivery",
-      appName: "Geeta Stores"
+      appName: "Unnati Stores"
     };
 
     try {

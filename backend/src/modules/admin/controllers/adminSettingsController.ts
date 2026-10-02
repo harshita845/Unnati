@@ -13,8 +13,8 @@ export const getAppSettings = asyncHandler(
     // Create default settings if none exist
     if (!settings) {
       settings = await AppSettings.create({
-        appName: "Geeta Stores",
-        contactEmail: "contact@Geeta Stores.com",
+        appName: "Unnati Stores",
+        contactEmail: "contact@Unnati Stores.com",
         contactPhone: "1234567890",
       });
       // Convert to plain object if created newly (create doesn't support lean directly)
@@ -136,8 +136,8 @@ export const updateSMSGatewaySettings = asyncHandler(
 
     if (!settings) {
       settings = await AppSettings.create({
-        appName: "Geeta Stores",
-        contactEmail: "contact@Geeta Stores.com",
+        appName: "Unnati Stores",
+        contactEmail: "contact@Unnati Stores.com",
         contactPhone: "1234567890",
         smsGateway,
       });

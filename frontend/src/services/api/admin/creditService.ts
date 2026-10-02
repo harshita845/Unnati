@@ -29,58 +29,34 @@ export interface CustomerCreditHistory {
 
 // APIs
 export const getCreditCustomers = async (search?: string, hasDue?: boolean, hasAdvance?: boolean) => {
-    try {
-        const response = await api.get(`${BASE_PATH}/customers`, {
-            params: { search, hasDue, hasAdvance }
-        });
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+    const response = await api.get(`${BASE_PATH}/customers`, {
+        params: { search, hasDue, hasAdvance }
+    });
+    return response.data;
 };
 
 export const getCustomerHistory = async (customerId: string) => {
-    try {
-        const response = await api.get(`${BASE_PATH}/history/${customerId}`);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+    const response = await api.get(`${BASE_PATH}/history/${customerId}`);
+    return response.data;
 };
 
 export const addCredit = async (data: { customerId: string, amount: number, description: string, date?: string }) => {
-    try {
-        const response = await api.post(`${BASE_PATH}/add`, data);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+    const response = await api.post(`${BASE_PATH}/add`, data);
+    return response.data;
 };
 
 export const acceptPayment = async (data: { customerId: string, amount: number, description: string, date?: string }) => {
-    try {
-        const response = await api.post(`${BASE_PATH}/payment`, data);
-        return response.data;
+    const response = await api.post(`${BASE_PATH}/payment`, data);
+    return response.data;
 // ... acceptPayment implementation ...
-    } catch (error) {
-        throw error;
-    }
 };
 
 export const initiateCreditPayment = async (data: { customerId: string, amount: number, gateway: string }) => {
-    try {
-        const response = await api.post(`${BASE_PATH}/payment/initiate`, data);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+    const response = await api.post(`${BASE_PATH}/payment/initiate`, data);
+    return response.data;
 };
 
 export const verifyCreditPayment = async (data: { customerId: string, amount: number, paymentId: string, gateway: string }) => {
-    try {
-        const response = await api.post(`${BASE_PATH}/payment/verify`, data);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+    const response = await api.post(`${BASE_PATH}/payment/verify`, data);
+    return response.data;
 };

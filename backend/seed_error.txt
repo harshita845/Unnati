@@ -4,5 +4,5 @@
 ❌ CRITICAL ERROR IN SEED SCRIPT:
 Error: Category 'Grocery & Kitchen' not found! Please run seedGroceryKitchen.ts first.
 Error: Category 'Grocery & Kitchen' not found! Please run seedGroceryKitchen.ts first.
-    at seed (D:\AppZeto\Geeta Stores\backend\src\scripts\seedSellerProducts.ts:167:13)
+    at seed (D:\AppZeto\Unnati Stores\backend\src\scripts\seedSellerProducts.ts:167:13)
     at processTicksAndRejections (node:internal/process/task_queues:105:5)

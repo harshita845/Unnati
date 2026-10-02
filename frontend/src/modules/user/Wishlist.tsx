@@ -24,15 +24,18 @@ export default function Wishlist() {
         latitude: location?.latitude,
         longitude: location?.longitude
       });
-      if (res.success && res.data) {
-        setProducts(res.data.products.map(p => ({
+      if (res.success && res.data && Array.isArray(res.data.products)) {
+        const rawProducts = res.data.products.filter((p: any) => p != null && (p._id || p.id));
+        setProducts(rawProducts.map((p: any) => ({
           ...p,
-          id: p._id || (p as any).id,
-          name: p.productName || (p as any).name,
-          imageUrl: p.mainImageUrl || p.mainImage || (p as any).imageUrl,
-          price: (p as any).price || (p as any).variations?.[0]?.price || 0,
-          pack: (p as any).pack || (p as any).variations?.[0]?.name || 'Standard'
+          id: p._id || p.id,
+          name: p.productName || p.name || 'Product',
+          imageUrl: p.mainImageUrl || p.mainImage || p.imageUrl || '',
+          price: p.price || p.variations?.[0]?.price || 0,
+          pack: p.pack || p.variations?.[0]?.name || 'Standard'
         })) as any);
+      } else {
+        setProducts([]);
       }
     } catch (error: any) {
       console.error('Failed to fetch wishlist:', error);

@@ -517,14 +517,14 @@ const SellerPOSOrders = () => {
         const parsed = JSON.parse(savedBills);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const normalized = parsed.map((bill: Bill) => {
-            const hasDummy = Array.isArray(bill.cart) && bill.cart.some((item: any) => item._id && String(item._id).startsWith('dummy_pos_item_'));
+            const cleanCart = Array.isArray(bill.cart)
+              ? bill.cart
+                  .filter((item: any) => !item._id || !String(item._id).startsWith('dummy_pos_item_'))
+                  .map((item) => normalizePosCartItem(item as CartItem))
+              : [];
             return {
               ...bill,
-              cart: hasDummy
-                ? DUMMY_POS_CART_ITEMS
-                : (Array.isArray(bill.cart) && bill.cart.length > 0
-                  ? bill.cart.map((item) => normalizePosCartItem(item as CartItem))
-                  : DUMMY_POS_CART_ITEMS),
+              cart: cleanCart,
             };
           });
           if (normalized.length === 1) {
@@ -539,7 +539,7 @@ const SellerPOSOrders = () => {
     return [{
       id: '1',
       name: 'Bill 1',
-      cart: DUMMY_POS_CART_ITEMS,
+      cart: [],
       selectedCustomer: null,
       customerSearch: '',
       paymentMethod: 'Cash',
@@ -1885,7 +1885,7 @@ const SellerPOSOrders = () => {
         (p.itemCode && String(p.itemCode).toLowerCase() === query);
     });
 
-    let exactMatch = findMatch(products);
+    const exactMatch = findMatch(products);
 
     if (exactMatch) {
       addToCart(exactMatch as CartItem);

@@ -1,11 +1,11 @@
-# POS Gap Audit — geetaecommerce
+# POS Gap Audit — Unnatiecommerce
 
-**Date:** 2026-07-08  
+**Date:** 2026-07-08
 **Target stack:** React + TypeScript frontend, Node/Express + MongoDB backend
 
 ## Summary
 
-geetaecommerce already implements ~95% of the POS plan. This audit maps existing assets vs plan requirements and lists gaps addressed in this implementation.
+Unnatiecommerce already implements ~95% of the POS plan. This audit maps existing assets vs plan requirements and lists gaps addressed in this implementation.
 
 ## Order Model — COMPLETE
 

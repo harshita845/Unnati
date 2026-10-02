@@ -216,20 +216,11 @@ video {
   padding-right: 16px !important;
 }
 
-.premium-theme main > div,
-.premium-theme main > div > div,
-.premium-theme .mx-auto,
-.premium-theme [class*="max-w-"] {
+.premium-theme main > div:not([class*="fixed"]):not([class*="absolute"]) {
   padding-left: 0px !important;
   padding-right: 0px !important;
-  margin-left: 0px !important;
-  margin-right: 0px !important;
   max-width: 100% !important;
   width: 100% !important;
-  background-color: transparent !important;
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
 }
 
 /* Customer Layout Width and Padding overrides to remove left/right extra spaces on desktop */

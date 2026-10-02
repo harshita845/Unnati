@@ -15,7 +15,7 @@ interface StorageLocationSetupViewProps {
   deleteLocationApi: (id: string) => Promise<{ success: boolean; message: string }>;
 }
 
-type TabType = "city" | "warehouse" | "room" | "rack";
+type TabType = "city" | "warehouse" | "room" | "rack" | "all";
 
 interface ParsedImportRow {
   level: "city" | "warehouse" | "room" | "rack";
@@ -116,7 +116,7 @@ export default function StorageLocationSetupView({
   // Filtered table data for the active tab
   const tableData = useMemo(() => {
     return locations.filter((loc) => {
-      if (loc.level !== activeTab) return false;
+      if (activeTab !== "all" && loc.level !== activeTab) return false;
       if (!search.trim()) return true;
       const q = search.toLowerCase();
       return (
@@ -137,6 +137,7 @@ export default function StorageLocationSetupView({
       warehouse: locations.filter((l) => l.level === "warehouse").length,
       room: locations.filter((l) => l.level === "room").length,
       rack: locations.filter((l) => l.level === "rack").length,
+      all: locations.length,
     };
   }, [locations]);
 
@@ -194,6 +195,11 @@ export default function StorageLocationSetupView({
       }
     }
 
+    if (activeTab === "all") {
+      showToast("Please select a specific tab (City, Warehouse, Room, or Rack) to add a location", "info");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const payload: StorageLocationPayload = {
@@ -225,12 +231,16 @@ export default function StorageLocationSetupView({
 
   // Edit item
   const handleEdit = (item: StorageLocationItem) => {
+    if (item.level) {
+      setActiveTab(item.level);
+    }
     setEditId(item._id);
-    setName(item.name || item.rackNumber || item.room || item.warehouse || item.city);
+    setName(item.name || item.rackNumber || item.room || item.warehouse || item.city || "");
     setCode(item.code || "");
     if (item.city) setSelectedCity(item.city);
     if (item.warehouse) setSelectedWarehouse(item.warehouse);
     if (item.room) setSelectedRoom(item.room);
+    showToast(`Editing ${item.level?.toUpperCase() || "location"} "${item.name || item.city}"`, "info");
   };
 
   // Delete item with cascade confirmation
@@ -385,6 +395,20 @@ export default function StorageLocationSetupView({
           "Room": item.room,
           "Rack Number": item.name || item.rackNumber,
         }));
+      } else if (activeTab === "all") {
+        exportRows = tableData.map((item, idx) => {
+          const parts = [item.city, item.warehouse, item.room, item.rackNumber || (item.level === "rack" ? item.name : "")].filter(Boolean);
+          return {
+            "SL": idx + 1,
+            "Level": item.level.toUpperCase(),
+            "City": item.city || (item.level === "city" ? item.name : "-"),
+            "Warehouse": item.warehouse || (item.level === "warehouse" ? item.name : "-"),
+            "Room": item.room || (item.level === "room" ? item.name : "-"),
+            "Rack Number": item.rackNumber || (item.level === "rack" ? item.name : "-"),
+            "Full Storage Path": parts.join(" ➔ "),
+            "Code": item.code || "-",
+          };
+        });
       }
 
       const wb = XLSX.utils.book_new();
@@ -747,7 +771,7 @@ export default function StorageLocationSetupView({
       </div>
 
       {/* Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 pb-3 border-b border-gray-200">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6 pb-3 border-b border-gray-200">
         <button
           type="button"
           onClick={() => handleTabChange("city")}
@@ -835,24 +859,120 @@ export default function StorageLocationSetupView({
             {tabCounts.rack}
           </span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabChange("all")}
+          style={activeTab === "all" ? { backgroundColor: "var(--primary-color)", color: "#ffffff" } : {}}
+          className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+            activeTab === "all"
+              ? "text-white shadow-md shadow-[var(--primary-color)]/20"
+              : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200"
+          }`}
+        >
+          <span className={activeTab === "all" ? "force-text-white flex items-center gap-1" : "flex items-center gap-1"}>
+            <span>📍</span> All Locations
+          </span>
+          <span
+            className={`px-2.5 py-0.5 rounded-full text-xs font-bold transition-all ${
+              activeTab === "all"
+                ? "bg-white text-[var(--primary-color)] shadow-sm"
+                : "bg-gray-100 text-gray-600"
+            }`}
+          >
+            {tabCounts.all}
+          </span>
+        </button>
       </div>
 
 
       {/* Main Grid: Form Left, Table Right */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Form Card */}
+        {/* Form Card or Overview Card */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 h-fit">
-          <div className="flex items-center justify-between pb-4 mb-4 border-b border-gray-100">
-            <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
-              <span>{editId ? "✏️ Edit" : "➕ Add New"}</span>
-              <span className="capitalize">{activeTab}</span>
-            </h2>
-            {editId && (
-              <span className="px-2 py-0.5 bg-amber-50 text-amber-600 border border-amber-200 rounded text-xs font-medium">
-                Edit Mode
-              </span>
-            )}
-          </div>
+          {activeTab === "all" ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                  <span>📍</span> Storage Hierarchy
+                </h2>
+                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded text-xs font-semibold">
+                  All Locations
+                </span>
+              </div>
+
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Storage locations are structured hierarchically:
+                <br />
+                <span className="font-semibold text-gray-700">City ➔ Warehouse ➔ Room ➔ Rack Number</span>
+              </p>
+
+              <div className="space-y-2 pt-2">
+                <div className="flex items-center justify-between p-2.5 bg-blue-50/60 border border-blue-100 rounded-lg text-xs font-semibold text-blue-900">
+                  <span className="flex items-center gap-2"><span>🏙️</span> Cities</span>
+                  <span className="bg-blue-200/80 px-2 py-0.5 rounded-full text-blue-900">{tabCounts.city}</span>
+                </div>
+                <div className="flex items-center justify-between p-2.5 bg-amber-50/60 border border-amber-100 rounded-lg text-xs font-semibold text-amber-900">
+                  <span className="flex items-center gap-2"><span>🏭</span> Warehouses</span>
+                  <span className="bg-amber-200/80 px-2 py-0.5 rounded-full text-amber-900">{tabCounts.warehouse}</span>
+                </div>
+                <div className="flex items-center justify-between p-2.5 bg-purple-50/60 border border-purple-100 rounded-lg text-xs font-semibold text-purple-900">
+                  <span className="flex items-center gap-2"><span>🚪</span> Rooms</span>
+                  <span className="bg-purple-200/80 px-2 py-0.5 rounded-full text-purple-900">{tabCounts.room}</span>
+                </div>
+                <div className="flex items-center justify-between p-2.5 bg-emerald-50/60 border border-emerald-100 rounded-lg text-xs font-semibold text-emerald-900">
+                  <span className="flex items-center gap-2"><span>📦</span> Rack Numbers</span>
+                  <span className="bg-emerald-200/80 px-2 py-0.5 rounded-full text-emerald-900">{tabCounts.rack}</span>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-gray-100">
+                <p className="text-xs font-semibold text-gray-700 mb-2">Quick Add Location:</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange("city")}
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium rounded-lg transition-colors text-center"
+                  >
+                    + Add City
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange("warehouse")}
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium rounded-lg transition-colors text-center"
+                  >
+                    + Add Warehouse
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange("room")}
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium rounded-lg transition-colors text-center"
+                  >
+                    + Add Room
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange("rack")}
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium rounded-lg transition-colors text-center"
+                  >
+                    + Add Rack
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div className="flex items-center justify-between pb-4 mb-4 border-b border-gray-100">
+                <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                  <span>{editId ? "✏️ Edit" : "➕ Add New"}</span>
+                  <span className="capitalize">{activeTab}</span>
+                </h2>
+                {editId && (
+                  <span className="px-2 py-0.5 bg-amber-50 text-amber-600 border border-amber-200 rounded text-xs font-medium">
+                    Edit Mode
+                  </span>
+                )}
+              </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* City selector if on warehouse, room, or rack tab */}
@@ -1000,6 +1120,8 @@ export default function StorageLocationSetupView({
               </button>
             </div>
           </form>
+            </div>
+          )}
         </div>
 
         {/* Table / List Card */}
@@ -1106,13 +1228,23 @@ export default function StorageLocationSetupView({
                       <th className="px-4 py-3">Rack Number</th>
                     </>
                   )}
+                  {activeTab === "all" && (
+                    <>
+                      <th className="px-4 py-3">Level</th>
+                      <th className="px-4 py-3">City</th>
+                      <th className="px-4 py-3">Warehouse</th>
+                      <th className="px-4 py-3">Room</th>
+                      <th className="px-4 py-3">Rack Number</th>
+                      <th className="px-4 py-3">Full Location Path</th>
+                    </>
+                  )}
                   <th className="px-4 py-3 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-sm">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                       <div className="flex items-center justify-center gap-2">
                         <div className="w-5 h-5 border-2 border-[var(--primary-color)] border-t-transparent rounded-full animate-spin"></div>
                         <span>Loading storage locations...</span>
@@ -1169,6 +1301,48 @@ export default function StorageLocationSetupView({
                             <div className="flex items-center gap-1.5">
                               <span>📦</span>
                               <span>{item.name || item.rackNumber}</span>
+                            </div>
+                          </td>
+                        </>
+                      )}
+                      {activeTab === "all" && (
+                        <>
+                          <td className="px-4 py-3 align-middle">
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider ${
+                              item.level === "city"
+                                ? "bg-blue-100 text-blue-700 border border-blue-200"
+                                : item.level === "warehouse"
+                                ? "bg-amber-100 text-amber-700 border border-amber-200"
+                                : item.level === "room"
+                                ? "bg-purple-100 text-purple-700 border border-purple-200"
+                                : "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                            }`}>
+                              {item.level}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-gray-700 text-xs font-medium align-middle">
+                            {item.city || (item.level === "city" ? item.name : "-")}
+                          </td>
+                          <td className="px-4 py-3 text-gray-700 text-xs font-medium align-middle">
+                            {item.warehouse || (item.level === "warehouse" ? item.name : "-")}
+                          </td>
+                          <td className="px-4 py-3 text-gray-700 text-xs font-medium align-middle">
+                            {item.room || (item.level === "room" ? item.name : "-")}
+                          </td>
+                          <td className="px-4 py-3 text-gray-700 text-xs font-medium align-middle">
+                            {item.rackNumber || (item.level === "rack" ? item.name : "-")}
+                          </td>
+                          <td className="px-4 py-3 align-middle">
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100/90 text-gray-800 rounded-lg text-xs font-medium border border-gray-200">
+                              <span className="text-gray-400">📍</span>
+                              <span>
+                                {[
+                                  item.city || (item.level === "city" ? item.name : ""),
+                                  item.warehouse || (item.level === "warehouse" ? item.name : ""),
+                                  item.room || (item.level === "room" ? item.name : ""),
+                                  item.rackNumber || (item.level === "rack" ? item.name : ""),
+                                ].filter(Boolean).join(" ➔ ")}
+                              </span>
                             </div>
                           </td>
                         </>

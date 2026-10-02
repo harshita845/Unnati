@@ -1,495 +1,66 @@
 import { Request, Response } from "express";
 import Order from "../../../models/Order";
-import Product from "../../../models/Product";
 import OrderItem from "../../../models/OrderItem";
-import Customer from "../../../models/Customer";
-import Seller from "../../../models/Seller";
 import Return from "../../../models/Return";
-import AppSettings from "../../../models/AppSettings";
 import mongoose from "mongoose";
-import axios from "axios";
-import { calculateDistance } from "../../../utils/locationHelper";
 import { notifyDeliveryBoysOfNewOrder } from "../../../services/orderNotificationService";
 import { notifySellersOfOrderUpdate } from "../../../services/sellerNotificationService";
 import { notifyAdminsOfNewOrder } from "../../../services/adminNotificationService";
 import { generateDeliveryOtp } from "../../../services/deliveryOtpService";
-import {
-  FIRST_ORDER_OFFER_CODE,
-  resolveFirstOrderOfferDiscount,
-} from "../../../services/firstOrderOfferService";
-import {
-  calculateCartRuleDiscount,
-  getActiveCartRules,
-} from "../../../services/cartRuleService";
 import { Server as SocketIOServer } from "socket.io";
+import { OrderPlacementError, placeOrder, runInTransaction } from "../../../services/orderPlacementService";
+import { cancelOrderAndRestoreStock, confirmOnlinePayment } from "../../../services/orderLifecycleService";
+import {
+  createCashfreeOrder,
+  createRazorpayOrder,
+  getCashfreePaidReference,
+  isValidRazorpaySignature,
+} from "../../../services/paymentGatewayService";
 
-const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-const buildVariationSearchValue = (variationValue: any) => {
-    if (!variationValue || typeof variationValue !== 'string') {
-        return variationValue;
-    }
-    const trimmedValue = variationValue.trim();
-    if (!trimmedValue) {
-        return variationValue;
-    }
-    return new RegExp(`^${escapeRegExp(trimmedValue)}$`, 'i');
-};
-
-const matchesVariation = (variation: any, variationValue: any) => {
-    if (!variationValue) return false;
-    const rawValue = String(variationValue);
-    if (variation?._id && variation._id.toString() === rawValue) {
-        return true;
-    }
-    const normalizedValue = rawValue.trim().toLowerCase();
-    return (
-        (typeof variation?.value === 'string' && variation.value.trim().toLowerCase() === normalizedValue) ||
-        (typeof variation?.name === 'string' && variation.name.trim().toLowerCase() === normalizedValue) ||
-        (typeof variation?.title === 'string' && variation.title.trim().toLowerCase() === normalizedValue) ||
-        (typeof variation?.pack === 'string' && variation.pack.trim().toLowerCase() === normalizedValue)
-    );
-};
-
-const getVariationMatchConditions = (variationValue: any) => {
-    const variationSearchValue = buildVariationSearchValue(variationValue);
-    return [
-        { "variations._id": mongoose.isValidObjectId(variationValue) ? variationValue : new mongoose.Types.ObjectId() },
-        { "variations.value": variationSearchValue },
-        { "variations.name": variationSearchValue },
-        { "variations.title": variationSearchValue },
-        { "variations.pack": variationSearchValue }
-    ];
-};
-
-// Create a new order
-export const createOrder = async (req: Request, res: Response) => {
-    let session: mongoose.ClientSession | null = null;
+// Notify delivery partners, sellers and admins about an order that is ready to fulfil
+const notifyNewOrder = async (req: Request, orderId: unknown) => {
     try {
-        // Only start session if we are on a replica set (required for transactions)
-        // For simplicity in local dev, we check and fallback if it fails
-        try {
-            session = await mongoose.startSession();
-            session.startTransaction();
-        } catch (sessionError) {
-            console.warn("MongoDB Transactions not supported or failed to start. Proceeding without transaction.");
-            session = null;
-        }
+        const io: SocketIOServer = req.app.get("io") as SocketIOServer;
+        if (!io) return;
+        const savedOrder = await Order.findById(orderId).lean();
+        if (!savedOrder) return;
+        await notifyDeliveryBoysOfNewOrder(io, savedOrder);
+        await notifySellersOfOrderUpdate(io, savedOrder, 'NEW_ORDER');
+        await notifyAdminsOfNewOrder(io, savedOrder);
+    } catch (notificationError) {
+        // Log error but don't fail the request
+        console.error("Error sending new order notifications:", notificationError);
+    }
+};
 
-        const { items, address, paymentMethod, fees } = req.body;
-        const userId = req.user!.userId;
+const sendOrderError = (res: Response, error: any, fallbackMessage: string) => {
+    if (error instanceof OrderPlacementError) {
+        return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    console.error(fallbackMessage, error);
+    return res.status(500).json({
+        success: false,
+        message: `${fallbackMessage} ${error?.message || ""}`.trim(),
+        error: error?.message,
+    });
+};
 
-        // Log incoming request for debugging
-        console.log("DEBUG: Order creation request:", {
-            userId,
-            itemsCount: items?.length,
-            hasAddress: !!address,
-            addressLat: address?.latitude,
-            addressLng: address?.longitude,
-            paymentMethod,
-        });
-
-        if (!items || items.length === 0) {
-            if (session) await session.abortTransaction();
-            return res.status(400).json({
-                success: false,
-                message: "Order must have at least one item",
-            });
-        }
-
-        if (!address) {
-            if (session) await session.abortTransaction();
-            return res.status(400).json({
-                success: false,
-                message: "Delivery address is required",
-            });
-        }
-
-        // Validate required address fields
-        if (!address.city || (typeof address.city === 'string' && address.city.trim() === '')) {
-            if (session) await session.abortTransaction();
-            return res.status(400).json({
-                success: false,
-                message: "City is required in delivery address",
-                details: {
-                    receivedCity: address.city,
-                    addressObject: address
-                }
-            });
-        }
-
-        if (!address.pincode || (typeof address.pincode === 'string' && address.pincode.trim() === '')) {
-            if (session) await session.abortTransaction();
-            return res.status(400).json({
-                success: false,
-                message: "Pincode is required in delivery address",
-                details: {
-                    receivedPincode: address.pincode,
-                    addressObject: address
-                }
-            });
-        }
-
-        // Fetch customer details
-        const customer = await Customer.findById(userId);
-        if (!customer) {
-            if (session) await session.abortTransaction();
-            return res.status(404).json({
-                success: false,
-                message: "Customer not found",
-            });
-        }
-
-        // Validate delivery address location
-        // Handle both string and number types, and check for null/undefined (not truthy, since 0 is valid)
-        const deliveryLat = address.latitude != null
-            ? (typeof address.latitude === 'number' ? address.latitude : parseFloat(address.latitude))
-            : null;
-        const deliveryLng = address.longitude != null
-            ? (typeof address.longitude === 'number' ? address.longitude : parseFloat(address.longitude))
-            : null;
-
-        if (deliveryLat == null || deliveryLng == null || isNaN(deliveryLat) || isNaN(deliveryLng)) {
-            if (session) await session.abortTransaction();
-            return res.status(400).json({
-                success: false,
-                message: "Delivery address location (latitude/longitude) is required",
-                details: {
-                    receivedLatitude: address.latitude,
-                    receivedLongitude: address.longitude,
-                    parsedLatitude: deliveryLat,
-                    parsedLongitude: deliveryLng,
-                }
-            });
-        }
-
-        // Validate coordinates
-        if (deliveryLat < -90 || deliveryLat > 90 || deliveryLng < -180 || deliveryLng > 180) {
-            if (session) await session.abortTransaction();
-            return res.status(400).json({
-                success: false,
-                message: "Invalid delivery address coordinates",
-            });
-        }
-
-        // Initialize Order first to get an ID
-        const newOrder = new Order({
-            customer: new mongoose.Types.ObjectId(userId),
-            customerName: customer.name,
-            customerEmail: customer.email,
-            customerPhone: customer.phone,
-            deliveryAddress: {
-                address: address.address || address.street || 'N/A',
-                city: address.city || 'N/A',
-                state: address.state || '',
-                pincode: address.pincode || '000000',
-                landmark: address.landmark || '',
-                latitude: deliveryLat,
-                longitude: deliveryLng,
-            },
-            paymentMethod: paymentMethod || 'COD',
-            paymentStatus: 'Pending',
-            status: 'Received',
-            subtotal: 0,
-            tax: 0,
-            shipping: fees?.deliveryFee || 0,
-            platformFee: fees?.platformFee || 0,
-            discount: 0,
-            total: 0,
-            items: []
-        });
-
-        let calculatedSubtotal = 0;
-        const orderItemIds: mongoose.Types.ObjectId[] = [];
-        const sellerIds = new Set<string>(); // Track unique sellers
-
-        for (const item of items) {
-            if (!item.product || !item.product.id) {
-                throw new Error("Invalid item structure: product.id is missing");
-            }
-
-            const qty = Number(item.quantity) || 0;
-            if (qty <= 0) {
-                throw new Error("Invalid item quantity");
-            }
-
-            // Atomically check stock and decrement to prevent race conditions
-            let product;
-            // The frontend sends variation info as 'variant' or 'variation'
-            // In the product model, it's stored in 'variations' array
-            const variationValue = item.variant || item.variation;
-            const variationConditions = variationValue ? getVariationMatchConditions(variationValue) : [];
-
-            if (variationValue) {
-                // Try to decrement stock for the specific variation first
-                // We check variations._id, variations.value, variations.title, or variations.pack
-                product = session
-                    ? await Product.findOneAndUpdate(
-                        {
-                            _id: item.product.id,
-                            $or: variationConditions,
-                            "variations.stock": { $gte: qty }
-                        },
-                        { $inc: { "variations.$.stock": -qty, stock: -qty } },
-                        { session, new: true }
-                    )
-                    : await Product.findOneAndUpdate(
-                        {
-                            _id: item.product.id,
-                            $or: variationConditions,
-                            "variations.stock": { $gte: qty }
-                        },
-                        { $inc: { "variations.$.stock": -qty, stock: -qty } },
-                        { new: true }
-                    );
-            }
-
-            if (!product) {
-                // If we are here, either variationValue wasn't provided, or it didn't match any variation with enough stock.
-                // We'll try to find the product first to see if it has variations.
-                const checkProduct = await Product.findById(item.product.id);
-
-                if (checkProduct && checkProduct.variations && checkProduct.variations.length > 0) {
-                    // Product has variations, but we didn't match one.
-                    // If a variation was provided, it means that specific variation is out of stock.
-                    if (variationValue) {
-                         throw new Error(`Insufficient stock for variation: ${variationValue}`);
-                    }
-
-                    // No variation was provided, but the product has them.
-                    // To maintain data consistency, we'll try to decrement from the first variation.
-                    product = session
-                        ? await Product.findOneAndUpdate(
-                            {
-                                _id: item.product.id,
-                                "variations.0.stock": { $gte: qty }
-                            },
-                            { $inc: { "variations.0.stock": -qty, stock: -qty } },
-                            { session, new: true }
-                        )
-                        : await Product.findOneAndUpdate(
-                            {
-                                _id: item.product.id,
-                                "variations.0.stock": { $gte: qty }
-                            },
-                            { $inc: { "variations.0.stock": -qty, stock: -qty } },
-                            { new: true }
-                        );
-                } else {
-                    // No variations, just decrement top-level stock
-                    product = session
-                        ? await Product.findOneAndUpdate(
-                            { _id: item.product.id, stock: { $gte: qty } },
-                            { $inc: { stock: -qty } },
-                            { session, new: true }
-                          )
-                        : await Product.findOneAndUpdate(
-                            { _id: item.product.id, stock: { $gte: qty } },
-                            { $inc: { stock: -qty } },
-                            { new: true }
-                          );
-                }
-            }
-
-            if (!product) {
-                throw new Error(`Insufficient stock or product not found: ${item.product.name || 'ID: ' + item.product.id}${variationValue ? ' (' + variationValue + ')' : ''}`);
-            }
-
-            // Track seller IDs to validate location
-            if (product.seller) {
-                sellerIds.add(product.seller.toString());
-            }
-
-            // Determine the price based on variation and discounts
-            let selectedVariation;
-            if (variationValue && product.variations) {
-                 selectedVariation = product.variations.find((v: any) => matchesVariation(v, variationValue));
-            }
-            if (!selectedVariation && product.variations && product.variations.length > 0) {
-                 // Fallback to first if no variation spec or not found (consistent with stock fallback)
-                 selectedVariation = product.variations[0];
-            }
-
-            const itemPrice = (selectedVariation?.discPrice && selectedVariation.discPrice > 0)
-                ? selectedVariation.discPrice
-                : (product.discPrice && product.discPrice > 0)
-                ? product.discPrice
-                : (selectedVariation?.price || product.price || 0);
-            const itemTotal = itemPrice * qty;
-            calculatedSubtotal += itemTotal;
-
-            // Create OrderItem
-            const newOrderItemData = {
-                order: newOrder._id,
-                product: product._id,
-                seller: product.seller,
-                productName: product.productName,
-                productImage: product.mainImage,
-                sku: product.sku,
-                unitPrice: itemPrice,
-                quantity: qty,
-                total: itemTotal,
-                variation: variationValue,
-                status: 'Pending'
-            };
-
-            const newOrderItem = new OrderItem(newOrderItemData);
-            if (session) {
-                await newOrderItem.save({ session });
-            } else {
-                await newOrderItem.save();
-            }
-            orderItemIds.push(newOrderItem._id as mongoose.Types.ObjectId);
-        }
-
-        // Validate all sellers can deliver to user's location
-        if (sellerIds.size > 0) {
-            const uniqueSellerIds = Array.from(sellerIds).map(id => new mongoose.Types.ObjectId(id));
-
-            // Find sellers and check if user is within their service radius
-            const sellers = await Seller.find({
-                _id: { $in: uniqueSellerIds },
-                status: "Approved",
-                location: { $exists: true, $ne: null },
-            });
-
-            // Check each seller can deliver to user's location
-            for (const seller of sellers) {
-                if (!seller.location || !seller.location.coordinates) {
-                    if (session) await session.abortTransaction();
-                    return res.status(403).json({
-                        success: false,
-                        message: `Seller ${seller.storeName} does not have a valid location. Order cannot be placed.`,
-                    });
-                }
-
-                const sellerLng = seller.location.coordinates[0];
-                const sellerLat = seller.location.coordinates[1];
-                const distance = calculateDistance(deliveryLat, deliveryLng, sellerLat, sellerLng);
-                const serviceRadius = seller.serviceRadiusKm || 10;
-
-                if (distance > serviceRadius) {
-                    if (session) await session.abortTransaction();
-                    return res.status(403).json({
-                        success: false,
-                        message: `Your delivery address is ${distance.toFixed(2)} km away from ${seller.storeName}. They only deliver within ${serviceRadius} km. Please select products from sellers in your area.`,
-                    });
-                }
-            }
-        }
-
-        // Apply fees
-        const platformFee = Number(fees?.platformFee) || 0;
-        const deliveryFee = Number(fees?.deliveryFee) || 0;
-        const baseAmount = calculatedSubtotal + platformFee + deliveryFee;
-
-        const settings = await AppSettings.findOne().lean();
-        const cartRules = await getActiveCartRules();
-        const firstOrderDiscount = resolveFirstOrderOfferDiscount(
-          settings?.firstOrderOffer,
-          customer,
-          baseAmount
+// Create a new order (Cash on Delivery)
+export const createOrder = async (req: Request, res: Response) => {
+    try {
+        const { order } = await runInTransaction((session) =>
+            placeOrder({ userId: req.user!.userId, body: req.body, online: false }, session)
         );
-        const amountAfterFirstOrder = Math.max(0, baseAmount - firstOrderDiscount);
-        const cartRuleDiscount = calculateCartRuleDiscount(
-          cartRules,
-          calculatedSubtotal,
-          amountAfterFirstOrder
-        );
-        const finalTotal = Math.max(0, amountAfterFirstOrder - cartRuleDiscount);
 
-        // Update Order with calculated values and items
-        newOrder.subtotal = Number(calculatedSubtotal.toFixed(2));
-        newOrder.discount = Number((firstOrderDiscount + cartRuleDiscount).toFixed(2));
-        if (firstOrderDiscount > 0) {
-          newOrder.couponCode = FIRST_ORDER_OFFER_CODE;
-        }
-        newOrder.total = Number(finalTotal.toFixed(2));
-        newOrder.items = orderItemIds;
-
-
-        if (session) {
-            await newOrder.save({ session });
-            // Increment customer order stats
-            await Customer.findByIdAndUpdate(userId, {
-                $inc: { totalOrders: 1, totalSpent: newOrder.total }
-            }, { session });
-            await session.commitTransaction();
-        } else {
-            // Validate before saving to catch errors with details
-            const validationError = newOrder.validateSync();
-            if (validationError) {
-                console.error("DEBUG: Order Validation Error:", validationError.errors);
-                throw validationError;
-            }
-            await newOrder.save();
-            // Increment customer order stats
-            await Customer.findByIdAndUpdate(userId, {
-                $inc: { totalOrders: 1, totalSpent: newOrder.total }
-            });
-        }
-
-
-        // Emit notification to all available delivery boys
-        try {
-            const io: SocketIOServer = (req.app.get("io") as SocketIOServer);
-            if (io) {
-                // Reload order to ensure orderNumber is set (generated by pre-validate hook)
-                const savedOrder = await Order.findById(newOrder._id).lean();
-                if (savedOrder) {
-                    await notifyDeliveryBoysOfNewOrder(io, savedOrder);
-                    await notifySellersOfOrderUpdate(io, savedOrder, 'NEW_ORDER');
-                    await notifyAdminsOfNewOrder(io, savedOrder);
-                }
-            }
-        } catch (notificationError) {
-            // Log error but don't fail the order creation
-            console.error("Error notifying delivery boys:", notificationError);
-        }
+        await notifyNewOrder(req, order._id);
 
         return res.status(201).json({
             success: true,
             message: "Order placed successfully",
-            data: newOrder,
+            data: order,
         });
-
     } catch (error: any) {
-        if (session) {
-            try {
-                await session.abortTransaction();
-            } catch (abortError) {
-                console.error("Error aborting transaction:", abortError);
-            }
-        }
-
-        console.error("DEBUG: Order Creation Error Detail:", {
-            message: error.message,
-            name: error.name,
-            errors: error.errors ? Object.keys(error.errors).map(key => ({
-                field: key,
-                message: error.errors[key].message,
-                value: error.errors[key].value
-            })) : undefined,
-            stack: error.stack,
-            body: req.body
-        });
-
-        // Return a more informative error message if it's a validation error
-        let errorMessage = "Error creating order. " + error.message;
-        if (error.name === 'ValidationError') {
-            const fields = Object.keys(error.errors).join(', ');
-            errorMessage = `Validation failed for fields: ${fields}. ${error.message}`;
-        }
-
-        return res.status(500).json({
-            success: false,
-            message: errorMessage,
-            error: error.message,
-            details: error.errors,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-        });
-    } finally {
-        if (session) session.endSession();
+        return sendOrderError(res, error, "Error creating order.");
     }
 };
 
@@ -569,7 +140,8 @@ export const getOrderById = async (req: Request, res: Response) => {
                     { path: 'product', select: 'productName mainImage pack manufacturer price' },
                     { path: 'seller', select: 'storeName city phone fssaiLicNo' }
                 ]
-            });
+            })
+            .populate('deliveryBoy', 'name mobile profileImage vehicleNumber');
 
         if (!order) {
             return res.status(404).json({
@@ -593,7 +165,19 @@ export const getOrderById = async (req: Request, res: Response) => {
             subtotal: orderObj.subtotal,
             address: orderObj.deliveryAddress,
             // Include invoice enabled flag
-            invoiceEnabled: orderObj.invoiceEnabled || false
+            invoiceEnabled: orderObj.invoiceEnabled || false,
+            // Assigned delivery partner (shown with the delivery OTP)
+            deliveryPartner: orderObj.deliveryBoy && typeof orderObj.deliveryBoy === 'object'
+                ? {
+                    name: (orderObj.deliveryBoy as any).name,
+                    phone: (orderObj.deliveryBoy as any).mobile,
+                    profileImage: (orderObj.deliveryBoy as any).profileImage,
+                    vehicleNumber: (orderObj.deliveryBoy as any).vehicleNumber,
+                }
+                : undefined,
+            deliveryBoy: orderObj.deliveryBoy && typeof orderObj.deliveryBoy === 'object'
+                ? (orderObj.deliveryBoy as any)._id
+                : orderObj.deliveryBoy
         };
 
         return res.status(200).json({
@@ -622,20 +206,23 @@ export const refreshDeliveryOtp = async (req: Request, res: Response) => {
             return res.status(404).json({ success: false, message: "Order not found" });
         }
 
-        if (order.status === 'Delivered') {
-            return res.status(400).json({ success: false, message: "Order is already delivered" });
+        if (['Delivered', 'Cancelled', 'Rejected', 'Returned'].includes(order.status)) {
+            return res.status(400).json({ success: false, message: `Order is already ${order.status}` });
         }
 
         // Generate and send new OTP
         const result = await generateDeliveryOtp(id, order.customerPhone);
 
-        // Emit socket event if needed (customer room)
+        // Fetch updated order to get newly saved random 6-digit OTP
+        const updatedOrder = await Order.findById(id);
+
+        // Emit socket event (customer room)
         const io = (req.app as any).get("io");
-        if (io) {
+        if (io && updatedOrder) {
             io.to(`order-${id}`).emit('delivery-otp-refreshed', {
                 orderId: id,
-                deliveryOtp: order.deliveryOtp, // The service saves it to the order
-                expiresAt: order.deliveryOtpExpiresAt
+                deliveryOtp: updatedOrder.deliveryOtp,
+                expiresAt: updatedOrder.deliveryOtpExpiresAt
             });
         }
 
@@ -652,7 +239,6 @@ export const refreshDeliveryOtp = async (req: Request, res: Response) => {
 
 // Cancel Order
 export const cancelOrder = async (req: Request, res: Response) => {
-    let session: mongoose.ClientSession | null = null;
     try {
         const { id } = req.params;
         const { reason } = req.body;
@@ -662,94 +248,17 @@ export const cancelOrder = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: "Cancellation reason is required" });
         }
 
-        // Only start session if we are on a replica set (required for transactions)
-        try {
-            session = await mongoose.startSession();
-            session.startTransaction();
-        } catch (sessionError) {
-             console.warn("MongoDB Transactions not supported or failed to start. Proceeding without transaction.");
-             session = null;
-        }
+        const order: any = await cancelOrderAndRestoreStock(id, {
+            reason,
+            cancelledBy: userId,
+            filter: { customer: userId },
+            // Once the delivery partner has the items the order can no longer be cancelled
+            notCancellableFrom: ['Picked up', 'Shipped', 'Out for Delivery'],
+        });
 
-        const order = session
-            ? await Order.findOne({ _id: id, customer: userId }).session(session)
-            : await Order.findOne({ _id: id, customer: userId });
-
-        if (!order) {
-            if(session) await session.abortTransaction();
-            return res.status(404).json({ success: false, message: "Order not found" });
-        }
-
-        if (['Delivered', 'Cancelled', 'Returned', 'Rejected', 'Out for Delivery', 'Shipped'].includes(order.status)) {
-             if(session) await session.abortTransaction();
-            return res.status(400).json({
-                success: false,
-                message: `Order cannot be cancelled as it is already ${order.status}`
-            });
-        }
-
-        // Restore stock
-        for (const item of order.items) {
-             const orderItem = session
-                ? await OrderItem.findById(item).session(session)
-                : await OrderItem.findById(item);
-
-             if (orderItem) {
-                 const product = session
-                    ? await Product.findById(orderItem.product).session(session)
-                    : await Product.findById(orderItem.product);
-
-                 if (product) {
-                     // Check if it was a variation
-                     if (orderItem.variation) {
-                          // Try to find matching variation
-                          const variationIndex = product.variations?.findIndex((v: any) => v.value === orderItem.variation || v.title === orderItem.variation || v.pack === orderItem.variation);
-
-                          if (variationIndex !== undefined && variationIndex !== -1 && product.variations) {
-                               product.variations[variationIndex].stock += orderItem.quantity;
-                          } else if (product.variations && product.variations.length > 0) {
-                               // Fallback to first variation if specific one not found (should be rare)
-                               product.variations[0].stock += orderItem.quantity;
-                          }
-                     }
-
-                     // Helper: also increment main stock if variations are just attributes or if simple product
-                     product.stock += orderItem.quantity;
-                     if (session) {
-                        await product.save({ session });
-                     } else {
-                        await product.save();
-                     }
-                 }
-
-                 orderItem.status = 'Cancelled';
-                 if (session) {
-                    await orderItem.save({ session });
-                 } else {
-                    await orderItem.save();
-                 }
-             }
-        }
-
-        order.status = 'Cancelled';
-        order.cancellationReason = reason;
-        order.cancelledAt = new Date();
-        order.cancelledBy = new mongoose.Types.ObjectId(userId); // Use Customer ID as canceller
-
-        if (session) {
-            await order.save({ session });
-            await session.commitTransaction();
-        } else {
-            await order.save();
-        }
-
-        // Notify
         try {
             const io = (req.app as any).get("io");
-            if (io) {
-                await notifySellersOfOrderUpdate(io, order, 'ORDER_CANCELLED');
-                // Notify delivery boy if assigned?
-            }
+            if (io) await notifySellersOfOrderUpdate(io, order, 'ORDER_CANCELLED');
         } catch (err) {
             console.error("Notification error:", err);
         }
@@ -763,21 +272,8 @@ export const cancelOrder = async (req: Request, res: Response) => {
                 cancelledAt: order.cancelledAt
             }
         });
-
     } catch (error: any) {
-        if(session) {
-            try {
-                await session.abortTransaction();
-            } catch (e) {}
-        }
-        console.error('Error cancelling order:', error);
-        return res.status(500).json({
-            success: false,
-            message: "Failed to cancel order",
-            error: error.message
-        });
-    } finally {
-        if (session) session.endSession();
+        return sendOrderError(res, error, "Failed to cancel order.");
     }
 };
 
@@ -826,384 +322,126 @@ export const updateOrderNotes = async (req: Request, res: Response) => {
 
 /**
  * Initiate Online Order (Razorpay/Cashfree)
+ * Creates the order in "Pending" (awaiting payment) with stock reserved, then opens a gateway order.
+ * Unpaid orders are released automatically after ONLINE_PAYMENT_WINDOW_MINUTES.
  */
 export const initiateOnlineOrder = async (req: Request, res: Response) => {
-    let session: mongoose.ClientSession | null = null;
+    let order: any;
+    let customer: any;
     try {
-        // Only start session if we are on a replica set (required for transactions)
-        try {
-            session = await mongoose.startSession();
-            session.startTransaction();
-        } catch (sessionError) {
-             session = null;
-        }
+        ({ order, customer } = await runInTransaction((session) =>
+            placeOrder({ userId: req.user!.userId, body: req.body, online: true }, session)
+        ));
+    } catch (error: any) {
+        return sendOrderError(res, error, "Failed to initiate order.");
+    }
 
-        const { items, address, paymentMethod, fees } = req.body;
-        const userId = req.user!.userId;
-
-        // --- Validation Logic (Same as createOrder) ---
-        if (!items || items.length === 0) {
-            if (session) await session.abortTransaction();
-            return res.status(400).json({ success: false, message: "Order must have at least one item" });
-        }
-
-        if (!address) {
-            if (session) await session.abortTransaction();
-            return res.status(400).json({ success: false, message: "Delivery address is required" });
-        }
-
-        const customer = await Customer.findById(userId);
-        if (!customer) {
-            if (session) await session.abortTransaction();
-            return res.status(404).json({ success: false, message: "Customer not found" });
-        }
-
-        const deliveryLat = address.latitude != null ? Number(address.latitude) : null;
-        const deliveryLng = address.longitude != null ? Number(address.longitude) : null;
-
-        if (deliveryLat == null || deliveryLng == null || isNaN(deliveryLat) || isNaN(deliveryLng)) {
-             if (session) await session.abortTransaction();
-             return res.status(400).json({ success: false, message: "Invalid delivery address coordinates" });
-        }
-
-        // Fetch AppSettings to check for online payment discount
-        const settings = await AppSettings.findOne().lean();
-        const onlineDiscountConfig = settings?.onlinePaymentDiscount;
-
-        // --- Create Order Shell ---
-        const newOrder = new Order({
-            customer: new mongoose.Types.ObjectId(userId),
-            customerName: customer.name,
-            customerEmail: customer.email,
-            customerPhone: customer.phone,
-            deliveryAddress: {
-                address: address.address || address.street || 'N/A',
-                city: address.city || 'N/A',
-                state: address.state || '',
-                pincode: address.pincode || '000000',
-                landmark: address.landmark || '',
-                latitude: deliveryLat,
-                longitude: deliveryLng,
-            },
-            paymentMethod: paymentMethod || 'Online',
-            paymentStatus: 'Pending',
-            status: 'Pending', // Pending payment
-            subtotal: 0,
-            tax: 0,
-            shipping: fees?.deliveryFee || 0,
-            platformFee: fees?.platformFee || 0,
-            discount: 0,
-            total: 0,
-            items: []
-        });
-
-        let calculatedSubtotal = 0;
-        const orderItemIds: mongoose.Types.ObjectId[] = [];
-        const sellerIds = new Set<string>();
-
-        // --- Process Items & Stock ---
-        for (const item of items) {
-            const qty = Number(item.quantity) || 0;
-            if (qty <= 0) throw new Error("Invalid item quantity");
-
-            const variationValue = item.variant || item.variation;
-            let product;
-
-            // Try decrementing stock (with session if available)
-            // Skip stock check/deduction for Free Gifts
-            if (item.isFreeGift) {
-                // For free gifts, we just need the product details to create the order item
-                product = await Product.findById(item.product.id);
-                if (!product) {
-                     // If it's a transient object from frontend (rare), we might need to handle differently,
-                     // but for now assume it exists in DB. If not found, log warning and skip adding to order?
-                     // Or better, just continue; it won't be added to orderItemIds if we don't push it.
-                     // But we should likely throw error if gift rule implies it exists.
-                     // However, to prevent order blocking:
-                     console.warn(`Free gift product ${item.product.id} not found in DB.`);
-                     continue;
-                }
-            } else {
-                const variationConditions = variationValue ? getVariationMatchConditions(variationValue) : [];
-
-                if (variationValue) {
-                    product = session
-                        ? await Product.findOneAndUpdate(
-                            {
-                                _id: item.product.id,
-                                $or: variationConditions,
-                                "variations.stock": { $gte: qty }
-                            },
-                            { $inc: { "variations.$.stock": -qty, stock: -qty } },
-                            { session, new: true }
-                        )
-                        : await Product.findOneAndUpdate(
-                            {
-                                _id: item.product.id,
-                                $or: variationConditions,
-                                "variations.stock": { $gte: qty }
-                            },
-                            { $inc: { "variations.$.stock": -qty, stock: -qty } },
-                            { new: true }
-                        );
-                }
-
-                if (!product) {
-                    const checkProduct = await Product.findById(item.product.id);
-
-                    if (checkProduct && checkProduct.variations && checkProduct.variations.length > 0) {
-                        if (variationValue) {
-                             throw new Error(`Insufficient stock for variation: ${variationValue}`);
-                        }
-
-                        product = session
-                            ? await Product.findOneAndUpdate(
-                                {
-                                    _id: item.product.id,
-                                    "variations.0.stock": { $gte: qty }
-                                },
-                                { $inc: { "variations.0.stock": -qty, stock: -qty } },
-                                { session, new: true }
-                            )
-                            : await Product.findOneAndUpdate(
-                                {
-                                    _id: item.product.id,
-                                    "variations.0.stock": { $gte: qty }
-                                },
-                                { $inc: { "variations.0.stock": -qty, stock: -qty } },
-                                { new: true }
-                            );
-                    } else {
-                        // No variations, just decrement top-level stock
-                        product = session
-                            ? await Product.findOneAndUpdate(
-                                { _id: item.product.id, stock: { $gte: qty } },
-                                { $inc: { stock: -qty } },
-                                { session, new: true }
-                              )
-                            : await Product.findOneAndUpdate(
-                                { _id: item.product.id, stock: { $gte: qty } },
-                                { $inc: { stock: -qty } },
-                                { new: true }
-                              );
-                    }
-                }
-            }
-            // End of Free Gift vs Regular Product Logic
-
-
-            if (!product) {
-                console.error(`Processed Item Failed:`, {
-                    itemId: item.product.id,
-                    isFreeGift: item.isFreeGift,
-                    variant: variationValue
-                });
-                throw new Error(`Insufficient stock or product not found: ID ${item.product.id}`);
-            }
-
-            if (product.seller) sellerIds.add(product.seller.toString());
-
-            // Price Logic
-            let selectedVariation;
-            if (variationValue && product.variations) {
-                selectedVariation = product.variations.find((v: any) => matchesVariation(v, variationValue));
-            }
-            if (!selectedVariation && product.variations && product.variations.length > 0) selectedVariation = product.variations[0];
-
-            const itemPrice = (selectedVariation?.discPrice && selectedVariation.discPrice > 0)
-                 ? selectedVariation.discPrice
-                 : (product.discPrice && product.discPrice > 0 ? product.discPrice : (selectedVariation?.price || product.price || 0));
-
-            const itemTotal = itemPrice * qty;
-            calculatedSubtotal += itemTotal;
-
-            const newOrderItem = new OrderItem({
-                order: newOrder._id,
-                product: product._id,
-                seller: product.seller,
-                productName: product.productName,
-                productImage: product.mainImage,
-                sku: product.sku,
-                unitPrice: itemPrice,
-                quantity: qty,
-                total: itemTotal,
-                variation: variationValue,
-                status: 'Pending'
-            });
-
-            if (session) await newOrderItem.save({ session });
-            else await newOrderItem.save();
-            orderItemIds.push(newOrderItem._id as mongoose.Types.ObjectId);
-        }
-
-        // --- Validate Sellers (Distance) ---
-        if (sellerIds.size > 0) {
-            const uniqueSellerIds = Array.from(sellerIds).map(id => new mongoose.Types.ObjectId(id));
-            const sellers = await Seller.find({ _id: { $in: uniqueSellerIds }, status: "Approved", location: { $exists: true, $ne: null } });
-
-            for (const seller of sellers) {
-                 if (!seller.location || !seller.location.coordinates) continue;
-                 const distance = calculateDistance(deliveryLat, deliveryLng, seller.location.coordinates[1], seller.location.coordinates[0]);
-                 const serviceRadius = seller.serviceRadiusKm || 10;
-                 if (distance > serviceRadius) {
-                     // if (session) await session.abortTransaction();
-                     // return res.status(403).json({ success: false, message: `Seller ${seller.storeName} does not deliver to your location.` });
-                     console.warn(`Seller ${seller.storeName} is out of radius (${distance}km > ${serviceRadius}km) but allowing for testing.`);
-                 }
-            }
-        }
-
-        // --- Finalize Order Totals ---
-        const platformFee = Number(fees?.platformFee) || 0;
-        const deliveryFee = Number(fees?.deliveryFee) || 0;
-
-        // Base amount for discount is subtotal + shipping + platform fee
-        const baseAmount = calculatedSubtotal + deliveryFee + platformFee;
-
-        const firstOrderDiscount = resolveFirstOrderOfferDiscount(
-          settings?.firstOrderOffer,
-          customer,
-          baseAmount
-        );
-        const amountAfterFirstOrder = Math.max(0, baseAmount - firstOrderDiscount);
-        const cartRules = await getActiveCartRules();
-        const cartRuleDiscount = calculateCartRuleDiscount(
-          cartRules,
-          calculatedSubtotal,
-          amountAfterFirstOrder
-        );
-        const amountAfterCartRules = Math.max(0, amountAfterFirstOrder - cartRuleDiscount);
-
-        let onlineDiscount = 0;
-        if (onlineDiscountConfig?.enabled && onlineDiscountConfig?.percentage > 0) {
-            onlineDiscount = (amountAfterCartRules * onlineDiscountConfig.percentage) / 100;
-        }
-
-        const totalDiscount = firstOrderDiscount + cartRuleDiscount + onlineDiscount;
-        const finalTotal = Math.max(0, baseAmount - totalDiscount);
-
-        newOrder.subtotal = Number(calculatedSubtotal.toFixed(2));
-        newOrder.discount = Number(totalDiscount.toFixed(2));
-        if (firstOrderDiscount > 0) {
-          newOrder.couponCode = FIRST_ORDER_OFFER_CODE;
-        }
-        newOrder.total = Number(finalTotal.toFixed(2));
-        newOrder.items = orderItemIds;
-
-        if (session) {
-            await newOrder.save({ session });
-            // Increment customer order stats (pre-emptive for online orders)
-            await Customer.findByIdAndUpdate(userId, {
-                $inc: { totalOrders: 1, totalSpent: newOrder.total }
-            }, { session });
-            await session.commitTransaction();
-        } else {
-             await newOrder.save();
-             // Increment customer order stats
-             await Customer.findByIdAndUpdate(userId, {
-                 $inc: { totalOrders: 1, totalSpent: newOrder.total }
-             });
-        }
-
-        // --- Initiate Gateway ---
-        const amountInPaise = Math.round(finalTotal * 100);
-
-        if (paymentMethod === 'Razorpay') {
-             const auth = Buffer.from(`${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`).toString('base64');
-             const razorpayResponse = await axios.post('https://api.razorpay.com/v1/orders', {
-                 amount: amountInPaise,
-                 currency: "INR",
-                 receipt: newOrder.orderNumber,
-                 notes: { order_id: newOrder._id.toString() }
-             }, { headers: { 'Authorization': `Basic ${auth}` } });
-
-             return res.status(200).json({
-                 success: true,
-                 data: {
-                     gateway: 'Razorpay',
-                     orderId: newOrder._id,
-                     razorpayOrderId: razorpayResponse.data.id,
-                     amount: finalTotal,
-                     key: process.env.RAZORPAY_KEY_ID,
-                     customer: { name: customer.name, email: customer.email, contact: customer.phone }
-                 }
-             });
-        } else if (paymentMethod === 'Cashfree') {
-            const baseUrl = process.env.CASHFREE_MODE === 'production' ? 'https://api.cashfree.com/pg' : 'https://sandbox.cashfree.com/pg';
-            const cashfreeResponse = await axios.post(`${baseUrl}/orders`, {
-                order_id: `cust_${newOrder._id}_${Date.now()}`,
-                order_amount: finalTotal,
-                order_currency: "INR",
-                customer_details: {
-                    customer_id: customer._id.toString(),
-                    customer_email: customer.email || "customer@example.com",
-                    customer_phone: customer.phone || "9999999999"
-                },
-                order_meta: {
-                    return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/order/success?order_id=${newOrder._id}`
-                }
-            }, {
-                headers: {
-                    'x-client-id': process.env.CASHFREE_APP_ID,
-                    'x-client-secret': process.env.CASHFREE_SECRET_KEY,
-                    'x-api-version': '2023-08-01'
-                }
-            });
+    const orderId = String(order._id);
+    try {
+        if (order.paymentMethod === 'Razorpay') {
+            const razorpayOrder = await createRazorpayOrder(order.total, order.orderNumber, orderId);
+            await Order.updateOne({ _id: order._id }, { $set: { gatewayOrderId: razorpayOrder.id } });
 
             return res.status(200).json({
                 success: true,
                 data: {
-                    gateway: 'Cashfree',
-                    orderId: newOrder._id,
-                    paymentSessionId: cashfreeResponse.data.payment_session_id,
-                    amount: finalTotal,
-                    isSandbox: process.env.CASHFREE_MODE !== 'production'
+                    gateway: 'Razorpay',
+                    orderId: order._id,
+                    razorpayOrderId: razorpayOrder.id,
+                    amount: order.total,
+                    key: process.env.RAZORPAY_KEY_ID,
+                    customer: { name: customer.name, email: customer.email, contact: customer.phone }
                 }
             });
         }
 
-        return res.status(400).json({ success: false, message: "Invalid Payment Gateway" });
+        const cashfreeOrder = await createCashfreeOrder({
+            amount: order.total,
+            orderId,
+            customerId: String(customer._id),
+            email: customer.email,
+            phone: customer.phone,
+        });
+        await Order.updateOne({ _id: order._id }, { $set: { gatewayOrderId: cashfreeOrder.cfOrderId } });
 
-    } catch (error: any) {
-        if (session) {
-             try { await session.abortTransaction(); } catch (e) {}
-        }
-        console.error("Initiate Online Order Error:", error);
-        return res.status(500).json({ success: false, message: error.message || "Failed to initiate order" });
-    } finally {
-        if (session) session.endSession();
+        return res.status(200).json({
+            success: true,
+            data: {
+                gateway: 'Cashfree',
+                orderId: order._id,
+                paymentSessionId: cashfreeOrder.paymentSessionId,
+                amount: order.total,
+                isSandbox: process.env.CASHFREE_MODE !== 'production'
+            }
+        });
+    } catch (gatewayError: any) {
+        console.error("Payment gateway error:", gatewayError?.response?.data || gatewayError?.message);
+        // Release the reserved stock — the customer never reached the payment page
+        await cancelOrderAndRestoreStock(orderId, { reason: "Payment gateway error" }).catch((e) =>
+            console.error("Failed to release order after gateway error:", e)
+        );
+        return res.status(502).json({ success: false, message: "Could not start the payment. Please try again." });
     }
 };
 
 /**
  * Verify Online Payment
+ * Razorpay: checks the checkout signature. Cashfree: asks Cashfree for the order status.
+ * Only then is the order marked Paid and sent to sellers/delivery partners.
  */
 export const verifyOnlinePayment = async (req: Request, res: Response) => {
     try {
-        const { orderId, paymentId, status } = req.body;
+        const { orderId, paymentId, razorpayOrderId, razorpaySignature } = req.body;
+        const userId = req.user!.userId;
 
-        const order = await Order.findById(orderId);
+        if (!orderId || !mongoose.isValidObjectId(orderId)) {
+            return res.status(400).json({ success: false, message: "Order ID is required" });
+        }
+        const order: any = await Order.findOne({ _id: orderId, customer: userId });
         if (!order) return res.status(404).json({ success: false, message: "Order not found" });
 
-        if (order.status !== 'Pending') {
-            return res.status(400).json({ success: false, message: "Order is not in pending state" });
+        if (order.paymentStatus === "Paid") {
+            return res.status(200).json({ success: true, message: "Payment already verified", data: order });
+        }
+        if (!order.gatewayOrderId) {
+            return res.status(400).json({ success: false, message: "No payment was started for this order" });
         }
 
-        order.paymentStatus = "Paid";
-        order.status = "Received"; // Now ready for processing
-        order.adminNotes = (order.adminNotes || "") + `\nOnline Payment Verified (ID: ${paymentId})`;
-        await order.save();
-
-        // Notify
-        const io: SocketIOServer = (req.app.get("io") as SocketIOServer);
-        if (io) {
-            await notifyDeliveryBoysOfNewOrder(io, order);
-            await notifySellersOfOrderUpdate(io, order, 'NEW_ORDER');
+        let verifiedPaymentId: string | null = null;
+        if (order.paymentGateway === 'Razorpay' || order.paymentMethod === 'Razorpay') {
+            if (razorpayOrderId === order.gatewayOrderId && isValidRazorpaySignature(order.gatewayOrderId, paymentId, razorpaySignature)) {
+                verifiedPaymentId = paymentId;
+            }
+        } else if (order.paymentGateway === 'Cashfree' || order.paymentMethod === 'Cashfree') {
+            verifiedPaymentId = await getCashfreePaidReference(order.gatewayOrderId, order.total);
         }
 
-        return res.status(200).json({ success: true, message: "Payment verified", data: order });
+        if (!verifiedPaymentId) {
+            return res.status(400).json({ success: false, message: "Payment could not be verified. If money was deducted it will be refunded." });
+        }
+
+        const { order: paidOrder, alreadyConfirmed } = await confirmOnlinePayment(String(order._id), verifiedPaymentId);
+        if (!alreadyConfirmed) await notifyNewOrder(req, paidOrder._id);
+
+        return res.status(200).json({ success: true, message: "Payment verified", data: paidOrder });
     } catch (error: any) {
-        return res.status(500).json({ success: false, message: "Verification failed", error: error.message });
+        return sendOrderError(res, error, "Verification failed.");
+    }
+};
+
+/**
+ * Abandon an unpaid online order (payment popup closed or failed) and release its stock.
+ */
+export const abandonOnlinePayment = async (req: Request, res: Response) => {
+    try {
+        const order: any = await cancelOrderAndRestoreStock(req.params.id, {
+            reason: req.body?.reason || "Payment not completed",
+            cancelledBy: req.user!.userId,
+            filter: { customer: req.user!.userId, status: "Pending", paymentStatus: { $ne: "Paid" } },
+        });
+        return res.status(200).json({ success: true, message: "Order released", data: { id: order._id, status: order.status } });
+    } catch (error: any) {
+        return sendOrderError(res, error, "Failed to release order.");
     }
 };
 

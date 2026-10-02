@@ -275,7 +275,7 @@ const AppSettingsSchema = new Schema<IAppSettings>(
     appName: {
       type: String,
       required: [true, "App name is required"],
-      default: "Geeta Stores",
+      default: "Unnati Stores",
       trim: true,
     },
     appLogo: {
@@ -784,8 +784,8 @@ AppSettingsSchema.statics.getSettings = async function () {
   let settings = await this.findOne();
   if (!settings) {
     settings = await this.create({
-      appName: "Geeta Stores",
-      contactEmail: "contact@geetastores.com",
+      appName: "Unnati Stores",
+      contactEmail: "contact@Unnatistores.com",
       contactPhone: "1234567890",
     });
   }

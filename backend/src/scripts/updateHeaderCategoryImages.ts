@@ -5,7 +5,7 @@ import HeaderCategory from "../models/HeaderCategory";
 
 dotenv.config({ path: path.join(__dirname, "../../.env") });
 
-const MONGO_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/Geeta Stores";
+const MONGO_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/Unnati Stores";
 
 const imageMap: Record<string, string> = {
   grocery: "/dairy.jpg",

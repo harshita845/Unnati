@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import Product from "./models/Product";
 
-const MONGODB_URI = "mongodb+srv://allokfarms_db_user:RSWTY1kVcvGeOtje@cluster1.moyfuna.mongodb.net/geeta-ecom?retryWrites=true&w=majority&appName=Cluster1";
+const MONGODB_URI = "mongodb+srv://allokfarms_db_user:RSWTY1kVcvGeOtje@cluster1.moyfuna.mongodb.net/Unnati-ecom?retryWrites=true&w=majority&appName=Cluster1";
 
 async function run() {
   try {

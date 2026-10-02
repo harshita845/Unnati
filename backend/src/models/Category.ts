@@ -1,5 +1,9 @@
 import mongoose, { Document, Schema, Model } from "mongoose";
 
+/** Subscription frequencies an admin can enable per category. */
+export const SUBSCRIPTION_PLANS = ["daily", "weekly", "monthly", "yearly"] as const;
+export type SubscriptionPlan = (typeof SUBSCRIPTION_PLANS)[number];
+
 export interface ICategory extends Document {
   name: string;
   slug: string;
@@ -12,6 +16,8 @@ export interface ICategory extends Document {
   status: "Active" | "Inactive";
   parentId?: mongoose.Types.ObjectId;
   headerCategoryId?: mongoose.Types.ObjectId;
+  subscriptionEnabled: boolean;
+  allowedPlans: SubscriptionPlan[];
   createdAt: Date;
   updatedAt: Date;
   getAllDescendants(): Promise<ICategory[]>;
@@ -78,6 +84,23 @@ const CategorySchema = new Schema<ICategory>(
       type: Schema.Types.ObjectId,
       ref: "HeaderCategory",
       default: null,
+    },
+    // Subscription plans (existing categories default to disabled / no plans)
+    subscriptionEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    allowedPlans: {
+      type: [
+        {
+          type: String,
+          enum: {
+            values: SUBSCRIPTION_PLANS as unknown as string[],
+            message: "Invalid subscription plan: {VALUE}",
+          },
+        },
+      ],
+      default: [],
     },
   },
   {

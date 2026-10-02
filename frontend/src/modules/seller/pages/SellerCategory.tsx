@@ -226,26 +226,16 @@ export default function SellerCategory() {
     const displayedCategories = filteredCategories.slice(startIndex, endIndex);
 
     const handleSaveCategory = async (category: Category) => {
+        const isEdit = !!editingCategory?._id;
         try {
-            const isEdit = !!editingCategory?._id;
-            let saved: any;
-            try {
-                const res = isEdit
-                    ? await apiUpdateSellerOwnCategory(String(editingCategory?._id), category)
-                    : await apiCreateSellerOwnCategory(category);
-                if (res.success && res.data) {
-                    saved = res.data;
-                }
-            } catch {}
-
-            if (!saved) {
-                saved = {
-                    ...category,
-                    _id: editingCategory?._id || `cat_sel_${Date.now()}`,
-                    totalSubcategory: 0,
-                    type: 'seller'
-                };
+            const res = isEdit
+                ? await apiUpdateSellerOwnCategory(String(editingCategory?._id), category)
+                : await apiCreateSellerOwnCategory(category);
+            if (!res.success || !res.data) {
+                showToast(res.message || 'Failed to save category', 'error');
+                return;
             }
+            const saved: any = res.data;
 
             const updatedCategories = isEdit
                 ? ownCategories.map((c) => (c._id === saved._id ? saved : c))
@@ -255,8 +245,9 @@ export default function SellerCategory() {
             showToast(isEdit ? 'Category updated successfully!' : 'Category created successfully!', 'success');
             setEditingCategory(null);
             setIsAddModalOpen(false);
-        } catch {
-            showToast('Failed to save category', 'error');
+        } catch (err: any) {
+            // Don't keep a local-only copy: products can't be saved against a category the server doesn't have
+            showToast(err?.response?.data?.message || 'Failed to save category', 'error');
         }
     };
 
@@ -288,15 +279,16 @@ export default function SellerCategory() {
     const handleDelete = async (id: string) => {
         if (window.confirm('Are you sure you want to delete this category?')) {
             try {
-                try {
+                // Categories created offline by older versions only exist in this browser
+                if (!String(id).startsWith('cat_sel_')) {
                     await apiDeleteSellerOwnCategory(id);
-                } catch {}
+                }
                 const updatedCategories = ownCategories.filter(c => c._id !== id);
                 setOwnCategories(updatedCategories);
                 localStorage.setItem('seller_own_categories', JSON.stringify(updatedCategories));
                 showToast('Category deleted successfully!', 'success');
-            } catch {
-                showToast('Failed to delete category', 'error');
+            } catch (err: any) {
+                showToast(err?.response?.data?.message || 'Failed to delete category', 'error');
             }
         }
     };

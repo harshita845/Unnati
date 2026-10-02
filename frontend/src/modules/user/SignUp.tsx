@@ -305,7 +305,7 @@ export default function SignUp() {
 
             {/* Privacy Text */}
             <p className="text-[9px] sm:text-[10px] text-neutral-500 text-center max-w-sm leading-tight px-4 relative z-10 pb-1 mt-2">
-              By signing up, you agree to Geeta Stores's Terms of Service and Privacy Policy
+              By signing up, you agree to Unnati Stores's Terms of Service and Privacy Policy
             </p>
           </div>
         </div>

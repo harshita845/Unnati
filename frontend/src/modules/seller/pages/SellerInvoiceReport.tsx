@@ -98,6 +98,7 @@ const SellerInvoiceReport = () => {
   };
 
   const handleCellEdit = async (id: string, field: keyof ReportOrder, value: any) => {
+    const previousValue = (orders as ReportOrder[]).find((item: ReportOrder) => item._id === id)?.[field];
     // Local Update
     setOrders(prev => (prev as ReportOrder[]).map((item: ReportOrder) =>
       item._id === id ? { ...item, [field]: value } : item
@@ -108,8 +109,12 @@ const SellerInvoiceReport = () => {
       try {
         await updateOrderStatus(id, { status: value });
         toast.success(`Updated Invoice #${id.slice(-6)} to ${value}`);
-      } catch (error) {
-        toast.error("Failed to sync status update");
+      } catch (error: any) {
+        // Revert — the backend refused the change (e.g. order already delivered)
+        setOrders(prev => (prev as ReportOrder[]).map((item: ReportOrder) =>
+          item._id === id ? ({ ...item, [field]: previousValue } as ReportOrder) : item
+        ));
+        toast.error(error?.response?.data?.message || "Failed to sync status update");
       }
     }
   };

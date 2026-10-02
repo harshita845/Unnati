@@ -20,19 +20,19 @@ async function resolveAdminSeller(sellerId?: string): Promise<string> {
 
   let adminSeller = await Seller.findOne({
     $or: [
-      { email: "admin-store@geetastores.com" },
+      { email: "admin-store@Unnatistores.com" },
       { mobile: "9999999999" },
     ],
   });
 
   if (!adminSeller) {
     adminSeller = await Seller.create({
-      sellerName: "Geeta Stores Admin",
-      storeName: "Geeta Stores Admin Store",
-      email: "admin-store@geetastores.com",
+      sellerName: "Unnati Stores Admin",
+      storeName: "Unnati Stores Admin Store",
+      email: "admin-store@Unnatistores.com",
       mobile: "9999999999",
       password: "AdminStore@123",
-      address: "Geeta Stores HQ",
+      address: "Unnati Stores HQ",
       city: "Admin City",
       category: "Admin",
       commission: 0,

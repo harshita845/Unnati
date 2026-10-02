@@ -143,7 +143,7 @@ export default function OrderAgain() {
             <h2 className="text-sm md:text-lg font-bold text-neutral-900 mb-3 capitalize tracking-tight">Your Previous Orders</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {orders.map((order) => {
-                const shortId = order.id.split('-').slice(-1)[0];
+                const shortId = order.orderNumber || order.id.split('-').slice(-1)[0];
                 const previewItems = order.items.slice(0, 3);
 
                 return (

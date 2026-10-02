@@ -164,9 +164,9 @@ export default function Home() {
           setLoading(true);
         }
         setError(null);
-        const response = await getHomeContent(undefined, undefined, undefined, true, 5 * 60 * 1000, true);
+        const response = await getHomeContent(undefined, location?.latitude, location?.longitude, true, 5 * 60 * 1000, true, location?.city);
         if (response.success && response.data) {
-          let finalData = { ...response.data };
+          const finalData = { ...response.data };
 
           // Inject Seller Categories into homeSections. Customers must only
           // see Active seller-own categories — when a seller marks one as
@@ -235,34 +235,7 @@ export default function Home() {
     };
 
     fetchData();
-
-    // Preload PromoStrip data
-    const preloadHeaderCategories = async () => {
-      try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        const headerCategories = await getHeaderCategoriesPublic(true);
-        const slugsToPreload = ['all', ...headerCategories.map(cat => cat.slug)];
-        const batchSize = 2;
-        for (let i = 0; i < slugsToPreload.length; i += batchSize) {
-          const batch = slugsToPreload.slice(i, i + batchSize);
-          await Promise.all(
-            batch.map(slug =>
-              getHomeContent(slug, undefined, undefined, true, 5 * 60 * 1000, true).catch(err => {
-                console.debug(`Failed to preload data for ${slug}:`, err);
-              })
-            )
-          );
-          if (i + batchSize < slugsToPreload.length) {
-            await new Promise(resolve => setTimeout(resolve, 200));
-          }
-        }
-      } catch (error) {
-        console.debug("Failed to preload header categories:", error);
-      }
-    };
-
-    preloadHeaderCategories();
-  }, []);
+  }, [location?.latitude, location?.longitude, location?.city]);
 
   useEffect(() => {
     return () => {
@@ -423,7 +396,7 @@ export default function Home() {
           setHomeData(defaultHome.data);
         } else {
           try {
-            const response = await getHomeContent(undefined, location?.latitude, location?.longitude, true, 5 * 60 * 1000, true);
+            const response = await getHomeContent(undefined, location?.latitude, location?.longitude, false, 0, true);
             if (response.success && response.data) {
               setHomeData(response.data);
             }

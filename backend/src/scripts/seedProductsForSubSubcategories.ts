@@ -22,7 +22,7 @@ function log(msg: any) {
 }
 
 // --- Configuration ---
-const MONGO_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/Geeta Stores";
+const MONGO_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/Unnati Stores";
 const FRONTEND_ASSETS_PATH = path.join(__dirname, "../../../frontend/assets");
 const PRODUCT_IMAGES_PATH = path.join(
   FRONTEND_ASSETS_PATH,
@@ -230,7 +230,7 @@ async function uploadToCloudinary(
 
   try {
     const result = await cloudinary.uploader.upload(localPath, {
-      folder: `Geeta Stores/${folder}`,
+      folder: `Unnati Stores/${folder}`,
       resource_type: "image",
       use_filename: true,
       unique_filename: false,

@@ -30,6 +30,9 @@ interface QRScannerModalProps {
   onScanSuccess: (decodedText: string) => void;
   onScanFailure?: (error: unknown) => void;
   onClose: () => void;
+  /** Title and manual-entry placeholder; defaults keep the existing billing scanner text. */
+  title?: string;
+  manualPlaceholder?: string;
 }
 
 const BILLING_BARCODE_FORMATS = [
@@ -61,6 +64,8 @@ export default function QRScannerModal({
   onScanSuccess,
   onScanFailure,
   onClose,
+  title,
+  manualPlaceholder,
 }: QRScannerModalProps) {
   const scannerProfile = useMemo(() => getScannerProfile(), []);
   const isIosProfile = scannerProfile.id === "ios";
@@ -93,6 +98,7 @@ export default function QRScannerModal({
   const [zoom, setZoom] = useState(1);
   const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1 });
   const [isHighContrast, setIsHighContrast] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
@@ -218,6 +224,7 @@ export default function QRScannerModal({
         stopIosCamera();
         setCameraReady(false);
         setIosPreviewStalled(true);
+        setCameraError("Camera permission denied or camera not available. Please enable camera access in browser settings or click 'Upload Image'.");
         onScanFailureRef.current?.(err);
       } finally {
         setIosStarting(false);
@@ -313,9 +320,10 @@ export default function QRScannerModal({
 
     beginLiveScanRef.current = beginLiveScan;
 
-    beginLiveScan().catch((err: unknown) => {
-      console.error("QRScannerModal: camera failed to start", err);
+    beginLiveScan().catch((err: any) => {
+      console.warn("QRScannerModal: camera start deferred (permission or device unavailable)", err?.message || err);
       setCameraReady(false);
+      setCameraError("Camera permission denied or camera not available. Please allow camera access in your browser settings, enter Order ID below, or click 'Upload Image'.");
     });
 
     return () => {
@@ -423,17 +431,10 @@ export default function QRScannerModal({
       handledRef.current = true;
       playBeep();
       onScanSuccessRef.current(text);
-    } catch (err) {
+    } catch (err: any) {
       handledRef.current = false;
-      if (isIosProfile) {
-        void attachIosStream(requestIosCameraStream());
-      } else {
-        try {
-          await beginLiveScanRef.current?.();
-        } catch (resumeErr) {
-          console.error("QRScannerModal: could not resume camera", resumeErr);
-        }
-      }
+      const errorMsg = err?.message || "No barcode found in image";
+      setCameraError(`Image scan failed: ${errorMsg}. Please upload a clear QR code image.`);
       onScanFailureRef.current?.(err);
     }
   };
@@ -498,7 +499,7 @@ export default function QRScannerModal({
 
         <div className="flex justify-between items-center py-2.5 px-4 border-b border-gray-100 shrink-0">
           <div>
-            <h3 className="text-base font-bold text-gray-800 leading-tight">Scan barcode</h3>
+            <h3 className="text-base font-bold text-gray-800 leading-tight">{title || "Scan barcode"}</h3>
             <p className="text-[9px] text-gray-500 uppercase tracking-wider font-semibold">
               {scannerProfile.label}
             </p>
@@ -517,6 +518,16 @@ export default function QRScannerModal({
         </div>
 
         <div className="flex-1 overflow-y-auto bg-gray-50 p-4 space-y-3">
+          {cameraError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800 leading-relaxed flex items-start gap-2">
+              <span className="shrink-0 text-base">⚠️</span>
+              <div>
+                <p className="font-bold text-red-900">Camera Access Denied</p>
+                <p className="mt-0.5 text-red-700">{cameraError}</p>
+              </div>
+            </div>
+          )}
+
           {isIosProfile && iosPreviewStalled && !iosStarting && (
             <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[11px] text-amber-800 leading-relaxed">
               Camera paused — tap the preview to resume.
@@ -608,9 +619,9 @@ export default function QRScannerModal({
             />
             <button
               type="button"
-              disabled={!cameraReady && !isIosProfile}
+              disabled={false}
               onClick={() => fileInputRef.current?.click()}
-              className="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 shadow-sm"
+              className="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm"
             >
               {isIosProfile ? "Photo of Barcode" : "Upload Image"}
             </button>
@@ -627,6 +638,28 @@ export default function QRScannerModal({
                 {torchOn ? "🔦 Flash ON" : "🔦 Flash OFFER"}
               </button>
             )}
+          </div>
+
+          {/* Manual Order ID Entry */}
+          <div className="pt-2 border-t border-gray-100 flex gap-2">
+            <input
+              type="text"
+              placeholder={manualPlaceholder || "Or enter Order ID / MongoDB ID manually..."}
+              className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 text-gray-800"
+              id="manual-qr-input"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById("manual-qr-input") as HTMLInputElement;
+                if (el?.value.trim()) {
+                  onScanSuccessRef.current(el.value.trim());
+                }
+              }}
+              className="px-4 py-2 bg-neutral-900 text-white text-xs font-bold rounded-xl hover:bg-black transition-colors"
+            >
+              Verify
+            </button>
           </div>
         </div>
 

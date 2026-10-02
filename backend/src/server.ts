@@ -18,8 +18,9 @@ import { ensureDefaultAdmin } from "./utils/ensureDefaultAdmin";
 import { seedHeaderCategories } from "./utils/seedHeaderCategories";
 import { initializeSocket } from "./socket/socketService";
 import ThemeSettings from "./models/ThemeSettings";
+import { expireUnpaidOnlineOrders } from "./services/orderLifecycleService";
 
-// Load environment variables
+// Load environment variables (.env file reload)
 dotenv.config();
 
 const app: Application = express();
@@ -29,11 +30,11 @@ const httpServer = createServer(app);
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
-  "https://geeta.today",
-  "https://www.geeta.today",
-  "http://geeta.today",
-  "http://www.geeta.today",
-  "https://api.geeta.today",
+  "https://Unnati.today",
+  "https://www.Unnati.today",
+  "http://Unnati.today",
+  "http://www.Unnati.today",
+  "https://api.Unnati.today",
 
   // Add more origins from environment variable if needed, cleaning up quotes and trailing slashes
   ...(process.env.FRONTEND_URL
@@ -51,9 +52,9 @@ const corsOptions: cors.CorsOptions = {
     // Normalize origin (remove trailing slash and lowercase)
     const normalizedOrigin = origin.replace(/\/$/, '').toLowerCase();
 
-    // Special case: allow any geeta.today domain or localhost
-    const isGeetaToday = normalizedOrigin.endsWith("geeta.today") ||
-                        normalizedOrigin.includes("geeta.today");
+    // Special case: allow any Unnati.today domain or localhost
+    const isUnnatiToday = normalizedOrigin.endsWith("Unnati.today") ||
+                        normalizedOrigin.includes("Unnati.today");
 
     const isLocalhost = normalizedOrigin.startsWith("http://localhost:") ||
                        normalizedOrigin.startsWith("http://127.0.0.1:") ||
@@ -68,7 +69,7 @@ const corsOptions: cors.CorsOptions = {
       isVercelApp = false;
     }
 
-    if (isGeetaToday || isLocalhost || isVercelApp) {
+    if (isUnnatiToday || isLocalhost || isVercelApp) {
       return callback(null, true);
     }
 
@@ -122,8 +123,8 @@ app.use((req: Request, _res: Response, next) => {
   next();
 });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Initialize Socket.io
 const io = initializeSocket(httpServer);
@@ -132,7 +133,7 @@ app.set("io", io);
 // Routes
 app.get("/", (_req: Request, res: Response) => {
   res.json({
-    message: "Geeta Stores API Server is running!",
+    message: "Unnati Stores API Server is running!",
     version: "1.0.0",
     socketIO: "Listening for WebSocket connections",
   });
@@ -159,9 +160,17 @@ async function startServer() {
   await ThemeSettings.getSettings();
   console.log("   \x1b[36mTheme:\x1b[0m ✓ Default theme initialized");
 
+  // Release stock held by online orders whose payment was never completed
+  const releaseUnpaidOrders = () =>
+    expireUnpaidOnlineOrders()
+      .then((count) => count && console.log(`   Released ${count} unpaid online order(s)`))
+      .catch((err) => console.error("Failed to release unpaid online orders:", err));
+  releaseUnpaidOrders();
+  setInterval(releaseUnpaidOrders, 5 * 60 * 1000);
+
   httpServer.timeout = 300000; // 5 minutes
   httpServer.listen(PORT, () => {
-    console.log("\n\x1b[32m✓\x1b[0m \x1b[1mGeeta Stores Server Started\x1b[0m");
+    console.log("\n\x1b[32m✓\x1b[0m \x1b[1mUnnati Stores Server Started\x1b[0m");
     console.log(`   \x1b[36mPort:\x1b[0m http://localhost:${PORT}`);
     console.log(
       `   \x1b[36mEnvironment:\x1b[0m ${process.env.NODE_ENV || "development"}`

@@ -66,6 +66,8 @@ export interface DeliveryAddress {
 
 export interface OrderDetail {
   id: string;
+  /** Order number shown in every app; the rider scans its barcode at pickup */
+  orderNumber: string;
   invoiceNumber: string;
   orderDate: string;
   deliveryDate: string;
@@ -86,7 +88,7 @@ export interface OrderDetail {
 }
 
 export interface UpdateOrderStatusData {
-  status: 'Accepted' | 'On the way' | 'Delivered' | 'Cancelled';
+  status: 'Accepted' | 'On the way' | 'Processed' | 'Out for Delivery' | 'Delivered' | 'Cancelled';
 }
 
 export interface GetOrdersParams {

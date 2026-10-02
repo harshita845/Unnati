@@ -6,10 +6,10 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const URIS = [
   process.env.MONGODB_URI,
-  "mongodb+srv://playeronline4076_db_user:17UCetOw0K4CJWnH@cluster0.j5ccbjf.mongodb.net/geeta-ecom?retryWrites=true&w=majority&appName=Cluster0",
-  "mongodb+srv://harshgemini:harshgemini123@cluster0.qyctmev.mongodb.net/geeta-ecom?retryWrites=true&w=majority",
-  "mongodb+srv://aryankarma29_db_user:iR1609zqHSZRxUDx@cluster0.fi6wvqa.mongodb.net/geeta-ecom",
-  "mongodb+srv://allokfarms_db_user:RSWTY1kVcvGeOtje@cluster1.moyfuna.mongodb.net/geeta-ecom?retryWrites=true&w=majority&appName=Cluster1"
+  "mongodb+srv://playeronline4076_db_user:17UCetOw0K4CJWnH@cluster0.j5ccbjf.mongodb.net/Unnati-ecom?retryWrites=true&w=majority&appName=Cluster0",
+  "mongodb+srv://harshgemini:harshgemini123@cluster0.qyctmev.mongodb.net/Unnati-ecom?retryWrites=true&w=majority",
+  "mongodb+srv://aryankarma29_db_user:iR1609zqHSZRxUDx@cluster0.fi6wvqa.mongodb.net/Unnati-ecom",
+  "mongodb+srv://allokfarms_db_user:RSWTY1kVcvGeOtje@cluster1.moyfuna.mongodb.net/Unnati-ecom?retryWrites=true&w=majority&appName=Cluster1"
 ].filter(Boolean) as string[];
 
 async function checkLogoHistory() {

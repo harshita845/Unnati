@@ -108,12 +108,14 @@ export const getTrendingSearches = async (
 
 export const getSimilarProducts = async (
   productId: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  location?: { latitude?: number; longitude?: number }
 ): Promise<{ success: boolean; data: SearchProduct[] }> => {
   const response = await api.get<{ success: boolean; data: SearchProduct[] }>(
     `/search/similar/${productId}`,
     {
-      params: { limit: 6 },
+      // Extra results so there are still enough after hiding items already in the cart
+      params: { limit: 12, latitude: location?.latitude, longitude: location?.longitude },
       signal,
     }
   );

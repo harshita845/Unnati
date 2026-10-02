@@ -151,13 +151,14 @@ const SellerPOSReport = () => {
                 start.setHours(0,0,0,0);
                 end.setHours(23,59,59,999);
                 break;
-            case "This Week":
-                // Start of week (Monday)
+            case "This Week": {
+                // Start of week (Monday 00:00)
                 const day = now.getDay() || 7;
-                if (day !== 1) start.setHours(-24 * (day - 1));
-                else start.setHours(0,0,0,0);
+                start.setDate(now.getDate() - (day - 1));
+                start.setHours(0,0,0,0);
                 end.setHours(23,59,59,999);
                 break;
+            }
             case "This Month":
                 start = new Date(now.getFullYear(), now.getMonth(), 1);
                 end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);

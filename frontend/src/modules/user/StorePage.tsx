@@ -69,8 +69,9 @@ export default function StorePage() {
 
     // Determine banner image source
     useEffect(() => {
-        if (shopData?.image) {
-            setBannerImage(shopData.image);
+        const banner = shopData?.storeBanner || shopData?.banner || shopData?.image;
+        if (banner) {
+            setBannerImage(banner);
             setImageError(false);
         } else if (slug) {
             // Try multiple possible image paths

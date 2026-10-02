@@ -19,7 +19,7 @@ import { getAddresses } from '../../services/api/customerAddressService';
 import { getProducts } from '../../services/api/customerProductService';
 import { addToWishlist } from '../../services/api/customerWishlistService';
 import { calculateProductPrice, getCartItemVariantSelector, getCartLineUnitPrice } from '../../utils/priceUtils';
-import { initiateOnlineOrder, verifyOnlinePayment } from '../../services/api/customerOrderService';
+import { abandonOnlinePayment, initiateOnlineOrder, verifyOnlinePayment } from '../../services/api/customerOrderService';
 import { resolveFirstOrderOfferDiscount } from '../../utils/firstOrderOfferUtils';
 import {
   calculateCartRuleDiscount,
@@ -329,17 +329,20 @@ export default function Checkout() {
   let currentCouponDiscount = 0;
   if (selectedCoupon) {
     // Logic mirrors backend for UI update purposes
-    if (selectedCoupon.minOrderValue && subtotalBeforeCoupon < selectedCoupon.minOrderValue) {
+    const minimumPurchase = selectedCoupon.minimumPurchase ?? selectedCoupon.minOrderValue;
+    const maximumDiscount = selectedCoupon.maximumDiscount ?? selectedCoupon.maxDiscountAmount;
+    if (minimumPurchase && subtotalBeforeCoupon < minimumPurchase) {
       // Invalid now
     } else {
-      if (selectedCoupon.discountType === 'percentage') {
+      if (String(selectedCoupon.discountType).toLowerCase() === 'percentage') {
         currentCouponDiscount = Math.round((subtotalBeforeCoupon * selectedCoupon.discountValue) / 100);
-        if (selectedCoupon.maxDiscountAmount && currentCouponDiscount > selectedCoupon.maxDiscountAmount) {
-          currentCouponDiscount = selectedCoupon.maxDiscountAmount;
+        if (maximumDiscount && currentCouponDiscount > maximumDiscount) {
+          currentCouponDiscount = maximumDiscount;
         }
       } else {
         currentCouponDiscount = selectedCoupon.discountValue;
       }
+      currentCouponDiscount = Math.min(currentCouponDiscount, subtotalBeforeCoupon);
     }
   }
 
@@ -489,23 +492,31 @@ export default function Checkout() {
     });
   };
 
-  const handleVerifyPayment = async (orderId: string, paymentId: string) => {
+  const handleVerifyPayment = async (
+      orderId: string,
+      payment: { paymentId?: string; razorpayOrderId?: string; razorpaySignature?: string } = {}
+  ) => {
       setIsProcessingPayment(true);
       try {
-          const response = await verifyOnlinePayment({ orderId, paymentId, status: 'success' });
+          const response = await verifyOnlinePayment({ orderId, ...payment });
           if (response.success) {
               setPlacedOrderId(orderId);
               clearCart();
               setShowOrderSuccess(true);
           } else {
-              alert("Payment Verification Failed. Please contact support.");
+              alert(response.message || "Payment Verification Failed. Please contact support.");
           }
-      } catch (error) {
+      } catch (error: any) {
           console.error("Verify Error", error);
-          alert("Error verifying payment");
+          alert(error.response?.data?.message || "Error verifying payment");
       } finally {
           setIsProcessingPayment(false);
       }
+  };
+
+  // Payment popup closed without paying: release the reserved stock right away
+  const releaseUnpaidOrder = (orderId: string) => {
+      abandonOnlinePayment(orderId).catch((error) => console.error("Failed to release unpaid order", error));
   };
 
   const handlePaymentSelection = async (method: string) => {
@@ -550,7 +561,8 @@ export default function Checkout() {
                 return {
                     product: { id: productId },
                     quantity: qty,
-                    variant: variant, // Assuming backend handles this structure
+                    variant: variant,
+                    variantId: item.variantId,
                     isFreeGift: isFreeGiftItem || false,
                     price: price,
                     freeGiftReason: isFreeGiftItem && activeRule ? `Cart value ≥ ₹${activeRule.minCartValue}` : undefined
@@ -582,15 +594,21 @@ export default function Checkout() {
                     return;
                 }
 
+                let paymentCompleted = false;
                 const options = {
                     key: key,
                     amount: amount * 100,
                     currency: "INR",
-                    name: "Ecommerce",
+                    name: "Unnati",
                     description: "Order Payment",
                     order_id: razorpayOrderId,
                     handler: async function (response: any) {
-                        await handleVerifyPayment(orderId, response.razorpay_payment_id);
+                        paymentCompleted = true;
+                        await handleVerifyPayment(orderId, {
+                            paymentId: response.razorpay_payment_id,
+                            razorpayOrderId: response.razorpay_order_id,
+                            razorpaySignature: response.razorpay_signature,
+                        });
                     },
                     prefill: {
                         name: savedAddress?.name || "",
@@ -598,11 +616,21 @@ export default function Checkout() {
                     },
                     theme: {
                         color: "#16a34a"
+                    },
+                    modal: {
+                        ondismiss: function () {
+                            if (!paymentCompleted) releaseUnpaidOrder(orderId);
+                            setIsProcessingPayment(false);
+                        }
                     }
                 };
                 const rzp1 = new (window as any).Razorpay(options);
+                rzp1.on('payment.failed', function (response: any) {
+                    // Razorpay keeps the popup open so the customer can retry; stock is released on dismiss
+                    console.error('Razorpay Payment Failed:', response.error);
+                    showGlobalToast(response.error?.description || 'Payment failed. Please try again.', 'error');
+                });
                 rzp1.open();
-                setIsProcessingPayment(false);
             } else if (gateway === 'Cashfree') {
                 const res = await loadScript("https://sdk.cashfree.com/js/v3/cashfree.js");
                 if (!res) {
@@ -616,17 +644,17 @@ export default function Checkout() {
                 cashfree.checkout({
                     paymentSessionId: paymentSessionId,
                     redirectTarget: "_modal",
-                }).then((result: any) => {
-                     // For seamless/modal flow, usually we verify on callback or webhook.
-                     // But if promise resolves indicating success or close.
-                     // Ideally we check payment status from backend.
-                     // For now, let's assume if it returns, we check.
-                     // Actually cashfree JS SDK usage implies redirect or handle result.
-                     // Checking 'result' object might be needed.
-                     // Just triggering verify for now as placeholder for user flow completion
-                     handleVerifyPayment(orderId, "CF_References_Checked_Backend");
+                }).then(async (result: any) => {
+                     if (result?.error) {
+                         // Closed or failed — nothing was charged
+                         showGlobalToast(result.error.message || 'Payment was not completed.', 'error');
+                         releaseUnpaidOrder(orderId);
+                         setIsProcessingPayment(false);
+                         return;
+                     }
+                     // The backend confirms with Cashfree that the order is actually paid
+                     await handleVerifyPayment(orderId);
                 });
-                setIsProcessingPayment(false);
             }
         } else {
              alert(response.message || "Failed to initiate payment");
@@ -641,13 +669,13 @@ export default function Checkout() {
 
   const performOrderPlacement = async (method: string) => {
     if (isProcessingPayment) return;
-    setIsProcessingPayment(true);
     // Re-validate just in case
     if (!selectedAddress || cart.items.length === 0) return;
     if (outOfStockItems.length > 0) {
       showGlobalToast(`"${firstOutOfStockName}" is out of stock. Please update cart first.`, "error");
       return;
     }
+    setIsProcessingPayment(true);
 
     const finalLatitude = selectedAddress.latitude ?? userLocation?.latitude;
     const finalLongitude = selectedAddress.longitude ?? userLocation?.longitude;

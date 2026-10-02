@@ -43,6 +43,8 @@ import {
   updateOrderNotes,
   initiateOnlineOrder,
   verifyOnlinePayment,
+  abandonOnlinePayment,
+  refreshDeliveryOtp,
   requestReturnOrReplace
 } from "../modules/customer/controllers/customerOrderController";
 
@@ -101,9 +103,11 @@ router.post(
 );
 router.post("/customer/orders/initiate", authenticate, requireUserType("Customer"), initiateOnlineOrder);
 router.post("/customer/orders/verify-payment", authenticate, requireUserType("Customer"), verifyOnlinePayment);
+router.post("/customer/orders/:id/abandon-payment", authenticate, requireUserType("Customer"), abandonOnlinePayment);
 router.get("/customer/orders", authenticate, requireUserType("Customer"), getMyOrders);
 router.get("/customer/orders/:id", authenticate, requireUserType("Customer"), getOrderById);
 router.post("/customer/orders/:id/cancel", authenticate, requireUserType("Customer"), cancelOrder);
+router.post("/customer/orders/:id/refresh-otp", authenticate, requireUserType("Customer"), refreshDeliveryOtp);
 router.patch("/customer/orders/:id/notes", authenticate, requireUserType("Customer"), updateOrderNotes);
 router.post("/customer/orders/return-replace", authenticate, requireUserType("Customer"), requestReturnOrReplace);
 

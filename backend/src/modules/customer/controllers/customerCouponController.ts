@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { CouponError, resolveCoupon } from "../../../services/orderPricingService";
 import Coupon from "../../../models/Coupon";
 
 // Get available coupons
@@ -28,8 +29,8 @@ export const getCoupons = async (_req: Request, res: Response) => {
 // Validate a coupon code
 export const validateCoupon = async (req: Request, res: Response) => {
     try {
-        const { code, orderTotal } = req.body;
-        // const userId = req.user!.userId; // Not currently used, but authentication is checked by middleware
+        const { code } = req.body;
+        const orderTotal = Number(req.body.orderTotal) || 0;
 
         if (!code) {
             return res.status(400).json({
@@ -38,64 +39,22 @@ export const validateCoupon = async (req: Request, res: Response) => {
             });
         }
 
-        const coupon = await Coupon.findOne({
-            code: code.toUpperCase(),
-            isActive: true,
-        });
-
-        if (!coupon) {
-            return res.status(404).json({
-                success: false,
-                message: "Invalid coupon code",
-            });
-        }
-
-        // Check dates
-        const currentDate = new Date();
-        if (currentDate < coupon.startDate || currentDate > coupon.endDate) {
-            return res.status(400).json({
-                success: false,
-                message: "Coupon has expired",
-            });
-        }
-
-        // Check usage limits
-        if (coupon.usageLimit && coupon.usageCount >= coupon.usageLimit) {
-            return res.status(400).json({
-                success: false,
-                message: "Coupon usage limit reached",
-            });
-        }
-
-        // Check min order value
-        if (coupon.minimumPurchase && orderTotal < coupon.minimumPurchase) {
-            return res.status(400).json({
-                success: false,
-                message: `Minimum order value of ₹${coupon.minimumPurchase} required`,
-            });
-        }
-
-        // Determine discount amount
-        let discountAmount = 0;
-        if (coupon.discountType === "Percentage") {
-            discountAmount = (orderTotal * coupon.discountValue) / 100;
-            if (coupon.maximumDiscount && discountAmount > coupon.maximumDiscount) {
-                discountAmount = coupon.maximumDiscount;
-            }
-        } else {
-            discountAmount = coupon.discountValue;
-        }
+        // Same rules the order placement applies, so an accepted coupon is honoured at checkout
+        const { coupon, discount } = await resolveCoupon(code, orderTotal, req.user?.userId);
 
         return res.status(200).json({
             success: true,
             data: {
                 isValid: true,
                 coupon,
-                discountAmount,
-                finalTotal: Math.max(0, orderTotal - discountAmount),
+                discountAmount: discount,
+                finalTotal: Math.max(0, orderTotal - discount),
             },
         });
     } catch (error: any) {
+        if (error instanceof CouponError) {
+            return res.status(400).json({ success: false, message: error.message });
+        }
         return res.status(500).json({
             success: false,
             message: "Error validating coupon",

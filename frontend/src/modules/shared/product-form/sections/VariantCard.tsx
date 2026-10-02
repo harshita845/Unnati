@@ -36,10 +36,10 @@ const variantColors = [
 // Helper to render Barcode preview using JsBarcode from CDN
 const BarcodePreview = ({ value }: { value: string }) => {
   const elementRef = useRef<SVGSVGElement | null>(null);
-  const [loaded, setLoaded] = useState(window.hasOwnProperty("JsBarcode"));
+  const [loaded, setLoaded] = useState("JsBarcode" in window);
 
   useEffect(() => {
-    if (window.hasOwnProperty("JsBarcode")) {
+    if ("JsBarcode" in window) {
       setLoaded(true);
       return;
     }

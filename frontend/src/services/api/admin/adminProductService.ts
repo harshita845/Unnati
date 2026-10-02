@@ -4,6 +4,22 @@ import api from "../config";
 import { ApiResponse } from "./types";
 
 // ==================== Category Interfaces ====================
+export type SubscriptionPlan = "daily" | "weekly" | "monthly" | "yearly";
+
+/** Plan frequencies an admin can enable per category, in display order. */
+export const SUBSCRIPTION_PLAN_OPTIONS: { value: SubscriptionPlan; label: string }[] = [
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+  { value: "yearly", label: "Yearly" },
+];
+
+/** "Monthly, Yearly" for a category's enabled plans. */
+export const formatSubscriptionPlans = (plans?: SubscriptionPlan[]): string =>
+  SUBSCRIPTION_PLAN_OPTIONS.filter((o) => plans?.includes(o.value))
+    .map((o) => o.label)
+    .join(", ");
+
 export interface Category {
   _id: string;
   name: string;
@@ -24,6 +40,8 @@ export interface Category {
     name: string;
     status: "Published" | "Unpublished";
   };
+  subscriptionEnabled?: boolean;
+  allowedPlans?: SubscriptionPlan[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -38,6 +56,8 @@ export interface CreateCategoryData {
   parentId?: string | null;
   headerCategoryId?: string | null;
   status?: "Active" | "Inactive";
+  subscriptionEnabled?: boolean;
+  allowedPlans?: SubscriptionPlan[];
 }
 
 export interface UpdateCategoryData extends Partial<CreateCategoryData> {}

@@ -57,7 +57,7 @@ export const updateStockLedgerEntry = asyncHandler(
                          }
                      }
 
-                     // Helper to sum variations stock if desired, but Geeta stores both.
+                     // Helper to sum variations stock if desired, but Unnati stores both.
                      // We update main stock too.
                      const currentStock = product.stock || 0;
                      product.stock = Math.max(0, currentStock + diff);

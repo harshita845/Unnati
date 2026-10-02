@@ -87,7 +87,10 @@ export const getTrending = async (req: Request, res: Response) => {
 export const getSimilarProducts = async (req: Request, res: Response) => {
   try {
     const limit = Math.min(12, Math.max(1, Number(req.query.limit || 6)));
-    const products = await getSimilarProductsForProduct(req.params.id, limit);
+    const products = await getSimilarProductsForProduct(req.params.id, limit, {
+      latitude: req.query.latitude !== undefined ? Number(req.query.latitude) : undefined,
+      longitude: req.query.longitude !== undefined ? Number(req.query.longitude) : undefined,
+    });
 
     return res.status(200).json({
       success: true,

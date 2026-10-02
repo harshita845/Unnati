@@ -90,7 +90,7 @@ export const sendPushNotification = async (tokens: string[], payload: any): Prom
           title: String(payload.title || ''),
           body: String(payload.body || ''),
           icon: '/notification-icon.png',
-          tag: 'geeta-notification',
+          tag: 'Unnati-notification',
           requireInteraction: true,
         },
         fcmOptions: {

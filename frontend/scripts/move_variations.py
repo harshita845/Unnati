@@ -1,6 +1,6 @@
 import os
 
-file_path = r"c:/Users/payal/Downloads/geetaecommerce/frontend/src/modules/seller/pages/SellerAddProduct.tsx"
+file_path = r"c:/Users/payal/Downloads/Unnatiecommerce/frontend/src/modules/seller/pages/SellerAddProduct.tsx"
 
 with open(file_path, "r", encoding="utf-8") as f:
     lines = f.readlines()

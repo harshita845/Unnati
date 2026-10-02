@@ -106,6 +106,14 @@ export default function DeliveryOrderDetail() {
     const [routeInfo, setRouteInfo] = useState<{ distance: string; duration: string } | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
     const [showScanner, setShowScanner] = useState(false);
+    const [copiedOrderId, setCopiedOrderId] = useState(false);
+
+    const handleCopyOrderId = () => {
+        if (!order?.orderId) return;
+        navigator.clipboard.writeText(order.orderId);
+        setCopiedOrderId(true);
+        setTimeout(() => setCopiedOrderId(false), 2000);
+    };
 
     const fetchOrder = async () => {
         if (!id) return;
@@ -152,23 +160,26 @@ export default function DeliveryOrderDetail() {
 
     const handleScanSuccess = async (decodedText: string) => {
         setShowScanner(false);
-        if (!order) return;
+        if (!order || !id) return;
+        const code = decodedText.trim();
 
-        // Check if scanned text matches Order ID or MongoDB ID
-        if (decodedText === order.orderId || decodedText === order._id) {
-            // If order is Out for Delivery, we can mark it as Delivered directly via scan
-            if (order.status === 'Out for Delivery') {
-                const confirmDelivery = window.confirm(`Order verified! Mark as Delivered?`);
-                if (confirmDelivery) {
-                     await handleStatusChange('Delivered');
-                }
-            } else if (order.status === 'Ready for pickup') {
-                 await handleStatusChange('Picked up');
-            } else {
-                 alert(`Scanned Order: ${decodedText}. Current Order: ${order.orderId}`);
-            }
-        } else {
-            alert("Invalid QR Code! This code does not match the current order.");
+        // At the customer's door the package is confirmed with the customer's OTP
+        if (order.status === 'Out for Delivery') {
+            await handleSendOtp();
+            return;
+        }
+
+        // At the store: the backend checks the code belongs to this order before marking it picked up
+        try {
+            setLoading(true);
+            const updated = await updateOrderStatus(id, 'Picked up', { pickupCode: code });
+            if (updated?.data) setOrder(updated.data);
+            else await fetchOrder();
+            alert(`Package verified for order #${order.orderId}. Marked as picked up.`);
+        } catch (err: any) {
+            alert(err.message || 'Could not verify this package. Please try again.');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -179,9 +190,9 @@ export default function DeliveryOrderDetail() {
             setOtpSending(true);
             await sendDeliveryOtp(id);
             setShowOtpInput(true);
-            alert('OTP sent to customer successfully');
+            alert('OTP sent. The customer can see it in their app on this order.');
         } catch (err: any) {
-            alert(err.message || 'Failed to send OTP');
+            alert(err.response?.data?.message || err.message || 'Failed to send OTP');
         } finally {
             setOtpSending(false);
         }
@@ -200,7 +211,13 @@ export default function DeliveryOrderDetail() {
             setShowOtpInput(false);
             setOtpValue('');
         } catch (err: any) {
-            alert(err.message || 'Failed to verify OTP');
+            const message = err.response?.data?.message || err.message || 'Failed to verify OTP';
+            if (/expired|No delivery OTP/i.test(message)) {
+                setOtpValue('');
+                alert(`${message}\n\nTap "Resend OTP" and ask the customer for the new code.`);
+            } else {
+                alert(message);
+            }
         } finally {
             setOtpVerifying(false);
         }
@@ -244,8 +261,15 @@ export default function DeliveryOrderDetail() {
                             console.warn('Location information unavailable. Please check your device settings.');
                             break;
                         case error.TIMEOUT:
-                            setLocationError('Location request timed out. Please try again.');
-                            console.warn('Location request timed out. Please try again.');
+                            // High-accuracy GPS often times out indoors/on laptops: retry with network location
+                            navigator.geolocation.getCurrentPosition(
+                                (position) => {
+                                    setDeliveryBoyLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
+                                    setLocationError(null);
+                                },
+                                () => setLocationError('Location request timed out. Please try again.'),
+                                { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 }
+                            );
                             break;
                         default:
                             setLocationError(`Error getting location: ${error.message}`);
@@ -353,6 +377,7 @@ export default function DeliveryOrderDetail() {
                         };
                         setDeliveryBoyLocation(newLocation);
                         setLastUpdate(new Date());
+                        setLocationError(null);
 
                         // Emit via Socket
                         socket.emit('update-location', {
@@ -421,10 +446,17 @@ export default function DeliveryOrderDetail() {
 
     const statusFlow: DeliveryOrderStatus[] = ['Pending', 'Ready for pickup', 'Picked up', 'Out for Delivery', 'Delivered'];
 
-    let currentStatusIndex = statusFlow.indexOf(order.status as DeliveryOrderStatus);
+    const getNormalizedStatus = (status: string): DeliveryOrderStatus => {
+        if (['Processed', 'Received', 'Pending'].includes(status)) {
+            return 'Ready for pickup';
+        }
+        return status as DeliveryOrderStatus;
+    };
+
+    const normalizedStatus = getNormalizedStatus(order.status);
+    let currentStatusIndex = statusFlow.indexOf(normalizedStatus);
     // Handle cases where status might not be in the flow (e.g. Cancelled)
     if (currentStatusIndex === -1 && (order.status === 'Cancelled' || order.status === 'Returned')) {
-        // Maybe show a different UI for cancelled/returned orders
         currentStatusIndex = -1;
     }
 
@@ -442,6 +474,7 @@ export default function DeliveryOrderDetail() {
             }
         } catch (err: any) {
             alert(err.message || "Failed to update status");
+        } finally {
             setLoading(false);
         }
     };
@@ -701,9 +734,18 @@ export default function DeliveryOrderDetail() {
                 {/* Order Info */}
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-neutral-100 mb-20">
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="p-3 bg-neutral-50 rounded-lg">
-                            <p className="text-xs text-neutral-500 mb-1">Order ID</p>
-                            <p className="text-sm font-bold text-neutral-900">{order.orderId}</p>
+                        <div
+                            onClick={handleCopyOrderId}
+                            className="p-3 bg-neutral-50 rounded-lg overflow-hidden cursor-pointer hover:bg-neutral-100 transition-colors group relative"
+                            title="Click to copy Order ID"
+                        >
+                            <div className="flex justify-between items-center mb-1">
+                                <span className="text-xs text-neutral-500">Order ID</span>
+                                <span className={`text-[10px] font-medium transition-colors ${copiedOrderId ? 'text-green-600 font-bold' : 'text-neutral-400 group-hover:text-neutral-700'}`}>
+                                    {copiedOrderId ? '✓ Copied' : '📋 Copy'}
+                                </span>
+                            </div>
+                            <p className="text-xs font-bold text-neutral-900 break-all leading-snug">{order.orderId}</p>
                         </div>
                         <div className="p-3 bg-neutral-50 rounded-lg">
                             <p className="text-xs text-neutral-500 mb-1">Order Date</p>
@@ -716,8 +758,8 @@ export default function DeliveryOrderDetail() {
 
             </div>
 
-            {/* OTP Section (when order is Picked up) */}
-            {order.status === 'Picked up' && !showOtpInput && (
+            {/* OTP Section (when order is Picked up or Out for Delivery) */}
+            {(order.status === 'Picked up' || order.status === 'Out for Delivery') && !showOtpInput && (
                 <div className="fixed bottom-24 left-6 right-6 z-30">
                     <button
                         onClick={handleSendOtp}
@@ -742,6 +784,17 @@ export default function DeliveryOrderDetail() {
                         className="w-full px-4 py-3 border border-neutral-300 rounded-xl text-lg font-semibold text-center mb-3 focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]"
                         maxLength={6}
                     />
+                    <p className="text-xs text-neutral-500 text-center mb-3">
+                        Ask the customer for the OTP shown in their app.{' '}
+                        <button
+                            type="button"
+                            onClick={handleSendOtp}
+                            disabled={otpSending}
+                            className="font-semibold text-[var(--primary-dark)] underline disabled:opacity-50"
+                        >
+                            {otpSending ? 'Sending…' : 'Resend OTP'}
+                        </button>
+                    </p>
                     <div className="flex gap-3">
                         <button
                             onClick={() => {
@@ -764,10 +817,11 @@ export default function DeliveryOrderDetail() {
             )}
 
             {/* Floating Glassmorphic Action Button Dock - Order Taken button or status update */}
-            {nextStatus && order.status !== 'Picked up' && !showOtpInput && (
+            {/* "Delivered" is only reachable through the OTP section above */}
+            {nextStatus && nextStatus !== 'Delivered' && order.status !== 'Picked up' && !showOtpInput && (
                 <div className="fixed bottom-24 left-6 right-6 z-30 flex gap-3">
-                    {/* Scan Button (Visible when Out for Delivery or Ready for Pickup) */}
-                   {(order.status === 'Out for Delivery' || order.status === 'Ready for pickup') && (
+                    {/* Scan Button (Visible when Out for Delivery or Ready for Pickup / Processed) */}
+                   {(order.status === 'Out for Delivery' || order.status === 'Ready for pickup' || order.status === 'Processed') && (
                         <button
                             onClick={() => openBarcodeScanner(() => setShowScanner(true))}
                             className="w-16 h-full rounded-2xl bg-neutral-900 text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform"
@@ -784,17 +838,17 @@ export default function DeliveryOrderDetail() {
                    )}
 
                     <button
-                        onClick={() => handleStatusChange(nextStatus)}
-                        className="flex-1 py-4 rounded-2xl bg-black/75 backdrop-blur-md border border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] text-white font-bold text-lg transition-transform active:scale-[0.98] flex items-center justify-center gap-3 overflow-hidden group"
+                        // Collecting the package requires verifying it (scan bill barcode or enter code)
+                        onClick={() => (nextStatus === 'Picked up' ? setShowScanner(true) : handleStatusChange(nextStatus))}
+                        className="flex-1 py-4 rounded-2xl bg-neutral-900 border border-neutral-700 shadow-xl text-white font-bold text-lg transition-transform active:scale-[0.98] flex items-center justify-center gap-3 overflow-hidden group"
                         disabled={loading}
                     >
                         <span className="relative z-10">
-                            {loading ? 'Updating...' : nextStatus === 'Picked up' ? 'Order Taken' : `Mark as ${nextStatus}`}
+                            {loading ? 'Updating...' : nextStatus === 'Picked up' ? 'Verify & Pick Up' : `Mark as ${nextStatus}`}
                         </span>
-                        {!loading && <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center relative z-10 group-hover:bg-white/30 transition-colors">
+                        {!loading && <span className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center relative z-10 group-hover:bg-white/30 transition-colors">
                             <Icons.ChevronLeft className="rotate-180" size={18} />
-                        </div>}
-                        <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none"></div>
+                        </span>}
                     </button>
                 </div>
             )}
@@ -804,6 +858,8 @@ export default function DeliveryOrderDetail() {
                 <QRScannerModal
                     onScanSuccess={handleScanSuccess}
                     onClose={() => setShowScanner(false)}
+                    title="Verify package at store"
+                    manualPlaceholder="Or type order number / 6-digit pickup code"
                 />
             )}
         </div>

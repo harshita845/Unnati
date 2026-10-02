@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Order from "../models/Order";
 import { IOrderItem } from "../models/OrderItem";
 import Commission from "../models/Commission";
@@ -82,77 +83,70 @@ const restoreInventory = async (items: IOrderItem[]) => {
 
 /**
  * Create commissions for sellers when order is delivered
- * Also updates seller balances and creates wallet transactions
+ * Also updates seller balances and creates wallet transactions.
+ * Idempotent per order: a second call for the same order does nothing.
  */
-const createCommissions = async (items: IOrderItem[]) => {
+export const createCommissions = async (
+  items: IOrderItem[],
+  session?: mongoose.ClientSession | null
+) => {
+  // Free gifts carry no revenue for the seller
+  const billableItems = items.filter((item) => item.seller && !(item as any).isFreeGift && item.total > 0);
+  if (!billableItems.length) return;
+
+  const orderId = billableItems[0].order;
+  if (await Commission.exists({ order: orderId }).session(session || null)) return;
+
   // Group items by seller to aggregate earnings
-  const sellerEarningsMap = new Map<string, {
-    totalAmount: number;
-    commissionAmount: number;
-    netEarning: number;
-    items: IOrderItem[];
-  }>();
+  const sellerEarnings = new Map<string, { netEarning: number }>();
 
-  // First pass: calculate commissions and aggregate by seller
-  for (const item of items) {
+  for (const item of billableItems) {
     const sellerId = item.seller.toString();
-    const seller = await Seller.findById(item.seller);
-
+    const seller = await Seller.findById(item.seller).session(session || null);
     if (!seller) continue;
 
     const commissionRate = seller.commission || 0;
     const commissionAmount = (item.total * commissionRate) / 100;
-    const netEarning = item.total - commissionAmount;
 
-    // Create commission record
-    await Commission.create({
-      order: item.order,
-      orderItem: item._id,
-      seller: item.seller,
-      orderAmount: item.total,
-      commissionRate,
-      commissionAmount,
-      status: "Pending",
-    });
+    await Commission.create(
+      [
+        {
+          order: item.order,
+          orderItem: item._id,
+          seller: item.seller,
+          orderAmount: item.total,
+          commissionRate,
+          commissionAmount,
+          status: "Pending",
+        },
+      ],
+      { session: session || undefined }
+    );
 
-    // Aggregate earnings by seller
-    if (!sellerEarningsMap.has(sellerId)) {
-      sellerEarningsMap.set(sellerId, {
-        totalAmount: 0,
-        commissionAmount: 0,
-        netEarning: 0,
-        items: [],
-      });
-    }
-
-    const sellerData = sellerEarningsMap.get(sellerId)!;
-    sellerData.totalAmount += item.total;
-    sellerData.commissionAmount += commissionAmount;
-    sellerData.netEarning += netEarning;
-    sellerData.items.push(item);
+    const entry = sellerEarnings.get(sellerId) || { netEarning: 0 };
+    entry.netEarning += item.total - commissionAmount;
+    sellerEarnings.set(sellerId, entry);
   }
 
-  // Second pass: update seller balances and create wallet transactions
-  for (const [sellerId, earnings] of sellerEarningsMap.entries()) {
-    const seller = await Seller.findById(sellerId);
-    if (!seller) continue;
+  const order = await Order.findById(orderId).select("orderNumber").session(session || null);
+  const orderNumber = order?.orderNumber || `ORDER-${orderId}`;
 
-    // Update seller balance
-    seller.balance = (seller.balance || 0) + earnings.netEarning;
-    await seller.save();
-
-    // Create wallet transaction
-    const order = await Order.findById(items[0].order);
-    const orderNumber = order?.orderNumber || `ORDER-${items[0].order}`;
-
-    await WalletTransaction.create({
-      sellerId: seller._id,
-      amount: earnings.netEarning,
-      type: 'Credit',
-      description: `Earnings from Order #${orderNumber}`,
-      reference: `ORD-${items[0].order}-${Date.now()}-${sellerId}`,
-      status: 'Completed',
-    });
+  for (const [sellerId, { netEarning }] of sellerEarnings.entries()) {
+    const amount = Number(netEarning.toFixed(2));
+    await Seller.updateOne({ _id: sellerId }, { $inc: { balance: amount } }, { session: session || undefined });
+    await WalletTransaction.create(
+      [
+        {
+          sellerId,
+          amount,
+          type: "Credit",
+          description: `Earnings from Order #${orderNumber}`,
+          reference: `ORD-${orderId}-${sellerId}`,
+          status: "Completed",
+        },
+      ],
+      { session: session || undefined }
+    );
   }
 };
 

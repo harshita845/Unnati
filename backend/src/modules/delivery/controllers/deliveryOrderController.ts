@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Order from "../../../models/Order";
 import { notifySellersOfOrderUpdate } from "../../../services/sellerNotificationService";
@@ -6,7 +7,28 @@ import Delivery from "../../../models/Delivery";
 import OrderItem from "../../../models/OrderItem";
 import Seller from "../../../models/Seller";
 import { generateDeliveryOtp, verifyDeliveryOtp } from "../../../services/deliveryOtpService";
-import { processOrderStatusTransition } from "../../../services/orderService";
+import {
+    COD_PAYMENT_METHODS,
+    TERMINAL_ORDER_STATUSES,
+    markOrderDelivered,
+} from "../../../services/orderLifecycleService";
+
+// Statuses a delivery partner may set directly; "Delivered" requires the customer's OTP
+const DELIVERY_PARTNER_STATUSES = ['Ready for pickup', 'Picked up', 'Out for Delivery'];
+
+/** Short code the store reads out / prints for pickup: last 6 characters of the order number. */
+export const pickupCodeFor = (orderNumber: string) => String(orderNumber || '').slice(-6);
+
+/**
+ * Pickup verification: the scanned barcode / typed value must be this order's number,
+ * its 6-digit pickup code, or its id. Prevents a rider collecting the wrong package.
+ */
+const matchesPickupCode = (order: any, raw: unknown) => {
+    const code = String(raw ?? '').trim().replace(/^#/, '').toUpperCase();
+    if (!code) return false;
+    const orderNumber = String(order.orderNumber || '').toUpperCase();
+    return code === orderNumber || code === String(order._id).toUpperCase() || (code.length === 6 && code === pickupCodeFor(orderNumber));
+};
 import DeliveryAssignment from "../../../models/DeliveryAssignment";
 import Return from "../../../models/Return";
 
@@ -78,13 +100,36 @@ export const getTodayOrders = asyncHandler(async (req: Request, res: Response) =
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
 
-    const orders = await Order.find({
-        deliveryBoy: deliveryId,
+    const deliveryPartner = deliveryId ? await Delivery.findById(deliveryId).select("city") : null;
+    const partnerCity = deliveryPartner?.city?.trim();
+
+    const orderQuery: any = {
+        status: { $ne: "Cancelled" },
         $or: [
             { createdAt: { $gte: todayStart, $lte: todayEnd } }, // Created today
             { updatedAt: { $gte: todayStart, $lte: todayEnd } }  // OR Updated today
         ]
-    })
+    };
+
+    if (partnerCity && partnerCity !== 'Test City') {
+        orderQuery.$or = [
+            { deliveryBoy: deliveryId },
+            {
+                $and: [
+                    { $or: [{ deliveryBoy: null }, { deliveryBoy: { $exists: false } }] },
+                    { "deliveryAddress.city": new RegExp(`^${partnerCity}$`, "i") }
+                ]
+            }
+        ];
+    } else {
+        orderQuery.$or = [
+            { deliveryBoy: deliveryId },
+            { deliveryBoy: null },
+            { deliveryBoy: { $exists: false } }
+        ];
+    }
+
+    const orders = await Order.find(orderQuery)
         .populate("items")
         .sort({ updatedAt: -1 });
 
@@ -115,11 +160,32 @@ export const getTodayOrders = asyncHandler(async (req: Request, res: Response) =
 export const getPendingOrders = asyncHandler(async (req: Request, res: Response) => {
     const deliveryId = req.user?.userId;
 
-    // Pending statuses: Ready for pickup, Out for delivery, Picked Up, Assigned, In Transit
-    const orders = await Order.find({
-        deliveryBoy: deliveryId,
-        status: { $in: ["Ready for pickup", "Out for Delivery", "Picked Up", "Assigned", "In Transit"] }
-    })
+    const deliveryPartner = deliveryId ? await Delivery.findById(deliveryId).select("city") : null;
+    const partnerCity = deliveryPartner?.city?.trim();
+
+    const pendingQuery: any = {
+        status: { $in: ["Received", "Processed", "Ready for pickup", "Out for Delivery", "Picked Up", "Assigned", "In Transit"] }
+    };
+
+    if (partnerCity && partnerCity !== 'Test City') {
+        pendingQuery.$or = [
+            { deliveryBoy: deliveryId },
+            {
+                $and: [
+                    { $or: [{ deliveryBoy: null }, { deliveryBoy: { $exists: false } }] },
+                    { "deliveryAddress.city": new RegExp(`^${partnerCity}$`, "i") }
+                ]
+            }
+        ];
+    } else {
+        pendingQuery.$or = [
+            { deliveryBoy: deliveryId },
+            { deliveryBoy: null },
+            { deliveryBoy: { $exists: false } }
+        ];
+    }
+
+    const orders = await Order.find(pendingQuery)
         .populate("items")
         .sort({ createdAt: -1 });
 
@@ -187,38 +253,69 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
         return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    if (order.deliveryBoy?.toString() != deliveryId) {
-        return res.status(403).json({ success: false, message: "This order is not assigned to you" });
+    if (order.deliveryBoy && order.deliveryBoy.toString() !== deliveryId) {
+        return res.status(403).json({ success: false, message: "This order is assigned to another delivery partner" });
+    }
+
+    // Auto-assign delivery partner if order is currently unassigned
+    if (!order.deliveryBoy && deliveryId) {
+        order.deliveryBoy = new mongoose.Types.ObjectId(deliveryId);
+    }
+
+    if (status === 'Delivered') {
+        return res.status(400).json({
+            success: false,
+            message: "Delivery must be confirmed with the customer's OTP. Use Send OTP and enter the code the customer gives you."
+        });
+    }
+    if (!DELIVERY_PARTNER_STATUSES.includes(status)) {
+        return res.status(400).json({
+            success: false,
+            message: `Invalid status. Delivery partner can set: ${DELIVERY_PARTNER_STATUSES.join(', ')}`
+        });
+    }
+    if (TERMINAL_ORDER_STATUSES.includes(order.status)) {
+        return res.status(400).json({ success: false, message: `Order is already ${order.status}` });
+    }
+    if (order.status === 'Pending' && !COD_PAYMENT_METHODS.includes(order.paymentMethod) && order.paymentStatus !== 'Paid') {
+        return res.status(400).json({ success: false, message: "This order is still waiting for the customer's online payment" });
+    }
+
+    // Collecting the package requires proving it is this order (barcode on the bill or pickup code)
+    if (status === 'Picked up' && order.status !== 'Picked up') {
+        const { pickupCode } = req.body;
+        if (!pickupCode) {
+            return res.status(400).json({
+                success: false,
+                message: "Verify the package first: scan the barcode on the bill or enter the order number / pickup code.",
+            });
+        }
+        if (!matchesPickupCode(order, pickupCode)) {
+            return res.status(400).json({
+                success: false,
+                message: `This package is not order #${order.orderNumber}. Check the order number on the bill and try again.`,
+            });
+        }
+        order.pickupVerifiedAt = new Date();
     }
 
     // Save previous status before updating
     const previousStatus = order.status;
 
-    // Status transition logic
-    if (status) order.status = status;
-
+    order.status = status;
     if (status === 'Picked up' || status === 'Out for Delivery') {
-        order.deliveryBoyStatus = 'Picked Up';
-    } else if (status === 'Delivered') {
-        order.deliveryBoyStatus = 'Delivered';
-        order.deliveredAt = new Date();
-        order.paymentStatus = 'Paid'; // Assume paid on delivery (or already paid)
-
-        // CASH COLLECTION LOGIC
-        if (order.paymentMethod === 'COD') {
-            await Delivery.findByIdAndUpdate(deliveryId, {
-                $inc: { cashCollected: order.total }
-            });
-        }
-
-        // COMMISSION LOGIC (Fixed mock amount for now, should be dynamic in future)
-        const COMMISSION = 40;
-        await Delivery.findByIdAndUpdate(deliveryId, {
-            $inc: { balance: COMMISSION }
-        });
+        order.deliveryBoyStatus = status === 'Picked up' ? 'Picked Up' : 'In Transit';
     }
 
-    await order.save();
+    try {
+        await order.save();
+    } catch (saveErr: any) {
+        console.error("Error saving order status update:", saveErr);
+        return res.status(400).json({
+            success: false,
+            message: saveErr.message || "Failed to save order status update"
+        });
+    }
 
     // Emit socket events for status changes
     const io = (req.app as any).get("io");
@@ -231,26 +328,9 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
             });
         }
 
-        if (status === 'Delivered' && previousStatus !== 'Delivered') {
-            // Emit order-delivered event to all relevant parties
-            io.to(`order-${id}`).emit('order-delivered', {
-                orderId: id,
-                orderNumber: order.orderNumber,
-                message: 'Order has been delivered successfully',
-            });
+        io.to(`order-${id}`).emit('order-status-updated', { orderId: id, status });
 
-            // Also emit to delivery boy room
-            io.to(`delivery-${deliveryId}`).emit('order-delivered', {
-                orderId: id,
-                orderNumber: order.orderNumber,
-                message: 'Order delivered successfully',
-            });
-        }
-
-        // Trigger notification to sellers for payment status change or specific transitions
-        if (order.paymentStatus === 'Paid' || status === 'Delivered') {
-            notifySellersOfOrderUpdate(io, order, 'STATUS_UPDATE');
-        }
+        notifySellersOfOrderUpdate(io, order, 'STATUS_UPDATE');
     }
 
     return res.status(200).json({
@@ -300,14 +380,14 @@ export const getSellerLocationsForOrder = asyncHandler(async (req: Request, res:
     const { id } = req.params;
     const deliveryId = req.user?.userId;
 
-    // Verify order exists and is assigned to this delivery boy
+    // Verify order exists
     const order = await Order.findById(id);
     if (!order) {
         return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    if (order.deliveryBoy?.toString() !== deliveryId) {
-        return res.status(403).json({ success: false, message: "This order is not assigned to you" });
+    if (order.deliveryBoy && order.deliveryBoy.toString() !== deliveryId) {
+        return res.status(403).json({ success: false, message: "This order is assigned to another delivery partner" });
     }
 
     // Get all unique seller IDs from order items
@@ -316,19 +396,23 @@ export const getSellerLocationsForOrder = asyncHandler(async (req: Request, res:
 
     // Get seller details including locations
     const sellers = await Seller.find({ _id: { $in: sellerIds } })
-        .select('storeName address city latitude longitude');
+        .select('storeName address city latitude longitude location');
 
-    // Format seller locations
+    // Format seller locations: map location (GeoJSON) first, legacy latitude/longitude text as fallback
     const sellerLocations = sellers
-        .filter(seller => seller.latitude && seller.longitude) // Only include sellers with location data
-        .map(seller => ({
-            sellerId: seller._id.toString(),
-            storeName: seller.storeName,
-            address: seller.address,
-            city: seller.city,
-            latitude: parseFloat(seller.latitude || '0'),
-            longitude: parseFloat(seller.longitude || '0'),
-        }));
+        .map((seller: any) => {
+            const coords = seller.location?.coordinates;
+            const hasGeo = Array.isArray(coords) && coords.length === 2 && (coords[0] !== 0 || coords[1] !== 0);
+            return {
+                sellerId: seller._id.toString(),
+                storeName: seller.storeName,
+                address: seller.address,
+                city: seller.city,
+                latitude: hasGeo ? Number(coords[1]) : parseFloat(seller.latitude || ''),
+                longitude: hasGeo ? Number(coords[0]) : parseFloat(seller.longitude || ''),
+            };
+        })
+        .filter((s) => Number.isFinite(s.latitude) && Number.isFinite(s.longitude));
 
     return res.status(200).json({
         success: true,
@@ -349,8 +433,12 @@ export const sendDeliveryOtp = asyncHandler(async (req: Request, res: Response) 
         return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    if (order.deliveryBoy?.toString() !== deliveryId) {
-        return res.status(403).json({ success: false, message: "This order is not assigned to you" });
+    if (order.deliveryBoy && order.deliveryBoy.toString() !== deliveryId) {
+        return res.status(403).json({ success: false, message: "This order is assigned to another delivery partner" });
+    }
+    if (!order.deliveryBoy && deliveryId) {
+        order.deliveryBoy = new mongoose.Types.ObjectId(deliveryId);
+        await order.save();
     }
 
     if (order.status === 'Delivered') {
@@ -371,6 +459,13 @@ export const sendDeliveryOtp = asyncHandler(async (req: Request, res: Response) 
                 orderId: id,
                 orderNumber: order.orderNumber,
                 message: 'Delivery OTP sent to customer',
+            });
+            // Let the customer's order page show the new OTP straight away
+            const fresh = await Order.findById(id).select('deliveryOtp deliveryOtpExpiresAt');
+            io.to(`order-${id}`).emit('delivery-otp-refreshed', {
+                orderId: id,
+                deliveryOtp: fresh?.deliveryOtp,
+                expiresAt: fresh?.deliveryOtpExpiresAt,
             });
         }
 
@@ -403,41 +498,33 @@ export const verifyDeliveryOtpController = asyncHandler(async (req: Request, res
         return res.status(404).json({ success: false, message: "Order not found" });
     }
 
-    if (order.deliveryBoy?.toString() !== deliveryId) {
-        return res.status(403).json({ success: false, message: "This order is not assigned to you" });
+    if (order.deliveryBoy && order.deliveryBoy.toString() !== deliveryId) {
+        return res.status(403).json({ success: false, message: "This order is assigned to another delivery partner" });
+    }
+    if (!order.deliveryBoy && deliveryId) {
+        order.deliveryBoy = new mongoose.Types.ObjectId(deliveryId);
+        await order.save();
     }
 
     try {
-        const previousStatus = order.status;
         const result = await verifyDeliveryOtp(id, otp);
-        // Note: verifyDeliveryOtp is from service, not this controller
+        // Single settlement path: seller commissions, delivery payout, COD cash
+        const updatedOrder: any = await markOrderDelivered(id, deliveryId);
+        await Order.updateOne({ _id: id }, { $set: { deliveryOtpVerified: true } });
 
-        // Reload order to get updated status
-        const updatedOrder = await Order.findById(id);
-
-        // Process order status transition for financial transactions
-        if (updatedOrder && updatedOrder.status === 'Delivered' && previousStatus !== 'Delivered') {
-            try {
-                await processOrderStatusTransition(id, 'Delivered', previousStatus);
-            } catch (transitionError: any) {
-                console.error('Error processing order status transition:', transitionError);
-                // Continue even if transition fails - order is already marked as delivered
-            }
-        }
-
-        // Update delivery boy balance and cash collected (if COD)
-        if (updatedOrder && updatedOrder.status === 'Delivered') {
-            if (updatedOrder.paymentMethod === 'COD') {
-                await Delivery.findByIdAndUpdate(deliveryId, {
-                    $inc: { cashCollected: updatedOrder.total }
-                });
-            }
-
-            // Update delivery boy commission
-            const COMMISSION = 40; // Fixed amount for now, should be dynamic in future
-            await Delivery.findByIdAndUpdate(deliveryId, {
-                $inc: { balance: COMMISSION }
+        const io = (req.app as any).get("io");
+        if (io) {
+            io.to(`order-${id}`).emit('order-delivered', {
+                orderId: id,
+                orderNumber: updatedOrder.orderNumber,
+                message: 'Order has been delivered successfully',
             });
+            io.to(`delivery-${deliveryId}`).emit('order-delivered', {
+                orderId: id,
+                orderNumber: updatedOrder.orderNumber,
+                message: 'Order delivered successfully',
+            });
+            notifySellersOfOrderUpdate(io, updatedOrder, 'STATUS_UPDATE');
         }
 
         return res.status(200).json({

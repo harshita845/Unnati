@@ -2,6 +2,15 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { getOrderById, updateOrderStatus, OrderDetail } from '../../../services/api/orderService';
 import jsPDF from 'jspdf';
+import Code128Barcode, { code128DataUrl } from '../../../components/Code128Barcode';
+
+// Values are Order statuses; labels are what the seller sees
+const SELLER_STATUS_OPTIONS = [
+  { value: 'Processed', label: 'Accepted' },
+  { value: 'Out for Delivery', label: 'On the way' },
+  { value: 'Delivered', label: 'Delivered' },
+  { value: 'Cancelled', label: 'Cancelled' },
+];
 
 export default function SellerOrderDetail() {
   const { id } = useParams<{ id: string }>();
@@ -43,8 +52,9 @@ export default function SellerOrderDetail() {
     try {
       const response = await updateOrderStatus(orderDetail.id, { status: newStatus as any });
       if (response.success) {
-        setOrderStatus(newStatus);
-        setOrderDetail({ ...orderDetail, status: newStatus as any });
+        const savedStatus = response.data?.status || newStatus;
+        setOrderStatus(savedStatus);
+        setOrderDetail({ ...orderDetail, status: savedStatus as any });
       } else {
         alert('Failed to update order status');
       }
@@ -97,6 +107,7 @@ export default function SellerOrderDetail() {
   }
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return 'Not delivered yet';
     const date = new Date(dateString + 'T00:00:00');
     const day = date.getDate();
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -109,8 +120,9 @@ export default function SellerOrderDetail() {
     return `${day}${suffix} ${month}, ${year}`;
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (!orderDetail) return;
+    const pickupBarcode = await code128DataUrl(orderDetail.orderNumber);
 
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -285,6 +297,22 @@ export default function SellerOrderDetail() {
     doc.text(`₹${grandTotal.toFixed(2)}`, pageWidth - margin, yPos, { align: 'right' });
     yPos += 15;
 
+    // Pickup verification: the delivery partner scans this barcode (or enters the code) at the store
+    checkPageBreak(40);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Pickup code: ${orderDetail.orderNumber.slice(-6)}`, margin, yPos);
+    if (pickupBarcode) {
+      doc.addImage(pickupBarcode, 'PNG', margin, yPos + 3, 70, 16);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text(`#${orderDetail.orderNumber}`, margin, yPos + 23);
+      yPos += 30;
+    } else {
+      yPos += 8;
+    }
+
     // Footer
     checkPageBreak(20);
     doc.setDrawColor(200, 200, 200);
@@ -313,6 +341,7 @@ export default function SellerOrderDetail() {
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case 'Accepted':
+      case 'Processed':
         return 'bg-[var(--primary-alpha-20)] text-[var(--primary-darker)] border border-blue-400';
       case 'On the way':
         return 'bg-[var(--primary-alpha-20)] text-[var(--primary-darker)] border border-purple-400';
@@ -321,6 +350,7 @@ export default function SellerOrderDetail() {
       case 'Cancelled':
         return 'bg-red-100 text-red-800 border border-red-400';
       case 'Out For Delivery':
+      case 'Out for Delivery':
         return 'bg-[var(--primary-dark)] text-white border border-blue-700';
       case 'Received':
         return 'bg-[var(--primary-alpha-10)] text-[var(--primary-dark)] border border-blue-200';
@@ -351,6 +381,27 @@ export default function SellerOrderDetail() {
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-8">
+      {/* Pickup verification: rider must scan this or enter the code before collecting the package */}
+      {orderDetail.orderNumber && !['Delivered', 'Cancelled', 'Rejected', 'Returned'].includes(orderDetail.status) && (
+        <div className="bg-white mb-6 rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
+          <div className="bg-[var(--primary-dark)] text-white px-4 sm:px-6 py-3">
+            <h2 className="text-base sm:text-lg font-semibold">Pickup Verification</h2>
+          </div>
+          <div className="px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="bg-white p-2 border border-neutral-200 rounded-lg overflow-x-auto">
+              <Code128Barcode value={orderDetail.orderNumber} />
+            </div>
+            <div className="text-sm text-neutral-700">
+              <p className="text-neutral-500">Pickup code</p>
+              <p className="text-3xl font-bold tracking-widest text-neutral-900">{orderDetail.orderNumber.slice(-6)}</p>
+              <p className="mt-1 text-xs text-neutral-500">
+                The delivery partner must scan this barcode (it is also printed on the invoice) or enter this code before taking the package.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Order Action Section */}
       <div className="bg-white mb-6 rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
         <div className="bg-[var(--primary-dark)] text-white px-4 sm:px-6 py-3">
@@ -360,14 +411,17 @@ export default function SellerOrderDetail() {
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
             <div className="flex-1 w-full sm:w-auto">
               <select
-                value={orderStatus}
-                onChange={(e) => handleStatusUpdate(e.target.value)}
+                value={SELLER_STATUS_OPTIONS.some((o) => o.value === orderStatus) ? orderStatus : ''}
+                disabled={['Delivered', 'Cancelled', 'Rejected', 'Returned'].includes(orderStatus)}
+                onChange={(e) => e.target.value && handleStatusUpdate(e.target.value)}
                 className="w-full sm:w-64 px-4 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)]"
               >
-                <option value="Accepted">Accepted</option>
-                <option value="On the way">On the way</option>
-                <option value="Delivered">Delivered</option>
-                <option value="Cancelled">Cancelled</option>
+                {!SELLER_STATUS_OPTIONS.some((o) => o.value === orderStatus) && (
+                  <option value="" disabled>{orderStatus || 'Select status'}</option>
+                )}
+                {SELLER_STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
               </select>
             </div>
             <button

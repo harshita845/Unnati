@@ -503,7 +503,7 @@ async function runSeed() {
     deliveryBoy = await Delivery.create({
       name: "Ramesh Delivery Rider",
       mobile: "9111966733",
-      email: "delivery@geetastores.com",
+      email: "delivery@Unnatistores.com",
       password: hashedPassword,
       address: "12, Station Road",
       city: "Nagda",
@@ -1122,7 +1122,7 @@ async function runSeed() {
     { question: "What payment methods are supported?", answer: "We accept UPI (Google Pay, PhonePe, Paytm), Credit & Debit Cards, Net Banking, and Cash on Delivery (COD).", category: "Payments", order: 2 },
     { question: "How does 10-minute Express delivery work?", answer: "Our local dark stores and partner sellers fulfill nearby orders with prioritized dispatch within 10-15 minutes.", category: "Delivery", order: 3 },
     { question: "What is your return & replacement policy?", answer: "You can request a return or replacement within 24-48 hours of delivery for damaged, expired, or missing items.", category: "Returns", order: 4 },
-    { question: "How can I become a verified seller on Geeta Stores?", answer: "Register via the Seller Sign-Up page, upload your GST/FSSAI details and store photos. Our admin team verifies accounts within 24 hours.", category: "Seller", order: 5 },
+    { question: "How can I become a verified seller on Unnati Stores?", answer: "Register via the Seller Sign-Up page, upload your GST/FSSAI details and store photos. Our admin team verifies accounts within 24 hours.", category: "Seller", order: 5 },
     { question: "Can I use store credit or wallet balance for checkout?", answer: "Yes, wallet credits and referral bonuses can be applied directly at the checkout payment screen.", category: "Payments", order: 6 },
     { question: "How do I print a GST Invoice for my purchase?", answer: "You can download or print official tax invoices from the Order Details page or POS Invoice Report section.", category: "Orders", order: 7 },
     { question: "What should I do if an item is missing from my delivery bag?", answer: "Click 'Request Return / Issue' under your delivered order, select 'Missing Item', and our support team will instantly refund or dispatch the item.", category: "Returns", order: 8 },
@@ -1139,7 +1139,7 @@ async function runSeed() {
 # Customer Terms of Service & Privacy Policy
 
 ## 1. Introduction
-Welcome to Geeta Stores E-Commerce Platform. By using our website and mobile application, you agree to comply with our terms and conditions.
+Welcome to Unnati Stores E-Commerce Platform. By using our website and mobile application, you agree to comply with our terms and conditions.
 
 ## 2. Order Processing & Delivery
 - All orders are subject to item availability and seller acceptance.

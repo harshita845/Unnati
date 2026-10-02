@@ -44,7 +44,7 @@ export async function compressVideo(
       document.body.appendChild(video);
 
       let mediaRecorder: MediaRecorder | null = null;
-      let chunks: Blob[] = [];
+      const chunks: Blob[] = [];
 
       const cleanup = () => {
         try {
@@ -69,7 +69,7 @@ export async function compressVideo(
         const stream = (video as any).captureStream ? (video as any).captureStream(24) : (video as any).mozCaptureStream(24);
         
         // Determine encoding options
-        let options: MediaRecorderOptions = {
+        const options: MediaRecorderOptions = {
           videoBitsPerSecond: 800000, // 800 Kbps target
         };
 

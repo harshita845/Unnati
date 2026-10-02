@@ -69,7 +69,7 @@
   - Details: ```json
 {
   "error": "Operation `otps.findOne()` buffering timed out after 10000ms",
-  "stack": "MongooseError: Operation `otps.findOne()` buffering timed out after 10000ms\n    at Timeout.<anonymous> (C:\\Users\\AnkitAhirwar\\OneDrive\\Desktop\\Geeta Stores\\backend\\node_modules\\mongoose\\lib\\drivers\\node-mongodb-native\\collection.js:187:23)\n    at listOnTimeout (node:internal/timers:594:17)\n    at process.processTimers (node:internal/timers:529:7)"
+  "stack": "MongooseError: Operation `otps.findOne()` buffering timed out after 10000ms\n    at Timeout.<anonymous> (C:\\Users\\AnkitAhirwar\\OneDrive\\Desktop\\Unnati Stores\\backend\\node_modules\\mongoose\\lib\\drivers\\node-mongodb-native\\collection.js:187:23)\n    at listOnTimeout (node:internal/timers:594:17)\n    at process.processTimers (node:internal/timers:529:7)"
 }
 ```
 

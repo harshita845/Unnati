@@ -236,6 +236,80 @@ export const createCustomer = asyncHandler(
 );
 
 /**
+ * Update a customer (POS customer edit). Sellers can only edit their own customers.
+ */
+export const updateCustomer = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const scope: any = {
+      sellerId: req.user && req.user.userType === "Seller" ? req.user.userId : null,
+    };
+
+    const customer = await Customer.findOne({ _id: id, ...scope });
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found or you don't have permission to edit it",
+      });
+    }
+
+    const { name, email, phone, address, city, state, pincode } = req.body;
+    if (name !== undefined && !String(name).trim()) {
+      return res.status(400).json({ success: false, message: "Name is required" });
+    }
+    if (phone !== undefined && !String(phone).trim()) {
+      return res.status(400).json({ success: false, message: "Phone number is required" });
+    }
+
+    // Same duplicate rule as create: phone/email must be unique within this seller's (or admin's) list
+    const duplicateChecks: any[] = [];
+    if (phone && phone !== customer.phone) duplicateChecks.push({ phone });
+    if (email && email !== customer.email) duplicateChecks.push({ email });
+    if (duplicateChecks.length) {
+      const duplicate = await Customer.findOne({ ...scope, _id: { $ne: id }, $or: duplicateChecks });
+      if (duplicate) {
+        return res.status(400).json({
+          success: false,
+          message: duplicate.phone === phone
+            ? "Customer with this phone number is already registered in your list"
+            : "Customer with this email is already registered in your list",
+        });
+      }
+    }
+
+    if (name !== undefined) customer.name = String(name).trim();
+    if (phone !== undefined) customer.phone = String(phone).trim();
+    if (email !== undefined) (customer as any).email = email ? String(email).trim() : undefined;
+    if (address !== undefined) (customer as any).address = address;
+    if (city !== undefined) (customer as any).city = city;
+    if (state !== undefined) (customer as any).state = state;
+    if (pincode !== undefined) (customer as any).pincode = pincode;
+    const rawGst = req.body.gst ?? req.body.gstNumber;
+    if (rawGst !== undefined) {
+      (customer as any).gst = rawGst ? String(rawGst).toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 15) : "";
+    }
+
+    try {
+      await customer.save();
+    } catch (error: any) {
+      if (error.code === 11000) {
+        return res.status(400).json({
+          success: false,
+          message: "This phone number or email is already registered in the system.",
+        });
+      }
+      throw error;
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Customer updated successfully",
+      data: customer,
+    });
+  }
+);
+
+/**
  * Delete a customer
  */
 export const deleteCustomer = asyncHandler(

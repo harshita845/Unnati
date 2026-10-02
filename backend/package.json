@@ -1,7 +1,7 @@
 {
-  "name": "Geeta Stores-backend",
+  "name": "Unnati Stores-backend",
   "version": "1.0.0",
-  "description": "Geeta Stores Backend API Server",
+  "description": "Unnati Stores Backend API Server",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",

@@ -24,16 +24,16 @@ export default cloudinary;
 
 // Folder structure constants
 export const CLOUDINARY_FOLDERS = {
-  PRODUCTS: "Geeta Stores/products",
-  PRODUCT_GALLERY: "Geeta Stores/products/gallery",
-  CATEGORIES: "Geeta Stores/categories",
-  SUBCATEGORIES: "Geeta Stores/subcategories",
-  COUPONS: "Geeta Stores/coupons",
-  SELLERS: "Geeta Stores/sellers",
-  SELLER_PROFILE: "Geeta Stores/sellers/profile",
-  SELLER_DOCUMENTS: "Geeta Stores/sellers/documents",
-  DELIVERY: "Geeta Stores/delivery",
-  DELIVERY_DOCUMENTS: "Geeta Stores/delivery/documents",
-  STORES: "Geeta Stores/stores",
-  USERS: "Geeta Stores/users",
+  PRODUCTS: "Unnati Stores/products",
+  PRODUCT_GALLERY: "Unnati Stores/products/gallery",
+  CATEGORIES: "Unnati Stores/categories",
+  SUBCATEGORIES: "Unnati Stores/subcategories",
+  COUPONS: "Unnati Stores/coupons",
+  SELLERS: "Unnati Stores/sellers",
+  SELLER_PROFILE: "Unnati Stores/sellers/profile",
+  SELLER_DOCUMENTS: "Unnati Stores/sellers/documents",
+  DELIVERY: "Unnati Stores/delivery",
+  DELIVERY_DOCUMENTS: "Unnati Stores/delivery/documents",
+  STORES: "Unnati Stores/stores",
+  USERS: "Unnati Stores/users",
 } as const;

@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const MURI = 'mongodb+srv://aryankarma29_db_user:iR1609zqHSZRxUDx@cluster0.fi6wvqa.mongodb.net/geeta-ecom';
+const MURI = 'mongodb+srv://aryankarma29_db_user:iR1609zqHSZRxUDx@cluster0.fi6wvqa.mongodb.net/Unnati-ecom';
 
 async function check() {
   try {

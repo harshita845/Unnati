@@ -142,7 +142,8 @@ export const getProducts = async (req: Request, res: Response) => {
     // by findSellersWithinRange().
     const getVisibleSellersQuery = () => ({ isEnabled: true });
 
-    let visibleSellerIds: mongoose.Types.ObjectId[] = [];
+    const userCity = req.query.city ? String(req.query.city).trim() : null;
+    let visibleSellerIds: any[] = [];
 
     if (userLat && userLng && !isNaN(userLat) && !isNaN(userLng)) {
       const nearbySellerIds = await findSellersWithinRange(userLat, userLng);
@@ -151,8 +152,24 @@ export const getProducts = async (req: Request, res: Response) => {
         ...getVisibleSellersQuery()
       }).select("_id");
       visibleSellerIds = visibleSellers.map(s => s._id);
+    } else if (userCity) {
+      const visibleSellers = await Seller.find({
+        $or: [
+          { city: { $regex: new RegExp(`^${userCity}$`, "i") } },
+          { category: "Admin" }
+        ],
+        ...getVisibleSellersQuery()
+      }).select("_id");
+      visibleSellerIds = visibleSellers.map(s => s._id);
     } else {
-      const visibleSellers = await Seller.find(getVisibleSellersQuery()).select("_id");
+      // Default fallback for unlocalized browsing: show Indore stores and Admin
+      const visibleSellers = await Seller.find({
+        $or: [
+          { city: { $regex: /Indore/i } },
+          { category: "Admin" }
+        ],
+        ...getVisibleSellersQuery()
+      }).select("_id");
       visibleSellerIds = visibleSellers.map(s => s._id);
     }
 
@@ -455,11 +472,7 @@ export const getProductById = async (req: Request, res: Response) => {
       status: "Active",
       publish: true,
     })
-      .populate({
-        path: "category",
-        match: { status: "Active" }, // Ensure category is active
-        select: "name parentId status"
-      })
+      .populate("category", "name parentId status")
       .populate("subcategory", "name parentId")
       .populate("brand", "name")
       .populate(
@@ -467,7 +480,7 @@ export const getProductById = async (req: Request, res: Response) => {
         "storeName city fssaiLicNo address location serviceRadiusKm email isEnabled category"
       );
 
-    if (!product || !product.category) { // If category is null due to match filter, hide product
+    if (!product) {
       return res.status(404).json({
         success: false,
         message: "Product not found or unavailable",
@@ -521,7 +534,7 @@ export const getProductById = async (req: Request, res: Response) => {
     // Check availability
     // Always available if it's the Admin Store
     if (seller && (
-      seller.email === "admin-store@geetastores.com" ||
+      seller.email === "admin-store@Unnatistores.com" ||
       seller.category === "Admin" ||
       /Admin/i.test(seller.storeName || "")
     )) {
@@ -587,7 +600,7 @@ export const getProductById = async (req: Request, res: Response) => {
       similarProductsQuery.subcategory = subId;
       similarProductsQuery.subSubCategory = { $in: [null, ""] };
       if (catId) similarProductsQuery.category = catId;
-    } 
+    }
     // Case 3: If no subcategory, show products from the same main category
     else if (catId) {
       similarProductsQuery.category = catId;
@@ -603,7 +616,7 @@ export const getProductById = async (req: Request, res: Response) => {
       try {
         const adminSellers = await Seller.find({
           $or: [
-            { email: "admin-store@geetastores.com" },
+            { email: "admin-store@Unnatistores.com" },
             { category: "Admin" },
             { storeName: { $regex: /Admin/i } }
           ]

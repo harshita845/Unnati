@@ -106,7 +106,7 @@ export default function CategoryTileSection({
   };
 
   // Fallback tiles if we have too few bestseller tiles
-  let displayTiles = [...tiles];
+  const displayTiles = [...tiles];
   if (showProductCount && displayTiles.length < 3) {
     const mockBestsellers: CategoryTile[] = [
       { id: "mock-best-grocery", name: "Groceries", productCount: 15, slug: "grocery", productImages: ["/dairy.jpg"], categoryId: "grocery", type: "category" },

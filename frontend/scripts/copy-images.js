@@ -210,14 +210,14 @@ function copyShopByStoreImages() {
   });
 }
 
-// Copy Geeta Stores logo
-function copyGeetaStoresLogo() {
-  const geetaStoresPath = path.join(assetsDir, 'Geeta Stores1.png');
-  if (fs.existsSync(geetaStoresPath)) {
-    const destPath = path.join(publicAssetsDir, 'Geeta Stores1.png');
+// Copy Unnati Stores logo
+function copyUnnatiStoresLogo() {
+  const UnnatiStoresPath = path.join(assetsDir, 'Unnati Stores1.png');
+  if (fs.existsSync(UnnatiStoresPath)) {
+    const destPath = path.join(publicAssetsDir, 'Unnati Stores1.png');
     if (!fs.existsSync(destPath)) {
-      fs.copyFileSync(geetaStoresPath, destPath);
-      console.log('Copied Geeta Stores logo: Geeta Stores1.png');
+      fs.copyFileSync(UnnatiStoresPath, destPath);
+      console.log('Copied Unnati Stores logo: Unnati Stores1.png');
     }
   }
 }
@@ -249,7 +249,7 @@ copyProductImages();
 copyBannerImage();
 copyShopByStoreImages();
 copyLoginVideo();
-copyGeetaStoresLogo();
+copyUnnatiStoresLogo();
 copyDeliveryIcon();
 console.log('Image copy completed!');
 

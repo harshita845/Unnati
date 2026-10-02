@@ -56,19 +56,23 @@ export function DeliveryStatusProvider({ children }: { children: ReactNode }) {
     return () => stopTracking();
   }, [isOnline]);
 
-  const startTracking = () => {
+  const startTracking = (highAccuracy = true) => {
     if (!navigator.geolocation) {
       setLocationError("Geolocation is not supported by your browser");
       return;
     }
 
     setLocationError(null);
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+    }
+
     watchIdRef.current = navigator.geolocation.watchPosition(
       handleLocationUpdate,
-      handleLocationError,
+      (error) => handleLocationError(error, highAccuracy),
       {
-        enableHighAccuracy: true,
-        maximumAge: 10000, // Allow positions up to 10s old to prevents timeouts
+        enableHighAccuracy: highAccuracy,
+        maximumAge: 10000, // Allow positions up to 10s old to prevent timeouts
         timeout: 45000, // Increased timeout for better stability
       }
     );
@@ -106,7 +110,7 @@ export function DeliveryStatusProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const handleLocationError = (error: GeolocationPositionError) => {
+  const handleLocationError = (error: GeolocationPositionError, wasHighAccuracy: boolean = true) => {
     let message = "An unknown error occurred with location services";
     switch (error.code) {
       case error.PERMISSION_DENIED:
@@ -114,13 +118,23 @@ export function DeliveryStatusProvider({ children }: { children: ReactNode }) {
         break;
       case error.POSITION_UNAVAILABLE:
         message = "Location information is unavailable.";
+        if (wasHighAccuracy) {
+          console.warn("[DeliveryStatusContext] High-accuracy GPS unavailable (kCLErrorLocationUnknown). Falling back to standard accuracy...");
+          startTracking(false);
+          return;
+        }
         break;
       case error.TIMEOUT:
         message = "The request to get user location timed out.";
+        if (wasHighAccuracy) {
+          console.warn("[DeliveryStatusContext] High-accuracy location timed out. Falling back to standard accuracy...");
+          startTracking(false);
+          return;
+        }
         break;
     }
     setLocationError(message);
-    console.error("Location error:", error);
+    console.warn("[DeliveryStatusContext] Location warning:", message);
   };
 
   const toggleStatus = async () => {

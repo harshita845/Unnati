@@ -388,7 +388,7 @@ export default function AdminSellerTransaction() {
     let totalAmt = 0;
     let paidAmt = 0;
     let pendingAmt = 0;
-    let count = transactions.length;
+    const count = transactions.length;
 
     for (const t of transactions) {
       totalAmt += t.amount || 0;

@@ -20,7 +20,7 @@ function log(msg: any) {
 }
 
 // --- Configuration ---
-const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/Geeta Stores';
+const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/Unnati Stores';
 const FRONTEND_ASSETS_PATH = path.join(__dirname, '../../../frontend/public');
 
 log('Starting Seed Script');
@@ -188,7 +188,7 @@ async function uploadToCloudinary(localPath: string, folder: string = 'products'
         }
 
         const result = await cloudinary.uploader.upload(fullPath, {
-            folder: `Geeta Stores/${folder}`,
+            folder: `Unnati Stores/${folder}`,
             use_filename: true,
             unique_filename: false,
         });
@@ -207,15 +207,15 @@ async function seed() {
         console.log('Connected to MongoDB');
 
         // 1. Create or Find Admin Seller
-        let seller = await Seller.findOne({ email: 'retail@Geeta Stores.com' });
+        let seller = await Seller.findOne({ email: 'retail@Unnati Stores.com' });
         if (!seller) {
             console.log('Creating default seller...');
             seller = await Seller.create({
-                sellerName: 'Geeta Stores Retail',
-                email: 'retail@Geeta Stores.com',
+                sellerName: 'Unnati Stores Retail',
+                email: 'retail@Unnati Stores.com',
                 password: 'password123',
                 mobile: '9876543210',
-                storeName: 'Geeta Stores Retail Pvt Ltd',
+                storeName: 'Unnati Stores Retail Pvt Ltd',
                 address: 'Indore, MP',
                 city: 'Indore',
                 category: 'Grocery',

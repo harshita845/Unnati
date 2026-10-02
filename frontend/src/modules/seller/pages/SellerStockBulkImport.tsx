@@ -20,7 +20,7 @@ interface SellerStockBulkImportProps {
   onSuccess: () => void;
 }
 
-/** Strip BOM / zero-width chars; normalize so "PRODUCT NAME", "Product_Name", "﻿PRODUCT_NAME" all match. */
+/** Strip BOM / zero-width chars; normalize so "PRODUCT NAME", "Product_Name", "<BOM>PRODUCT_NAME" all match. */
 function normalizeHeaderKey(k: string): string {
   return String(k)
     .replace(/^\uFEFF/, "")

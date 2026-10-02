@@ -1,5 +1,5 @@
 import { useParams, Link, useSearchParams } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Button from "../../components/ui/button";
 import { useOrders } from "../../hooks/useOrders";
@@ -509,15 +509,16 @@ export default function OrderDetail() {
     const loadOrder = async () => {
       if (!id) return;
 
+      // Show the cached copy immediately, but always load the latest (status, delivery OTP)
       const existingOrder = getOrderById(id);
       if (existingOrder) {
         setOrder(existingOrder);
         setOrderStatus(existingOrder.status);
         setLoading(false);
-        return;
+      } else {
+        setLoading(true);
       }
 
-      setLoading(true);
       const fetchedOrder = await fetchOrderById(id);
       if (fetchedOrder) {
         setOrder(fetchedOrder);
@@ -528,6 +529,22 @@ export default function OrderDetail() {
 
     loadOrder();
   }, [id, getOrderById, fetchOrderById]);
+
+  // Keep an active order fresh so new status and the delivery OTP appear without a manual refresh
+  const fetchOrderByIdRef = useRef(fetchOrderById);
+  fetchOrderByIdRef.current = fetchOrderById;
+  useEffect(() => {
+    if (!id || !order?.status) return;
+    if (['Delivered', 'Cancelled', 'Rejected', 'Returned'].includes(order.status)) return;
+    const timer = setInterval(async () => {
+      const latest = await fetchOrderByIdRef.current(id);
+      if (latest) {
+        setOrder(latest);
+        setOrderStatus(latest.status);
+      }
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [id, order?.status]);
 
   // Fetch seller locations when order is loaded
   useEffect(() => {
@@ -620,9 +637,9 @@ export default function OrderDetail() {
 
   const handleShare = async () => {
     const shareData = {
-      title: `Order #${order?.id?.split("-").slice(-1)[0]}`,
+      title: `Order #${(order?.orderNumber || order?.id?.split("-").slice(-1)[0])}`,
       text: `Track my Ecommerce order: Order #${
-        order?.id?.split("-").slice(-1)[0]
+        (order?.orderNumber || order?.id?.split("-").slice(-1)[0])
       }`,
       url: window.location.href,
     };
@@ -641,8 +658,7 @@ export default function OrderDetail() {
   };
 
   const handleCallStore = () => {
-    // Default store number, should be from order/seller data
-    const storeNumber = order?.seller?.phone || "1234567890";
+    const storeNumber = order?.items?.[0]?.seller?.phone || order?.seller?.phone || "1234567890";
     window.location.href = `tel:${storeNumber}`;
   };
 
@@ -655,16 +671,18 @@ export default function OrderDetail() {
     if (!id) return;
 
     try {
-      // TODO: Call backend API to cancel order
       await cancelOrder(id, cancellationReason);
       setOrderStatus("Cancelled" as any);
       setShowCancelModal(false);
       alert("Order cancelled successfully");
       // Refresh order to get updated status
       handleRefresh();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error cancelling order:", error);
-      alert("Failed to cancel order");
+      const msg = error.response?.data?.message || error.message || "Failed to cancel order";
+      alert(msg);
+      setShowCancelModal(false);
+      handleRefresh();
     }
   };
 
@@ -820,7 +838,7 @@ export default function OrderDetail() {
     },
     // Backend status mappings
     Received: {
-      title: "Order received",
+      title: "Order placed",
       subtitle: "Processing your order",
       color: "bg-green-700",
     },
@@ -1015,7 +1033,9 @@ export default function OrderDetail() {
       )}
 
       {/* Delivery Partner Card */}
-      {isConnected && deliveryLocation && (
+      {/* Show while live tracking runs, and always once the delivery OTP exists (GPS may be unavailable) */}
+      {((isConnected && deliveryLocation) ||
+        (order?.deliveryOtp && ['Picked up', 'Out for Delivery'].includes(order?.status))) && (
         <DeliveryPartnerCard
           partner={{
             name: order?.deliveryPartner?.name || "Delivery Partner",
@@ -1025,39 +1045,41 @@ export default function OrderDetail() {
           }}
           eta={routeInfo ? Math.ceil(routeInfo.durationValue / 60) : eta}
           distance={routeInfo ? routeInfo.distanceValue : distance}
-          isTracking={isConnected}
+          isTracking={!!(isConnected && deliveryLocation)}
           deliveryOtp={order?.deliveryOtp}
           otpExpiryTime={order?.deliveryOtpExpiresAt}
           onRefreshOtp={handleRefreshOtp}
           onCall={() => {
-            const phone = order?.deliveryPartner?.phone || "1234567890";
-            window.location.href = `tel:${phone}`;
+            const phone = order?.deliveryPartner?.phone;
+            if (phone) window.location.href = `tel:${phone}`;
           }}
         />
       )}
 
       {/* Scrollable Content */}
       <div className="px-4 py-4 space-y-4 pb-24">
-        {/* Payment Pending */}
-        <motion.div
-          className="bg-white rounded-xl p-4 shadow-sm"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-semibold text-gray-900">
-                Payment of ₹{order.totalAmount?.toFixed(2) || "0.00"} pending
-              </p>
-              <p className="text-sm text-gray-500 mt-1">
-                Pay now, or pay to the delivery partner using Cash/UPI
-              </p>
+        {/* Payment Pending - Only show if payment is NOT completed */}
+        {order?.paymentStatus !== 'Paid' && order?.paymentStatus !== 'COMPLETED' && order?.paymentStatus !== 'Success' && (
+          <motion.div
+            className="bg-white rounded-xl p-4 shadow-sm"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-gray-900">
+                  Payment of ₹{order.totalAmount?.toFixed(2) || "0.00"} pending
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Pay now, or pay to the delivery partner using Cash/UPI
+                </p>
+              </div>
+              <Button className="bg-gray-900 hover:bg-gray-800 text-white rounded-full px-6">
+                Pay now <ChevronRightIcon className="w-4 h-4 ml-1" />
+              </Button>
             </div>
-            <Button className="bg-gray-900 hover:bg-gray-800 text-white rounded-full px-6">
-              Pay now <ChevronRightIcon className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        </motion.div>
+          </motion.div>
+        )}
 
         {/* Promo Carousel */}
         <PromoCarousel />
@@ -1151,9 +1173,11 @@ export default function OrderDetail() {
               <span className="text-2xl">🛒</span>
             </div>
             <div className="flex-1">
-              <p className="font-semibold text-gray-900">Ecommerce Store</p>
+              <p className="font-semibold text-gray-900">
+                {order.items?.[0]?.seller?.storeName || (order as any).storeName || order.seller?.storeName || "Unnati Store"}
+              </p>
               <p className="text-sm text-gray-500">
-                {order.address?.city || "Local Area"}
+                {order.items?.[0]?.seller?.city || order.seller?.city || order.address?.city || "Local Area"}
               </p>
             </div>
             <motion.button
@@ -1173,7 +1197,7 @@ export default function OrderDetail() {
               <ReceiptIcon className="w-5 h-5 text-gray-500 mt-0.5" />
               <div className="flex-1">
                 <p className="font-medium text-gray-900">
-                  Order #{order.id.split("-").slice(-1)[0]}
+                  Order #{order.orderNumber || order.id.split("-").slice(-1)[0]}
                 </p>
                 <div className="mt-2 space-y-1">
                   {order.items?.map((item: any, index: number) => {

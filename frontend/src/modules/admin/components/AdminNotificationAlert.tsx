@@ -61,7 +61,7 @@ const AdminNotificationAlert: React.FC<AdminNotificationAlertProps> = ({ notific
     if (isProcessing) return;
     setIsProcessing(true);
     try {
-      const response = await api.put(`/admin/orders/${notification.orderId}/status`, {
+      const response = await api.patch(`/admin/orders/${notification.orderId}/status`, {
         status: newStatus,
       });
       if (response.data.success) {

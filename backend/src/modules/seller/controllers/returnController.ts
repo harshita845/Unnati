@@ -1,8 +1,13 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
+import mongoose from "mongoose";
 import Return from "../../../models/Return";
-// import Order from "../../../models/Order";
+import Order from "../../../models/Order";
 import OrderItem from "../../../models/OrderItem";
+import Seller from "../../../models/Seller";
+import Delivery from "../../../models/Delivery";
+import DeliveryAssignment from "../../../models/DeliveryAssignment";
+import { findDeliveryBoysNearLocation } from "../../../services/orderNotificationService";
 
 export const getReturnRequests = asyncHandler(
   async (req: Request, res: Response) => {
@@ -142,17 +147,51 @@ export const getReturnRequestById = asyncHandler(
   }
 );
 
+const SELLER_RETURN_STATUSES = ["Approved", "Rejected", "Processing", "Completed"];
+
+/**
+ * Pick the delivery partner for a return pickup: an explicit choice, else the
+ * partner who delivered the order, else the nearest online partner to the store.
+ */
+const pickReturnDeliveryPartner = async (
+  explicitId: string | undefined,
+  orderId: unknown,
+  sellerId: string
+): Promise<string | null> => {
+  if (explicitId && mongoose.isValidObjectId(explicitId)) {
+    const partner = await Delivery.findOne({ _id: explicitId, status: "Active" }).select("_id");
+    if (partner) return String(partner._id);
+  }
+
+  const order: any = await Order.findById(orderId).select("deliveryBoy");
+  if (order?.deliveryBoy) {
+    const partner = await Delivery.findOne({ _id: order.deliveryBoy, status: "Active" }).select("_id");
+    if (partner) return String(partner._id);
+  }
+
+  const seller: any = await Seller.findById(sellerId).select("location serviceRadiusKm");
+  const coords = seller?.location?.coordinates;
+  if (coords?.length === 2) {
+    const nearby = await findDeliveryBoysNearLocation(coords[1], coords[0], seller.serviceRadiusKm || 10);
+    if (nearby.length) return String(nearby[0].deliveryBoyId);
+  }
+  return null;
+};
+
 export const updateReturnStatus = asyncHandler(
   async (req: Request, res: Response) => {
+    const sellerId = req.user!.userId;
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, rejectionReason, deliveryBoyId } = req.body;
 
-    const returnRequest = await Return.findByIdAndUpdate(
-      id,
-      { status },
-      { new: true }
-    );
+    if (!SELLER_RETURN_STATUSES.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status. Must be one of: ${SELLER_RETURN_STATUSES.join(", ")}`,
+      });
+    }
 
+    const returnRequest: any = await Return.findById(id);
     if (!returnRequest) {
       return res.status(404).json({
         success: false,
@@ -160,10 +199,62 @@ export const updateReturnStatus = asyncHandler(
       });
     }
 
+    // Sellers may only act on returns for their own items
+    const ownsItem = await OrderItem.exists({ _id: returnRequest.orderItem, seller: sellerId });
+    if (!ownsItem) {
+      return res.status(404).json({
+        success: false,
+        message: "Return request not found"
+      });
+    }
+
+    const updateData: any = {
+      status,
+      processedBy: sellerId,
+      processedAt: new Date(),
+    };
+    if (status === "Rejected" && rejectionReason) updateData.rejectionReason = rejectionReason;
+
+    // Approval schedules the pickup with a delivery partner (same as admin approval)
+    let assignedDeliveryBoy: string | null = null;
+    if (status === "Approved") {
+      assignedDeliveryBoy = await pickReturnDeliveryPartner(deliveryBoyId, returnRequest.order, sellerId);
+      if (assignedDeliveryBoy) {
+        await DeliveryAssignment.findOneAndUpdate(
+          { returnRequest: id },
+          {
+            order: returnRequest.order,
+            returnRequest: id,
+            deliveryBoy: assignedDeliveryBoy,
+            assignedAt: new Date(),
+            assignedBy: sellerId,
+            status: "Assigned",
+            assignmentType: returnRequest.requestType === "Replacement" ? "Replacement" : "Return",
+          },
+          { upsert: true, new: true }
+        );
+        updateData.pickupScheduled = new Date();
+      }
+    }
+
+    const updatedReturn = await Return.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+
+    if (assignedDeliveryBoy) {
+      const io = req.app.get("io");
+      io?.to(`delivery-${assignedDeliveryBoy}`).emit("new-return-task", {
+        returnRequestId: id,
+        orderId: String(returnRequest.order),
+        requestType: returnRequest.requestType,
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: "Return status updated successfully",
-      data: returnRequest
+      ...(status === "Approved" && !assignedDeliveryBoy
+        ? { warning: "Approved, but no delivery partner is available for pickup yet. Admin can assign one." }
+        : {}),
+      data: { ...updatedReturn!.toObject(), deliveryBoy: assignedDeliveryBoy },
     });
   }
 );

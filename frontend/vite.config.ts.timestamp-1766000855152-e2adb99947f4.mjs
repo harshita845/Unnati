@@ -1,13 +1,13 @@
 // vite.config.ts
-import { defineConfig } from "file:///C:/Users/AnkitAhirwar/OneDrive/Desktop/Geeta Stores/frontend/node_modules/vite/dist/node/index.js";
-import react from "file:///C:/Users/AnkitAhirwar/OneDrive/Desktop/Geeta Stores/frontend/node_modules/@vitejs/plugin-react/dist/index.js";
+import { defineConfig } from "file:///C:/Users/AnkitAhirwar/OneDrive/Desktop/Unnati Stores/frontend/node_modules/vite/dist/node/index.js";
+import react from "file:///C:/Users/AnkitAhirwar/OneDrive/Desktop/Unnati Stores/frontend/node_modules/@vitejs/plugin-react/dist/index.js";
 import path from "path";
 
 // vite-plugin-serve-assets.ts
 import { readFileSync, existsSync } from "fs";
 import { join, resolve, extname } from "path";
 import { fileURLToPath } from "url";
-var __vite_injected_original_import_meta_url = "file:///C:/Users/AnkitAhirwar/OneDrive/Desktop/Geeta Stores/frontend/vite-plugin-serve-assets.ts";
+var __vite_injected_original_import_meta_url = "file:///C:/Users/AnkitAhirwar/OneDrive/Desktop/Unnati Stores/frontend/vite-plugin-serve-assets.ts";
 var __filename = fileURLToPath(__vite_injected_original_import_meta_url);
 var __dirname2 = resolve(__filename, "..");
 function serveAssetsPlugin() {
@@ -50,7 +50,7 @@ function serveAssetsPlugin() {
 }
 
 // vite.config.ts
-var __vite_injected_original_dirname = "C:\\Users\\AnkitAhirwar\\OneDrive\\Desktop\\Geeta Stores\\frontend";
+var __vite_injected_original_dirname = "C:\\Users\\AnkitAhirwar\\OneDrive\\Desktop\\Unnati Stores\\frontend";
 var vite_config_default = defineConfig({
   plugins: [react(), serveAssetsPlugin()],
   assetsInclude: ["**/*.jpg", "**/*.jpeg", "**/*.png", "**/*.webp"],

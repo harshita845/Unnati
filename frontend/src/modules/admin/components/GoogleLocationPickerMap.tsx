@@ -1,6 +1,6 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
 // @ts-ignore
-import { GoogleMap, useJsApiLoader, Marker, Circle } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, MarkerF, CircleF } from '@react-google-maps/api';
 
 interface GoogleLocationPickerMapProps {
   latitude: number;
@@ -150,20 +150,20 @@ export default function GoogleLocationPickerMap({
             fullscreenControl: true,
         }}
       >
-        <Marker
+        <MarkerF
           position={center}
           draggable={!!onLocationSelect && !selectOnDragEnd}
           onDragEnd={handleMarkerDragEnd}
         />
         {radiusKm && (
-            <Circle
+            <CircleF
                 center={center}
                 radius={radiusKm * 1000}
                 options={{
-                    strokeColor: "var(--primary-color)",
+                    strokeColor: "#0B5D3B",
                     strokeOpacity: 0.8,
                     strokeWeight: 2,
-                    fillColor: "var(--primary-color)",
+                    fillColor: "#0B5D3B",
                     fillOpacity: 0.2,
                 }}
             />

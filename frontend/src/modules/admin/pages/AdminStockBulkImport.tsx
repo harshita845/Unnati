@@ -166,7 +166,7 @@ export default function AdminStockBulkImport({
         });
     }
 
-    let unitPricing: { minQty: number; price: number }[] = [];
+    const unitPricing: { minQty: number; price: number }[] = [];
     try {
       const priceFor2 = safeNonNegativeNumber(
         rowCell(row, [

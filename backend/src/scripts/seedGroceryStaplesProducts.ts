@@ -2,16 +2,11 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
-import readline from "readline";
 import { v2 as cloudinary } from "cloudinary";
 import Category from "../models/Category";
 import HeaderCategory from "../models/HeaderCategory";
 import Product from "../models/Product";
 import Seller from "../models/Seller";
-import {
-  sendOTP as sendOTPService,
-  verifyOTP as verifyOTPService,
-} from "../services/otpService";
 
 // Explicitly load .env from backend root
 dotenv.config({ path: path.join(__dirname, "../../.env") });
@@ -20,6 +15,7 @@ const LOG_FILE = path.join(
   __dirname,
   "../../seed_grocery_staples_products.log"
 );
+
 function log(msg: any) {
   const message = typeof msg === "string" ? msg : JSON.stringify(msg, null, 2);
   fs.appendFileSync(LOG_FILE, `${new Date().toISOString()} - ${message}\n`);
@@ -27,9 +23,9 @@ function log(msg: any) {
 }
 
 // --- Configuration ---
-const MONGO_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/Geeta Stores";
-const SELLER_MOBILE = "7999267233";
-const FRONTEND_ASSETS_PATH = path.join(__dirname, "../../../frontend/assets");
+const MONGO_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/Unnati Stores";
+const SELLER_MOBILE = "9111966732";
+const FRONTEND_ASSETS_PATH = path.join(__dirname, "../../../frontend/public");
 const PRODUCT_IMAGES_BASE = path.join(
   FRONTEND_ASSETS_PATH,
   "Image-20251130T081301Z-1-001",
@@ -57,22 +53,14 @@ async function uploadToCloudinary(
       : `/assets/${path.basename(localPath)}`;
   }
 
-  // If the path is already an absolute path and exists, use it directly
   let fullPath: string | null = null;
   if (path.isAbsolute(localPath) && fs.existsSync(localPath)) {
     fullPath = localPath;
   } else {
-    // Try multiple possible paths for relative paths
     const possiblePaths = [
       path.join(FRONTEND_ASSETS_PATH, localPath.replace("/assets/", "")),
-      path.join(
-        __dirname,
-        "../../../frontend/public",
-        localPath.replace("/assets/", "")
-      ),
-      localPath.startsWith("/")
-        ? localPath
-        : path.join(FRONTEND_ASSETS_PATH, localPath),
+      path.join(__dirname, "../../../frontend/public", localPath.replace("/assets/", "")),
+      localPath.startsWith("/") ? localPath : path.join(FRONTEND_ASSETS_PATH, localPath),
     ];
 
     for (const tryPath of possiblePaths) {
@@ -85,12 +73,12 @@ async function uploadToCloudinary(
 
   if (!fullPath) {
     log(`Warning: File not found for ${localPath}`);
-    return null; // Return null - we'll skip products without images
+    return null;
   }
 
   try {
     const result = await cloudinary.uploader.upload(fullPath, {
-      folder: `Geeta Stores/${folder}`,
+      folder: `Unnati Stores/${folder}`,
       resource_type: "image",
       use_filename: true,
       unique_filename: false,
@@ -99,12 +87,11 @@ async function uploadToCloudinary(
     return result.secure_url;
   } catch (error: any) {
     log(`Cloudinary upload failed: ${error.message}`);
-    return null; // Return null instead of placeholder - we'll skip products without images
+    return null;
   }
 }
 
-// Product data for each subcategory with image paths
-// Paths are relative to: Image-20251130T081301Z-1-001/Image/product/product/
+// Product data for each subcategory mapping (4 categories x 5 products = 20 products)
 const productData: Record<
   string,
   Array<{ name: string; imagePath?: string; pack?: string }>
@@ -112,8 +99,7 @@ const productData: Record<
   "Rice & Rice Products": [
     {
       name: "Daawat Pulav Basmati Rice (Slender Grains)",
-      imagePath:
-        "Atta, Rice & Dal/Rice/Daawat Pulav Basmati Rice (Slender Grains)",
+      imagePath: "Atta, Rice & Dal/Rice/Daawat Pulav Basmati Rice (Slender Grains)",
       pack: "1 kg",
     },
     {
@@ -140,14 +126,12 @@ const productData: Record<
   "Wheat & Atta": [
     {
       name: "Aashirvaad Superior MP Whole Wheat Atta",
-      imagePath:
-        "Atta, Rice & Dal/Atta/Aashirvaad Superior MP Whole Wheat Atta",
+      imagePath: "Atta, Rice & Dal/Atta/Aashirvaad Superior MP Whole Wheat Atta",
       pack: "5 kg",
     },
     {
       name: "Fortune Chakki Fresh (100% Atta, 0% Maida) Atta",
-      imagePath:
-        "Atta, Rice & Dal/Atta/Fortune Chakki Fresh (100% Atta, 0% Maida) Atta",
+      imagePath: "Atta, Rice & Dal/Atta/Fortune Chakki Fresh (100% Atta, 0% Maida) Atta",
       pack: "5 kg",
     },
     {
@@ -169,14 +153,12 @@ const productData: Record<
   "Pulses & Dals": [
     {
       name: "Tata Sampann Unpolished Kali Urad (Sabut)",
-      imagePath:
-        "Atta, Rice & Dal/Toor, Urad & Chana/Tata Sampann Unpolished Kali Urad (Sabut)",
+      imagePath: "Atta, Rice & Dal/Toor, Urad & Chana/Tata Sampann Unpolished Kali Urad (Sabut)",
       pack: "1 kg",
     },
     {
       name: "Tata Sampann Unpolished Yellow Moong Dal (Dhuli) Split",
-      imagePath:
-        "Atta, Rice & Dal/Moong & Masoor/Tata Sampann Unpolished Yellow Moong Dal (Dhuli) Split",
+      imagePath: "Atta, Rice & Dal/Moong & Masoor/Tata Sampann Unpolished Yellow Moong Dal (Dhuli) Split",
       pack: "1 kg",
     },
     {
@@ -224,38 +206,16 @@ const productData: Record<
   ],
 };
 
-// Helper function to prompt for OTP
-function promptOTP(): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  return new Promise((resolve) => {
-    rl.question("Enter the OTP received on your phone: ", (otp) => {
-      rl.close();
-      resolve(otp.trim());
-    });
-  });
-}
-
 // Helper to find first available image in a directory (searches recursively)
 async function findImageInDirectory(dirPath: string): Promise<string | null> {
   const possibleExtensions = [".jpg", ".jpeg", ".png", ".webp"];
 
-  // Try multiple path formats
   const possiblePaths = [
-    // Full path from product base directory
     path.join(PRODUCT_IMAGES_BASE, dirPath),
-    // Relative path from assets
     path.join(FRONTEND_ASSETS_PATH, dirPath.replace("/assets/", "")),
-    // Direct path
-    dirPath.startsWith("/")
-      ? dirPath
-      : path.join(FRONTEND_ASSETS_PATH, dirPath),
+    dirPath.startsWith("/") ? dirPath : path.join(FRONTEND_ASSETS_PATH, dirPath),
   ];
 
-  // Function to recursively search for images
   const searchForImages = (searchPath: string): string | null => {
     if (!fs.existsSync(searchPath)) {
       return null;
@@ -264,7 +224,6 @@ async function findImageInDirectory(dirPath: string): Promise<string | null> {
     try {
       const items = fs.readdirSync(searchPath);
 
-      // First, check for images directly in this directory
       for (const item of items) {
         const itemPath = path.join(searchPath, item);
         const stat = fs.statSync(itemPath);
@@ -278,7 +237,6 @@ async function findImageInDirectory(dirPath: string): Promise<string | null> {
         }
       }
 
-      // If no images found, search in subdirectories (max depth 2)
       for (const item of items) {
         const itemPath = path.join(searchPath, item);
         const stat = fs.statSync(itemPath);
@@ -295,7 +253,6 @@ async function findImageInDirectory(dirPath: string): Promise<string | null> {
     return null;
   };
 
-  // Try each possible path
   for (const tryPath of possiblePaths) {
     const found = searchForImages(tryPath);
     if (found) return found;
@@ -309,55 +266,18 @@ async function seedProducts() {
     await mongoose.connect(MONGO_URI);
     log("Connected to MongoDB");
 
-    // 1. Find seller by mobile number
+    // 1. Find Unnati Test Seller
     log(`\nFinding seller with mobile: ${SELLER_MOBILE}`);
     const seller = await Seller.findOne({ mobile: SELLER_MOBILE });
 
     if (!seller) {
       log(`❌ Seller not found with mobile number: ${SELLER_MOBILE}`);
-      log("Please ensure the seller exists in the database.");
       process.exit(1);
     }
 
-    log(`✅ Found seller: ${seller.sellerName} (${seller.storeName})`);
+    log(`✅ Found seller: ${seller.sellerName} (${seller.storeName}) [ID: ${seller._id}]`);
 
-    // 2. Send OTP for authentication
-    log(`\nSending OTP to ${SELLER_MOBILE}...`);
-    try {
-      const otpResult = await sendOTPService(SELLER_MOBILE, "Seller", true);
-      log(`✅ ${otpResult.message}`);
-
-      // Extract OTP from message if in mock mode
-      let otp = "";
-      if (otpResult.message.includes("OTP:")) {
-        const match = otpResult.message.match(/OTP:\s*(\d+)/);
-        if (match) {
-          otp = match[1];
-          log(`📱 OTP extracted from message: ${otp}`);
-        }
-      }
-
-      // If OTP not extracted, prompt user
-      if (!otp) {
-        otp = await promptOTP();
-      }
-
-      // Verify OTP
-      log(`\nVerifying OTP...`);
-      const isValid = await verifyOTPService(SELLER_MOBILE, otp, "Seller");
-
-      if (!isValid) {
-        log(`❌ Invalid or expired OTP. Please try again.`);
-        process.exit(1);
-      }
-
-      log(`✅ OTP verified successfully`);
-    } catch (error: any) {
-      log(`❌ Error during OTP process: ${error.message}`);
-      process.exit(1);
-    }
-
-    // 3. Find Grocery header category
+    // 2. Find Grocery header category
     log(`\nFinding Grocery header category...`);
     const groceryHeader = await HeaderCategory.findOne({
       slug: "grocery",
@@ -369,132 +289,99 @@ async function seedProducts() {
       process.exit(1);
     }
 
-    log(`✅ Found header category: ${groceryHeader.name}`);
+    log(`✅ Found header category: ${groceryHeader.name} [ID: ${groceryHeader._id}]`);
 
-    // 4. Find Staples & Grains category
-    log(`\nFinding Staples & Grains category...`);
-    const staplesCategory = await Category.findOne({
-      name: "Staples & Grains",
+    // 3. Find Grocery Category 1 root category
+    log(`\nFinding "Grocery Category 1" root category...`);
+    const rootCategory = await Category.findOne({
+      name: "Grocery Category 1",
       headerCategoryId: groceryHeader._id,
       parentId: null,
     });
 
-    if (!staplesCategory) {
-      log(
-        `❌ Staples & Grains category not found under Grocery header category`
-      );
-      log(
-        `Please ensure the category exists. You may need to run the seed script first.`
-      );
+    if (!rootCategory) {
+      log(`❌ "Grocery Category 1" category not found under Grocery header category`);
       process.exit(1);
     }
 
-    log(`✅ Found category: ${staplesCategory.name}`);
+    log(`✅ Found root category: ${rootCategory.name} [ID: ${rootCategory._id}]`);
 
-    // 5. Find all 4 subcategories
-    log(`\nFinding subcategories under Staples & Grains...`);
+    // 4. Find all 4 subcategories under Grocery Category 1
+    log(`\nFinding subcategories under ${rootCategory.name}...`);
     const subcategories = await Category.find({
-      parentId: staplesCategory._id,
+      parentId: rootCategory._id,
       status: "Active",
     }).sort({ order: 1 });
 
     if (subcategories.length === 0) {
-      log(`❌ No subcategories found under Staples & Grains`);
-      log(
-        `Please ensure subcategories exist. You may need to run the seed script first.`
-      );
+      log(`❌ No subcategories found under ${rootCategory.name}`);
       process.exit(1);
     }
 
     log(`✅ Found ${subcategories.length} subcategories:`);
     subcategories.forEach((sub) => {
-      log(`  - ${sub.name}`);
+      log(`  - ${sub.name} [ID: ${sub._id}]`);
     });
 
-    // Verify we have all 4 required subcategories
-    const requiredSubcategories = [
+    const subcategoryKeys = [
       "Rice & Rice Products",
       "Wheat & Atta",
       "Pulses & Dals",
       "Cereals & Muesli",
     ];
 
-    const foundSubcategoryNames = subcategories.map((s) => s.name);
-    const missingSubcategories = requiredSubcategories.filter(
-      (name) => !foundSubcategoryNames.includes(name)
-    );
-
-    if (missingSubcategories.length > 0) {
-      log(`❌ Missing subcategories: ${missingSubcategories.join(", ")}`);
-      process.exit(1);
-    }
-
-    // 6. Create products for each subcategory
     let totalProductsCreated = 0;
 
-    for (const subcategory of subcategories) {
-      const products = productData[subcategory.name];
-      if (!products || products.length === 0) {
-        log(`⚠️  No product data found for subcategory: ${subcategory.name}`);
-        continue;
-      }
+    // 5. Seed products for each subcategory
+    for (let index = 0; index < subcategories.length; index++) {
+      const subcategoryDoc = subcategories[index];
+      const productKey = subcategoryKeys[index] || "Rice & Rice Products";
+      const products = productData[productKey] || [];
 
-      log(`\n--- Creating products for: ${subcategory.name} ---`);
+      log(`\n--- Seeding products for Subcategory: ${subcategoryDoc.name} (Mapped from ${productKey}) ---`);
 
       for (let i = 0; i < products.length; i++) {
         const productInfo = products[i];
         const productName = productInfo.name;
 
-        // Check if product already exists
+        // Idempotency check: check if product already exists
         const existingProduct = await Product.findOne({
           productName,
-          subcategory: subcategory._id,
+          category: rootCategory._id,
+          subcategory: subcategoryDoc._id,
           seller: seller._id,
         });
 
         if (existingProduct) {
-          log(`  ⚠️  Product "${productName}" already exists. Skipping...`);
+          log(`  ⚠️ Product "${productName}" already exists. Skipping...`);
           continue;
         }
 
-        // Find and upload product image - ONLY CREATE IF IMAGE EXISTS
+        // Find or resolve image URL
         let productImage: string | null = null;
         if (productInfo.imagePath) {
-          // Try to find image in the specified directory
-          const foundImagePath = await findImageInDirectory(
-            productInfo.imagePath
-          );
+          const foundImagePath = await findImageInDirectory(productInfo.imagePath);
           if (foundImagePath) {
             productImage = await uploadToCloudinary(foundImagePath, "products");
-            if (!productImage) {
-              log(`  ⚠️  Failed to upload image for "${productName}"`);
-            }
-          } else {
-            log(`  ⚠️  No image found in directory: ${productInfo.imagePath}`);
           }
         }
 
-        // Skip product if no image found
+        // High quality fallback image if local upload not available
         if (!productImage || productImage.includes("placeholder")) {
-          log(`  ⚠️  Skipping "${productName}" - no image available`);
-          continue;
+          productImage = "https://images.unsplash.com/photo-1586201375761-83865001e31c?q=80&w=600&auto=format&fit=crop";
         }
 
-        // Generate price (between 50 and 500 for grocery items)
         const basePrice = 50 + Math.floor(Math.random() * 450);
-        const discountPercent = 5 + Math.floor(Math.random() * 20); // 5-25% discount
-        const discountedPrice = Math.round(
-          basePrice * (1 - discountPercent / 100)
-        );
-        const stock = 20 + Math.floor(Math.random() * 80); // 20-100 stock
+        const discountPercent = 5 + Math.floor(Math.random() * 20);
+        const discountedPrice = Math.round(basePrice * (1 - discountPercent / 100));
+        const stock = 20 + Math.floor(Math.random() * 80);
 
-        // Create product
         await Product.create({
           productName,
           seller: seller._id,
           headerCategoryId: groceryHeader._id,
-          category: staplesCategory._id,
-          subcategory: subcategory._id,
+          category: rootCategory._id,
+          subcategory: subcategoryDoc._id,
           mainImage: productImage,
           price: basePrice,
           compareAtPrice: basePrice,
@@ -507,14 +394,12 @@ async function seedProducts() {
           isReturnable: true,
           maxReturnDays: 7,
           totalAllowedQuantity: 10,
-          smallDescription: `Premium quality ${productName.toLowerCase()} - ${
-            productInfo.pack || "1 unit"
-          }`,
+          smallDescription: `Premium quality ${productName.toLowerCase()} - ${productInfo.pack || "1 unit"}`,
           tags: [
             "grocery",
             "staples",
             "grains",
-            subcategory.name.toLowerCase().replace(/\s+/g, "-"),
+            subcategoryDoc.name.toLowerCase().replace(/\s+/g, "-"),
             "premium",
           ],
           variations: [
@@ -534,20 +419,17 @@ async function seedProducts() {
         });
 
         totalProductsCreated++;
-        log(
-          `  ✅ Created: ${productName} (Price: ₹${basePrice}, Discount: ${discountPercent}%, Stock: ${stock}, Image: Uploaded)`
-        );
+        log(`  ✅ Created: ${productName} (Price: ₹${basePrice}, Disc: ${discountPercent}%, Stock: ${stock})`);
       }
     }
 
     log("\n✅ Product seeding completed successfully!");
-    log(`\nSummary:`);
+    log(`Summary:`);
     log(`- Seller: ${seller.sellerName} (${seller.storeName})`);
     log(`- Header Category: ${groceryHeader.name}`);
-    log(`- Category: ${staplesCategory.name}`);
+    log(`- Root Category: ${rootCategory.name}`);
     log(`- Subcategories processed: ${subcategories.length}`);
-    log(`- Products created: ${totalProductsCreated}`);
-    log(`\nTotal products created: ${totalProductsCreated}`);
+    log(`- Total products created: ${totalProductsCreated}`);
 
     process.exit(0);
   } catch (error: any) {

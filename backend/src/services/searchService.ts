@@ -451,14 +451,26 @@ export const hybridProductSearch = async (options: SearchOptions) => {
   };
 };
 
-export const getSimilarProductsForProduct = async (productId: string, limit = 6) => {
+export const getSimilarProductsForProduct = async (
+  productId: string,
+  limit = 6,
+  location?: { latitude?: number; longitude?: number }
+) => {
   if (!mongoose.Types.ObjectId.isValid(productId)) {
     const error = new Error("Invalid product ID");
     (error as any).statusCode = 400;
     throw error;
   }
 
-  const cacheKey = buildSearchCacheKey("search:similar", { productId, limit });
+  const lat = Number(location?.latitude);
+  const lng = Number(location?.longitude);
+  const hasLocation = Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+  const cacheKey = buildSearchCacheKey("search:similar", {
+    productId,
+    limit,
+    // ~1 km grid so nearby customers share cache entries
+    loc: hasLocation ? `${lat.toFixed(2)},${lng.toFixed(2)}` : "none",
+  });
   const cached = cache.get<any[]>(cacheKey);
   if (cached) return cached;
 
@@ -480,10 +492,28 @@ export const getSimilarProductsForProduct = async (productId: string, limit = 6)
     targetEmbedding = await generateEmbedding(await buildProductSearchText(target as any));
   }
 
-  const baseQuery = await buildVisibleProductQuery({});
+  // Only recommend products the customer can actually order: stores that deliver to them,
+  // or (no location) stores in the same city as this product's store.
+  const baseQuery: Record<string, any> = await buildVisibleProductQuery(
+    hasLocation ? { latitude: lat, longitude: lng } : {}
+  );
+  if (!hasLocation && (target as any).seller) {
+    const targetSeller = await Seller.findById((target as any).seller).select("city").lean();
+    if (targetSeller?.city) {
+      const sameCity = await Seller.find({
+        _id: baseQuery.seller?.$in || { $exists: true },
+        city: { $regex: new RegExp(`^${escapeRegex(String(targetSeller.city).trim())}$`, "i") },
+      }).select("_id");
+      baseQuery.seller = { $in: sameCity.map((seller) => seller._id) };
+    }
+  }
+
+  const targetName = String((target as any).productName || "").trim();
   const candidates = await Product.find({
     ...baseQuery,
     _id: { $ne: target._id },
+    // The same product sold by another store is not a "recommendation"
+    ...(targetName ? { productName: { $not: new RegExp(`^${escapeRegex(targetName)}$`, "i") } } : {}),
     embedding: { $exists: true, $ne: [] },
   })
     .select(productProjection)
@@ -507,6 +537,11 @@ export const getSimilarProductsForProduct = async (productId: string, limit = 6)
       });
     })
     .sort((a, b) => b.searchScore.finalScore - a.searchScore.finalScore)
+    // One card per product name (several stores can sell the same item)
+    .filter((product: any, index: number, all: any[]) => {
+      const name = String(product.productName || product.name || "").trim().toLowerCase();
+      return all.findIndex((p: any) => String(p.productName || p.name || "").trim().toLowerCase() === name) === index;
+    })
     .slice(0, limit);
 
   cache.set(cacheKey, similarProducts, SEARCH_CACHE_TTL_MS);

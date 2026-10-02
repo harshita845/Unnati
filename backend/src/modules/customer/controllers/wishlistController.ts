@@ -45,14 +45,17 @@ export const getWishlist = async (req: Request, res: Response) => {
             }
         });
 
-        if (!wishlist) {
-            // Return empty if not created yet
-            wishlist = new Wishlist({ customer: userId, products: [] });
-        }
+        const rawList = wishlist ? wishlist.toObject() : { products: [] };
+        const validProducts = Array.isArray(rawList.products)
+            ? rawList.products.filter((p: any) => p && p._id)
+            : [];
 
         return res.status(200).json({
             success: true,
-            data: wishlist
+            data: {
+                ...rawList,
+                products: validProducts
+            }
         });
     } catch (error: any) {
         return res.status(500).json({

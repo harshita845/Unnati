@@ -25,6 +25,8 @@ export interface OrderFees {
 
 export interface Order {
   id: string;
+  /** Human-readable order number shown everywhere (seller, delivery, admin), e.g. ORD1790883190922696 */
+  orderNumber?: string;
   items: CartItem[];
   totalItems: number;
   subtotal: number;

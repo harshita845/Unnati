@@ -46,9 +46,9 @@ export const initializeSocket = (httpServer: HttpServer) => {
                 // Normalize origin (remove trailing slash and lowercase)
                 const normalizedOrigin = origin.replace(/\/$/, '').toLowerCase();
 
-                // Special case: allow any geeta.today domain or localhost
-                const isGeetaToday = normalizedOrigin.endsWith("geeta.today") ||
-                                    normalizedOrigin.includes("geeta.today");
+                // Special case: allow any Unnati.today domain or localhost
+                const isUnnatiToday = normalizedOrigin.endsWith("Unnati.today") ||
+                                    normalizedOrigin.includes("Unnati.today");
 
                 const isLocalhost = normalizedOrigin.startsWith("http://localhost:") ||
                                    normalizedOrigin.startsWith("http://127.0.0.1:") ||
@@ -62,7 +62,7 @@ export const initializeSocket = (httpServer: HttpServer) => {
                     isVercelAppSocket = false;
                 }
 
-                if (isGeetaToday || isLocalhost || isVercelAppSocket) {
+                if (isUnnatiToday || isLocalhost || isVercelAppSocket) {
                     return callback(null, true);
                 }
 

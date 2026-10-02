@@ -1,4 +1,4 @@
-import { Category } from "../../../services/api/admin/adminProductService";
+import { Category, formatSubscriptionPlans } from "../../../services/api/admin/adminProductService";
 
 interface CategoryTreeViewProps {
   categories: Category[];
@@ -208,6 +208,16 @@ export default function CategoryTreeView({
                             );
                           })()
                         ) : null}
+
+                        {/* Subscription Plans Badge */}
+                        {category.subscriptionEnabled &&
+                          (category.allowedPlans?.length || 0) > 0 && (
+                            <span
+                              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]"
+                              title="Subscription plans">
+                              {formatSubscriptionPlans(category.allowedPlans)}
+                            </span>
+                          )}
 
                         {/* Children Count Badge */}
                         {hasChildren && (

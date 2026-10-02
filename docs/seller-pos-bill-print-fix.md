@@ -2,8 +2,8 @@
 
 ## Problem
 
-The screen titled **“Bill Settings”** (seller) saves to `localStorage` key `seller_bill_settings` and API.  
-`SellerPOSOrders.tsx` was still using **hardcoded `GEETA`** for thermal print, PDF, and purchase invoice HTML.
+The screen titled **“Bill Settings”** (seller) saves to `localStorage` key `seller_bill_settings` and API.
+`SellerPOSOrders.tsx` was still using **hardcoded `Unnati`** for thermal print, PDF, and purchase invoice HTML.
 
 Admin POS already reads `admin_pos_bill_settings`; seller POS needed the same pattern for `seller_bill_settings`.
 
@@ -85,14 +85,14 @@ const billPdf = readSellerPosBillSettings() ?? posBillSettings;
 
 ### 5) `printPurchaseInvoice` HTML header
 
-After the popup check, build `shopTitle`, `addrHtml`, `phoneLine`, `fssaiBlk` from `readSellerPosBillSettings()` + `esc()` (copy from `AdminPOSOrders.tsx` `printPurchaseInvoice`).  
-Replace the hardcoded `<h1>GEETA</h1>` and fixed address `<p>...</p>` with the dynamic template variables.
+After the popup check, build `shopTitle`, `addrHtml`, `phoneLine`, `fssaiBlk` from `readSellerPosBillSettings()` + `esc()` (copy from `AdminPOSOrders.tsx` `printPurchaseInvoice`).
+Replace the hardcoded `<h1>Unnati</h1>` and fixed address `<p>...</p>` with the dynamic template variables.
 
 ### 6) Hidden thermal block (`HIDDEN THERMAL RECEIPT`)
 
 Match `AdminPOSOrders.tsx`:
 
-- `posBillSettings?.shopName || 'GEETA'`
+- `posBillSettings?.shopName || 'Unnati'`
 - `posBillSettings?.address` with `whitespace-pre-wrap` + default address string
 - `posBillSettings?.phone`
 - GST/FSSAI: seller settings first, else `config.invoiceSettings`
@@ -101,16 +101,16 @@ Match `AdminPOSOrders.tsx`:
 
 ### 7) Success modal title
 
-Replace hardcoded `Geeta Store` with:
+Replace hardcoded `Unnati Store` with:
 
 ```tsx
-{posBillSettings?.shopName || 'Geeta Store'}
+{posBillSettings?.shopName || 'Unnati Store'}
 ```
 
 ## Verify
 
-1. Seller → Bill Settings → set shop name → Save.  
-2. Seller → POS → bill → Print.  
+1. Seller → Bill Settings → set shop name → Save.
+2. Seller → POS → bill → Print.
 3. Header should show saved shop name, address, phone.
 
 ## Reference implementation

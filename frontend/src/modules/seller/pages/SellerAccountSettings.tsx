@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getSellerProfile, updateSellerProfile } from '../../../services/api/auth/sellerAuthService';
@@ -109,12 +109,55 @@ const SellerAccountSettings = () => {
     }
   };
 
+  const profileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setSellerData(prev => ({
       ...prev,
       [name]: value
     }));
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'profile' | 'logo' | 'storeBanner') => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxDim = field === 'storeBanner' ? 1920 : 800;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          setSellerData(prev => ({
+            ...prev,
+            [field]: compressedDataUrl
+          }));
+        };
+        img.src = event.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -281,19 +324,26 @@ const SellerAccountSettings = () => {
             </div>
 
             {/* Status Card */}
-            <div className="mt-6 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl p-5 text-white shadow-lg">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-semibold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded">
+            <div className="mt-6 bg-gradient-to-br from-indigo-600 to-purple-700 rounded-xl p-5 text-white shadow-lg overflow-hidden">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded text-white">
                   Account Status
                 </span>
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                  sellerData.status === 'APPROVED' || sellerData.status === 'Active' || sellerData.status === 'APPROVED'
+                    ? 'bg-emerald-400/20 text-emerald-300 border border-emerald-400/30'
+                    : 'bg-amber-400/20 text-amber-300 border border-amber-400/30'
+                }`}>
+                  {sellerData.status || 'Active'}
+                </span>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-white/20 flex-shrink-0 flex items-center justify-center text-lg font-bold">
-                  {sellerData.sellerName?.charAt(0).toUpperCase()}
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-full bg-white/20 flex-shrink-0 flex items-center justify-center text-lg font-bold text-white border border-white/20">
+                  {sellerData.sellerName?.charAt(0).toUpperCase() || 'S'}
                 </div>
-                <div>
-                  <p className="font-medium">{sellerData.sellerName}</p>
-                  <p className="text-xs text-[var(--primary-dark,#047857)] uppercase">{sellerData.status || 'Active'}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-sm text-white truncate" title={sellerData.sellerName}>{sellerData.sellerName || 'Seller'}</p>
+                  <p className="text-xs text-indigo-100 truncate" title={sellerData.email}>{sellerData.email || sellerData.mobile}</p>
                 </div>
               </div>
             </div>
@@ -329,7 +379,17 @@ const SellerAccountSettings = () => {
                     {activeTab === 'profile' && (
                       <div className="space-y-8">
                         <div className="flex flex-col sm:flex-row items-center gap-6 pb-8 border-b border-gray-100">
-                          <div className="relative group">
+                          <div
+                            className={`relative group ${isEditing ? 'cursor-pointer' : ''}`}
+                            onClick={() => isEditing && profileInputRef.current?.click()}
+                          >
+                            <input
+                              type="file"
+                              ref={profileInputRef}
+                              className="hidden"
+                              accept="image/*"
+                              onChange={(e) => handleImageUpload(e, 'profile')}
+                            />
                             <div className="absolute inset-0 bg-gradient-to-tr from-[var(--primary-color)] to-[var(--primary-color)] rounded-full blur opacity-25 group-hover:opacity-40 transition-opacity"></div>
                             <img
                               src={sellerData.profile || 'https://placehold.co/150'}
@@ -377,7 +437,17 @@ const SellerAccountSettings = () => {
                     {activeTab === 'store' && (
                       <div className="space-y-8">
                         <div className="flex flex-col sm:flex-row items-center gap-6 pb-8 border-b border-gray-100">
-                          <div className="relative group flex-shrink-0">
+                          <div
+                            className={`relative group flex-shrink-0 ${isEditing ? 'cursor-pointer' : ''}`}
+                            onClick={() => isEditing && logoInputRef.current?.click()}
+                          >
+                            <input
+                              type="file"
+                              ref={logoInputRef}
+                              className="hidden"
+                              accept="image/*"
+                              onChange={(e) => handleImageUpload(e, 'logo')}
+                            />
                             <div className="w-24 h-24 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center overflow-hidden">
                               <img
                                 src={sellerData.logo || 'https://placehold.co/100'}
@@ -535,7 +605,17 @@ const SellerAccountSettings = () => {
                       <div className="space-y-8">
                         <div className="space-y-3">
                           <label className="text-sm font-semibold text-gray-700 ml-1">Store Banner</label>
-                          <div className="relative group rounded-xl overflow-hidden bg-gray-100 border-2 border-dashed border-gray-300 aspect-[21/9] transition-all hover:border-[var(--primary-alpha-40)]">
+                          <div
+                            className={`relative group rounded-xl overflow-hidden bg-gray-100 border-2 border-dashed border-gray-300 aspect-[21/9] transition-all hover:border-[var(--primary-alpha-40)] ${isEditing ? 'cursor-pointer' : ''}`}
+                            onClick={() => isEditing && bannerInputRef.current?.click()}
+                          >
+                            <input
+                              type="file"
+                              ref={bannerInputRef}
+                              className="hidden"
+                              accept="image/*"
+                              onChange={(e) => handleImageUpload(e, 'storeBanner')}
+                            />
                             <img
                               src={sellerData.storeBanner || 'https://placehold.co/1200x400?text=Store+Banner'}
                               alt="Store Banner"

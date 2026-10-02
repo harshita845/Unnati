@@ -35,66 +35,38 @@ export interface SupplierDetailResponse {
 
 // APIs
 export const getAllSuppliers = async (search?: string, hasDue?: boolean, hasAdvance?: boolean) => {
-    try {
-        const response = await api.get(BASE_PATH, {
-            params: { search, hasDue, hasAdvance }
-        });
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+    const response = await api.get(BASE_PATH, {
+        params: { search, hasDue, hasAdvance }
+    });
+    return response.data;
 };
 
 export const getSupplierDetail = async (id: string) => {
-    try {
-        const response = await api.get(`${BASE_PATH}/${id}`);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+    const response = await api.get(`${BASE_PATH}/${id}`);
+    return response.data;
 };
 
 export const createSupplier = async (data: Partial<Supplier>) => {
-    try {
-        const response = await api.post(BASE_PATH, data);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+    const response = await api.post(BASE_PATH, data);
+    return response.data;
 };
 
 export const editSupplier = async (id: string, data: Partial<Supplier>) => {
-    try {
-        const response = await api.put(`${BASE_PATH}/${id}`, data);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+    const response = await api.put(`${BASE_PATH}/${id}`, data);
+    return response.data;
 };
 
 export const deleteSupplier = async (id: string) => {
-    try {
-        const response = await api.delete(`${BASE_PATH}/${id}`);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+    const response = await api.delete(`${BASE_PATH}/${id}`);
+    return response.data;
 };
 
 export const addDebt = async (id: string, data: { amount: number, description: string, date?: string }) => {
-    try {
-        const response = await api.post(`${BASE_PATH}/${id}/debt`, data);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+    const response = await api.post(`${BASE_PATH}/${id}/debt`, data);
+    return response.data;
 };
 
 export const paySupplier = async (id: string, data: { amount: number, description: string, date?: string }) => {
-    try {
-        const response = await api.post(`${BASE_PATH}/${id}/pay`, data);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
+    const response = await api.post(`${BASE_PATH}/${id}/pay`, data);
+    return response.data;
 };

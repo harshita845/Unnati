@@ -1,5 +1,10 @@
 import mongoose, { Document, Schema } from "mongoose";
 import { generateEmbedding } from "../utils/embedding";
+import "./Category";
+import "./SubCategory";
+import "./HeaderCategory";
+import "./Brand";
+import "./Seller";
 
 export interface IProduct extends Document {
   // Basic Info

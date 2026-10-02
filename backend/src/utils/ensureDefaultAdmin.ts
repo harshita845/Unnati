@@ -4,7 +4,7 @@ import Delivery from '../models/Delivery';
 import Customer from '../models/Customer';
 
 const DEFAULT_ADMIN_MOBILE = process.env.DEFAULT_ADMIN_MOBILE || '9876543210';
-const DEFAULT_ADMIN_EMAIL = process.env.DEFAULT_ADMIN_EMAIL || 'admin@geetastores.com';
+const DEFAULT_ADMIN_EMAIL = process.env.DEFAULT_ADMIN_EMAIL || 'admin@Unnatistores.com';
 const DEFAULT_ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD || 'Admin@123';
 const DEFAULT_ADMIN_FIRST = process.env.DEFAULT_ADMIN_FIRST || 'Default';
 const DEFAULT_ADMIN_LAST = process.env.DEFAULT_ADMIN_LAST || 'Admin';
@@ -117,7 +117,7 @@ export async function ensureDefaultAdmin() {
 
   // Ensure Admin Store (Seller) account is approved and enabled
   const adminStore = await Seller.findOne({
-    $or: [{ email: "admin-store@geetastores.com" }, { mobile: "9999999999" }],
+    $or: [{ email: "admin-store@Unnatistores.com" }, { mobile: "9999999999" }],
   });
   if (adminStore) {
     if (adminStore.status !== "Approved" || !adminStore.isEnabled) {
@@ -128,12 +128,12 @@ export async function ensureDefaultAdmin() {
     }
   } else {
     await Seller.create({
-      sellerName: "Geeta Stores Admin",
-      storeName: "Geeta Stores Admin Store",
-      email: "admin-store@geetastores.com",
+      sellerName: "Unnati Stores Admin",
+      storeName: "Unnati Stores Admin Store",
+      email: "admin-store@Unnatistores.com",
       mobile: "9999999999",
       password: "AdminStore@123",
-      address: "Geeta Stores HQ",
+      address: "Unnati Stores HQ",
       city: "Admin City",
       category: "Admin",
       commission: 0,

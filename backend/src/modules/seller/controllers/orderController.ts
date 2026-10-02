@@ -2,8 +2,22 @@ import { Request, Response } from "express";
 import Order from "../../../models/Order";
 import OrderItem from "../../../models/OrderItem";
 import { asyncHandler } from "../../../utils/asyncHandler";
-import Seller from "../../../models/Seller";
-import WalletTransaction from "../../../models/WalletTransaction";
+import { notifySellersOfOrderUpdate } from "../../../services/sellerNotificationService";
+import {
+  COD_PAYMENT_METHODS,
+  TERMINAL_ORDER_STATUSES,
+  cancelOrderAndRestoreStock,
+  markOrderDelivered,
+} from "../../../services/orderLifecycleService";
+import { OrderPlacementError } from "../../../services/orderPlacementService";
+
+// Dates are shown in Indian time, DD/MM/YYYY (en-US formatting showed 2 Oct as "10/02")
+const formatDateIN = (date?: Date | null) =>
+  date ? new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '—';
+// YYYY-MM-DD in Indian time (toISOString uses UTC and can show the previous day)
+const isoDateIN = (date?: Date | null) =>
+  date ? new Date(date).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) : '';
+
 
 /**
  * Get seller's orders with filters, sorting, and pagination
@@ -49,8 +63,8 @@ export const getOrders = asyncHandler(
       // Map frontend status to backend status
       const statusMapping: Record<string, string> = {
         'Pending': 'Pending',
-        'Accepted': 'Accepted',
-        'On the way': 'On the way',
+        'Accepted': 'Processed',
+        'On the way': 'Out for Delivery',
         'Delivered': 'Delivered',
         'Cancelled': 'Cancelled',
         'Rejected': 'Rejected',
@@ -102,10 +116,9 @@ export const getOrders = asyncHandler(
     const formattedOrders = orders.map(order => ({
       id: order._id,
       orderId: order.orderNumber,
-      deliveryDate: order.estimatedDeliveryDate
-        ? order.estimatedDeliveryDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
-        : order.orderDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-      orderDate: order.orderDate.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
+      // Actual delivery date once delivered, otherwise the expected date if one was set
+      deliveryDate: formatDateIN(order.deliveredAt || order.estimatedDeliveryDate),
+      orderDate: formatDateIN(order.orderDate || order.createdAt),
       status: order.status === 'On the way' ? 'On the way' : order.status,
       amount: order.total,
       customerName: (order.customer as any)?.name || order.customerName || '',
@@ -244,8 +257,8 @@ export const getOrders = asyncHandler(
       _id: order._id,
       orderNumber: order.orderNumber || order.invoiceNumber || 'N/A',
       invoiceNumber: order.invoiceNumber || order.orderNumber || 'N/A',
-      orderDate: order.orderDate ? order.orderDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-      deliveryDate: order.estimatedDeliveryDate ? order.estimatedDeliveryDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      orderDate: isoDateIN(order.orderDate || order.createdAt),
+      deliveryDate: isoDateIN(order.deliveredAt || order.estimatedDeliveryDate),
       timeSlot: order.timeSlot || 'N/A',
       status: order.status === 'On the way' ? 'Out For Delivery' : order.status,
       customer: order.customer,
@@ -271,6 +284,29 @@ export const getOrders = asyncHandler(
   }
 );
 
+// Seller-facing labels -> Order.status values. "Accepted" means the seller confirmed and is packing.
+const SELLER_STATUS_MAP: Record<string, string> = {
+  'Accepted': 'Processed',
+  'Processed': 'Processed',
+  'Ready for pickup': 'Ready for pickup',
+  'On the way': 'Out for Delivery',
+  'Out For Delivery': 'Out for Delivery',
+  'Out for Delivery': 'Out for Delivery',
+  'Delivered': 'Delivered',
+  'Cancelled': 'Cancelled',
+};
+
+// Forward-only progression for non-terminal updates
+const STATUS_PROGRESS: Record<string, number> = {
+  'Received': 0,
+  'Pending': 0,
+  'Processed': 1,
+  'Ready for pickup': 2,
+  'Picked up': 3,
+  'Shipped': 3,
+  'Out for Delivery': 4,
+};
+
 /**
  * Update order status (seller can update: Accepted, On the way, Delivered, Cancelled)
  */
@@ -278,14 +314,13 @@ export const updateOrderStatus = asyncHandler(
   async (req: Request, res: Response) => {
     const sellerId = (req as any).user.userId;
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, reason } = req.body;
 
-    // Validate allowed status updates for seller
-    const allowedStatuses = ['Accepted', 'On the way', 'Delivered', 'Cancelled'];
-    if (!allowedStatuses.includes(status)) {
+    const targetStatus = SELLER_STATUS_MAP[status];
+    if (!targetStatus) {
       return res.status(400).json({
         success: false,
-        message: `Invalid status. Seller can only update to: ${allowedStatuses.join(', ')}`,
+        message: `Invalid status. Seller can only update to: Accepted, On the way, Delivered, Cancelled`,
       });
     }
 
@@ -298,9 +333,7 @@ export const updateOrderStatus = asyncHandler(
       });
     }
 
-    // Find the order
-    const order = await Order.findById(id);
-
+    const order: any = await Order.findById(id);
     if (!order) {
       return res.status(404).json({
         success: false,
@@ -308,49 +341,57 @@ export const updateOrderStatus = asyncHandler(
       });
     }
 
-    // Check if status is already the same
-    if (order.status === status) {
+    if (TERMINAL_ORDER_STATUSES.includes(order.status)) {
+      return res.status(400).json({ success: false, message: `Order is already ${order.status}` });
+    }
+    if (order.status === 'Pending' && !COD_PAYMENT_METHODS.includes(order.paymentMethod) && order.paymentStatus !== 'Paid') {
+      return res.status(400).json({ success: false, message: "This order is still waiting for the customer's online payment" });
+    }
+    if (order.status === targetStatus) {
       return res.status(400).json({
         success: false,
         message: `Order is already ${status}`,
       });
     }
 
-    const previousStatus = order.status;
-    order.status = status;
-    await order.save();
-
-    // If order is delivered, credit seller's balance
-    if (status === 'Delivered' && previousStatus !== 'Delivered') {
-      const seller = await Seller.findById(sellerId);
-      if (seller) {
-        // Calculate net earning (sale amount - commission)
-        // Commission is stored in seller model
-        const commissionRate = (seller.commission || 0) / 100;
-        const commissionAmount = order.grandTotal * commissionRate;
-        const netEarning = order.grandTotal - commissionAmount;
-
-        seller.balance = (seller.balance || 0) + netEarning;
-        await seller.save();
-
-        // Log transaction
-        await WalletTransaction.create({
-          sellerId,
-          amount: netEarning,
-          type: 'Credit',
-          description: `Earnings from Order #${order.orderId}`,
-          reference: `ORD-${order.orderId}-${Date.now()}`,
-          status: 'Completed'
+    let updatedOrder: any;
+    try {
+      if (targetStatus === 'Delivered') {
+        updatedOrder = await markOrderDelivered(id);
+      } else if (targetStatus === 'Cancelled') {
+        updatedOrder = await cancelOrderAndRestoreStock(id, {
+          reason: reason || 'Cancelled by seller',
+          cancelledBy: sellerId,
         });
+      } else {
+        if ((STATUS_PROGRESS[targetStatus] ?? 0) < (STATUS_PROGRESS[order.status] ?? 0)) {
+          return res.status(400).json({
+            success: false,
+            message: `Order is already ${order.status} and cannot be moved back to ${status}`,
+          });
+        }
+        order.status = targetStatus;
+        updatedOrder = await order.save();
       }
+    } catch (error: any) {
+      if (error instanceof OrderPlacementError) {
+        return res.status(error.statusCode).json({ success: false, message: error.message });
+      }
+      throw error;
+    }
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`order-${id}`).emit('order-status-updated', { orderId: id, status: updatedOrder.status });
+      notifySellersOfOrderUpdate(io, updatedOrder, targetStatus === 'Cancelled' ? 'ORDER_CANCELLED' : 'STATUS_UPDATE');
     }
 
     return res.status(200).json({
       success: true,
       message: "Order status updated successfully",
       data: {
-        id: order._id,
-        status: order.status,
+        id: updatedOrder._id,
+        status: updatedOrder.status,
       },
     });
   }
@@ -398,8 +439,8 @@ export const getOnlineOrders = asyncHandler(
     if (status && status !== 'All Status') {
       const statusMapping: Record<string, string> = {
         'Pending': 'Pending',
-        'Accepted': 'Accepted',
-        'On the way': 'On the way',
+        'Accepted': 'Processed',
+        'On the way': 'Out for Delivery',
         'Delivered': 'Delivered',
         'Cancelled': 'Cancelled',
         'Rejected': 'Rejected',

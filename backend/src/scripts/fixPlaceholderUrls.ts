@@ -5,7 +5,7 @@ import path from "path";
 // Explicitly load .env from backend root
 dotenv.config({ path: path.join(__dirname, "../../.env") });
 
-const MONGO_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/Geeta Stores";
+const MONGO_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/Unnati Stores";
 
 // Old broken placeholder patterns to find
 const OLD_PLACEHOLDER_PATTERNS = [

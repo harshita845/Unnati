@@ -41,8 +41,11 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
     const stats = await Order.aggregate([
         {
             $match: {
-                deliveryBoy: objectId,
-                // We consider orders active or touching today
+                $or: [
+                    { deliveryBoy: objectId },
+                    { deliveryBoy: null },
+                    { deliveryBoy: { $exists: false } }
+                ]
             }
         },
         {
@@ -51,7 +54,7 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
                 // Pending: Active statuses
                 pendingOrders: {
                     $sum: {
-                        $cond: [{ $in: ["$status", ["Ready for pickup", "Out for Delivery", "Picked Up", "Assigned", "In Transit"]] }, 1, 0]
+                        $cond: [{ $in: ["$status", ["Received", "Processed", "Ready for pickup", "Out for Delivery", "Picked Up", "Assigned", "In Transit"]] }, 1, 0]
                     }
                 },
                 // All Orders Today: Created today OR Updated today
@@ -133,8 +136,12 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
 
     // Fetch list of Pending Orders for the "Today's Pending Order" section
     const pendingOrdersList = await Order.find({
-        deliveryBoy: deliveryId,
-        status: { $in: ["Ready for pickup", "Out for Delivery", "Picked Up", "Assigned", "In Transit"] }
+        $or: [
+            { deliveryBoy: deliveryId },
+            { deliveryBoy: null },
+            { deliveryBoy: { $exists: false } }
+        ],
+        status: { $in: ["Received", "Processed", "Ready for pickup", "Out for Delivery", "Picked Up", "Assigned", "In Transit"] }
     })
         .select("orderNumber customerName deliveryAddress status total estimatedDeliveryDate") // Select necessary fields
         .sort({ createdAt: -1 })
@@ -201,7 +208,7 @@ export const getHelpSupport = asyncHandler(async (_req: Request, res: Response) 
 
     const contactOptions = [
         { label: 'Call Support', value: '+91-1800-XXX-XXXX', icon: 'phone' },
-        { label: 'Email Support', value: 'support@Geeta Stores.com', icon: 'email' },
+        { label: 'Email Support', value: 'support@Unnati Stores.com', icon: 'email' },
         { label: 'Live Chat', value: 'Available 24/7', icon: 'chat' },
     ];
 

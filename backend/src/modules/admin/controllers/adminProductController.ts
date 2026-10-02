@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
-import Category from "../../../models/Category";
+import Category, { SUBSCRIPTION_PLANS } from "../../../models/Category";
 import SubCategory from "../../../models/SubCategory";
 import Brand from "../../../models/Brand";
 import Product from "../../../models/Product";
@@ -17,6 +17,44 @@ import { adminProductPolicy } from "../../product/productPolicies";
 import { toDetail, toListItem, toListItems } from "../../product/productReadMapper";
 
 // ==================== Category Controllers ====================
+
+/**
+ * Validate subscription settings from a create/update body, falling back to the
+ * category's current values for fields the request does not send.
+ */
+const resolveSubscriptionSettings = (
+  body: any,
+  current?: { subscriptionEnabled?: boolean; allowedPlans?: string[] }
+): { subscriptionEnabled: boolean; allowedPlans: string[] } | { error: string } => {
+  const enabledInput =
+    body.subscriptionEnabled !== undefined ? body.subscriptionEnabled : current?.subscriptionEnabled ?? false;
+  if (typeof enabledInput !== "boolean") {
+    return { error: "subscriptionEnabled must be true or false" };
+  }
+
+  const plansInput = body.allowedPlans !== undefined ? body.allowedPlans : current?.allowedPlans ?? [];
+  if (!Array.isArray(plansInput)) {
+    return { error: "allowedPlans must be an array" };
+  }
+
+  const plans = Array.from(new Set(plansInput.map((p: unknown) => String(p).trim().toLowerCase())));
+  const invalid = plans.filter((p) => !(SUBSCRIPTION_PLANS as readonly string[]).includes(p));
+  if (invalid.length) {
+    return {
+      error: `Invalid subscription plan(s): ${invalid.join(", ")}. Allowed: ${SUBSCRIPTION_PLANS.join(", ")}`,
+    };
+  }
+
+  if (enabledInput && plans.length === 0) {
+    return { error: "Select at least one subscription plan when subscription is enabled" };
+  }
+
+  // Keep stored order consistent (daily, weekly, monthly, yearly); disabled categories carry no plans
+  return {
+    subscriptionEnabled: enabledInput,
+    allowedPlans: enabledInput ? SUBSCRIPTION_PLANS.filter((p) => plans.includes(p)) : [],
+  };
+};
 
 /**
  * Create a new category
@@ -40,6 +78,11 @@ export const createCategory = asyncHandler(
         success: false,
         message: "Category name is required",
       });
+    }
+
+    const subscription = resolveSubscriptionSettings(req.body);
+    if ("error" in subscription) {
+      return res.status(400).json({ success: false, message: subscription.error });
     }
 
     let finalHeaderCategoryId = headerCategoryId;
@@ -133,6 +176,8 @@ export const createCategory = asyncHandler(
       parentId: parentId || null,
       headerCategoryId: finalHeaderCategoryId || null,
       status,
+      subscriptionEnabled: subscription.subscriptionEnabled,
+      allowedPlans: subscription.allowedPlans,
     });
 
     // Invalidate category caches
@@ -314,6 +359,16 @@ export const updateCategory = asyncHandler(
           });
         }
       }
+    }
+
+    // Validate subscription settings when either field is being changed
+    if (updateData.subscriptionEnabled !== undefined || updateData.allowedPlans !== undefined) {
+      const subscription = resolveSubscriptionSettings(updateData, category);
+      if ("error" in subscription) {
+        return res.status(400).json({ success: false, message: subscription.error });
+      }
+      updateData.subscriptionEnabled = subscription.subscriptionEnabled;
+      updateData.allowedPlans = subscription.allowedPlans;
     }
 
     // Track if status is changing

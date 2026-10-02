@@ -7,7 +7,7 @@ import Admin from './src/models/Admin'; // Ensure Admin is registered
 
 dotenv.config();
 
-const MONGODB_URI = process.env.MONGODB_URI_LOCAL || 'mongodb://localhost:27017/geeta-ecom';
+const MONGODB_URI = process.env.MONGODB_URI_LOCAL || 'mongodb://localhost:27017/Unnati-ecom';
 
 async function test() {
   try {

@@ -58,62 +58,28 @@ export async function generateDeliveryOtp(orderId: string, customerPhone: string
 }
 
 /**
- * Verify delivery OTP and mark order as delivered if valid
+ * Check a delivery OTP. Does not change the order — the caller marks it delivered
+ * (orderLifecycleService.markOrderDelivered) and then records the OTP as used.
  */
-
 export async function verifyDeliveryOtp(orderId: string, otp: string): Promise<{ success: boolean; message: string }> {
-  try {
-    const order = await Order.findById(orderId);
-
-    if (!order) {
-      throw new Error('Order not found');
-    }
-
-    if (!order.deliveryOtp) {
-      throw new Error('No delivery OTP generated for this order');
-    }
-
-    if (order.deliveryOtpVerified) {
-      throw new Error('OTP already verified');
-    }
-
-    if (order.deliveryOtpExpiresAt && order.deliveryOtpExpiresAt < new Date()) {
-      throw new Error('Delivery OTP has expired. Please request a new OTP.');
-    }
-
-    // Developer bypass
-    if ((process.env.NODE_ENV !== 'production' || process.env.USE_MOCK_OTP === 'true') && otp === '999999') {
-      order.deliveryOtpVerified = true;
-      order.status = 'Delivered';
-      order.deliveredAt = new Date();
-      order.invoiceEnabled = true;
-      await order.save();
-
-      return {
-        success: true,
-        message: 'OTP verified successfully. Order marked as delivered.',
-      };
-    }
-
-    // Verify OTP
-    if (order.deliveryOtp !== otp) {
-      throw new Error('Invalid OTP. Please check and try again.');
-    }
-
-    // Mark OTP as verified and update order status
-    order.deliveryOtpVerified = true;
-    order.status = 'Delivered';
-    order.deliveredAt = new Date();
-    order.invoiceEnabled = true;
-    await order.save();
-
-    return {
-      success: true,
-      message: 'OTP verified successfully. Order marked as delivered.',
-    };
-  } catch (error: any) {
-    console.error('Error verifying delivery OTP:', error);
-    throw new Error(error.message || 'Failed to verify delivery OTP');
+  const order = await Order.findById(orderId);
+  if (!order) {
+    throw new Error('Order not found');
   }
+  if (!order.deliveryOtp) {
+    throw new Error('No delivery OTP generated for this order. Please click "Send OTP" first.');
+  }
+  if (order.deliveryOtpVerified) {
+    throw new Error('OTP already verified.');
+  }
+  if (order.deliveryOtpExpiresAt && order.deliveryOtpExpiresAt < new Date()) {
+    throw new Error('Delivery OTP has expired. Please click "Send OTP" to request a new OTP.');
+  }
+  if (order.deliveryOtp !== String(otp).trim()) {
+    throw new Error(`Invalid OTP. Please enter the correct OTP sent to the customer.`);
+  }
+  return {
+    success: true,
+    message: 'OTP verified successfully. Order marked as delivered.',
+  };
 }
-

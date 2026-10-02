@@ -176,7 +176,7 @@ export default function DeliverySignUp() {
         if (drivingLicenseFile) {
           const drivingLicenseResult = await uploadDocument(
             drivingLicenseFile,
-            "Geeta Stores/delivery/documents"
+            "Unnati Stores/delivery/documents"
           );
           drivingLicenseUrl = drivingLicenseResult.secureUrl;
         }
@@ -184,7 +184,7 @@ export default function DeliverySignUp() {
         if (nationalIdentityCardFile) {
           const nationalIdResult = await uploadDocument(
             nationalIdentityCardFile,
-            "Geeta Stores/delivery/documents"
+            "Unnati Stores/delivery/documents"
           );
           nationalIdentityCardUrl = nationalIdResult.secureUrl;
         }
@@ -706,7 +706,7 @@ export default function DeliverySignUp() {
 
             {/* Footer Text */}
             <p className="mt-4 text-[9px] sm:text-[10px] text-neutral-500 text-center max-w-sm leading-tight">
-              By continuing, you agree to Geeta Stores's Terms of Service and Privacy Policy
+              By continuing, you agree to Unnati Stores's Terms of Service and Privacy Policy
             </p>
           </div>
         </div>

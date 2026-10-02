@@ -4,7 +4,13 @@ import { getApiBaseURL } from './api/config';
 
 const VAPID_KEY = "BBIaDZbFoNRN0wCbCsg9zDgfSIbH94G77houhAZawsYOZxCzkLhMa-hPTzUDbAHIRPaf2o92d1uUa8ZwNtZQu7w";
 
+let isFcmDisabledInSession = typeof window !== 'undefined' && sessionStorage.getItem('fcm_disabled') === 'true';
+
 export const requestNotificationPermission = async (userType: 'customer' | 'delivery' | 'seller' | 'admin', authToken?: string) => {
+  if (isFcmDisabledInSession) {
+    return null;
+  }
+
   console.log(`[FCM-DEBUG] 🚀 STEP 1: requestNotificationPermission started for ${userType}`);
 
   if (!('Notification' in window)) {
@@ -43,8 +49,23 @@ export const requestNotificationPermission = async (userType: 'customer' | 'deli
     } else {
       console.warn('[FCM-DEBUG] ❌ STEP 3: Notification permission DENIED by user.');
     }
-  } catch (error) {
-    console.error('[FCM-DEBUG] 🔥 FATAL ERROR in requestNotificationPermission:', error);
+  } catch (error: any) {
+    if (
+      error?.code === 'installations/request-failed' ||
+      error?.message?.includes('PERMISSION_DENIED') ||
+      error?.message?.includes('403')
+    ) {
+      isFcmDisabledInSession = true;
+      try {
+        sessionStorage.setItem('fcm_disabled', 'true');
+      } catch (e) {}
+      console.warn(
+        '[FCM-DEBUG] ⚠️ FCM Push Notifications restricted by Firebase project settings. Disabled FCM requests for this session.'
+      );
+    } else {
+      console.error('[FCM-DEBUG] 🔥 Error in requestNotificationPermission:', error);
+    }
+    return null;
   }
 };
 

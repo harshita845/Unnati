@@ -16,7 +16,7 @@ function log(msg: any) {
 }
 
 // --- Configuration ---
-const MONGO_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/Geeta Stores";
+const MONGO_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/Unnati Stores";
 const FRONTEND_ASSETS_PATH = path.join(__dirname, "../../../frontend/assets");
 const PRODUCT_IMAGES_PATH = path.join(
   FRONTEND_ASSETS_PATH,
@@ -25,7 +25,7 @@ const PRODUCT_IMAGES_PATH = path.join(
   "product",
   "product"
 );
-const DEFAULT_IMAGE_PATH = path.join(FRONTEND_ASSETS_PATH, "Geeta Stores1.png");
+const DEFAULT_IMAGE_PATH = path.join(FRONTEND_ASSETS_PATH, "Unnati Stores1.png");
 
 log("Starting Sub-Subcategories Seed Script");
 log(`MONGO_URI: ${MONGO_URI}`);
@@ -365,7 +365,7 @@ async function uploadToCloudinary(
   }
 }
 
-// Helper to get default image (Geeta Stores1.png)
+// Helper to get default image (Unnati Stores1.png)
 async function getDefaultImage(): Promise<string> {
   if (!fs.existsSync(DEFAULT_IMAGE_PATH)) {
     log(`Warning: Default image not found at ${DEFAULT_IMAGE_PATH}`);
@@ -373,7 +373,7 @@ async function getDefaultImage(): Promise<string> {
   }
 
   const uploadedUrl = await uploadToCloudinary(DEFAULT_IMAGE_PATH, "default");
-  return uploadedUrl || `/assets/Geeta Stores1.png`;
+  return uploadedUrl || `/assets/Unnati Stores1.png`;
 }
 
 // Helper to generate slug from name

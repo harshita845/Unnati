@@ -1,6 +1,7 @@
 import { useCallback, useRef, useEffect, useState } from 'react'
 // @ts-ignore - @react-google-maps/api types may not be available
-import { GoogleMap, useJsApiLoader, Marker, Polyline } from '@react-google-maps/api'
+// MarkerF/PolylineF: the plain Marker/Polyline don't render under React 18 StrictMode
+import { GoogleMap, useJsApiLoader, MarkerF, PolylineF } from '@react-google-maps/api'
 import { motion } from 'framer-motion'
 import deliveryIcon from '@assets/deliveryboy/deliveryIcon.png'
 
@@ -570,7 +571,7 @@ export default function GoogleMapsTracking({
                 }}
             >
                 {/* Customer Marker */}
-                <Marker
+                <MarkerF
                     position={customerLocation}
                     icon={showRoute && routeDestination?.lat === customerLocation.lat ? {
                         path: window.google?.maps?.SymbolPath?.CIRCLE || 0,
@@ -588,13 +589,13 @@ export default function GoogleMapsTracking({
 
                 {/* Seller Markers */}
                 {allSellers.map((seller, index) => (
-                    <Marker
+                    <MarkerF
                         key={`seller-${index}`}
                         position={seller}
                         icon={showRoute && routeDestination?.lat === seller.lat ? {
                             path: window.google?.maps?.SymbolPath?.CIRCLE || 0,
                             scale: 10,
-                            fillColor: 'var(--customer-primary)',
+                            fillColor: '#0B5D3B',
                             fillOpacity: 1,
                             strokeWeight: 3,
                             strokeColor: '#ffffff',
@@ -608,7 +609,7 @@ export default function GoogleMapsTracking({
 
                 {/* Delivery Partner Marker (Animated) */}
                 {animatedDeliveryLocation && (
-                    <Marker
+                    <MarkerF
                         position={animatedDeliveryLocation}
                         icon={{
                             url: getDeliveryIconUrl(),
@@ -619,10 +620,10 @@ export default function GoogleMapsTracking({
                     />
                 )}
                 {( !showRoute || routeError ) && (
-                    <Polyline
+                    <PolylineF
                         path={path}
                         options={{
-                            strokeColor: routeError ? 'var(--customer-primary)' : '#16a34a',
+                            strokeColor: routeError ? '#0B5D3B' : '#16a34a',
                             strokeOpacity: 0.7,
                             strokeWeight: 4,
                             geodesic: true,

@@ -12,7 +12,7 @@ import Seller from "../../../models/Seller";
 import mongoose from "mongoose";
 import { cache } from "../../../utils/cache";
 import { findSellersWithinRange } from "../../../utils/locationHelper";
-import { toListItem } from "../../product/productReadMapper";
+import { toListItem, toListItems } from "../../product/productReadMapper";
 
 // Helper function to fetch data for a home section based on its configuration
 async function fetchSectionData(
@@ -271,7 +271,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
 
     const adminSellers = await Seller.find({
       $or: [
-        { email: "admin-store@geetastores.com" },
+        { email: "admin-store@Unnatistores.com" },
         { category: "Admin" },
         { storeName: /Admin/i }
       ]
@@ -380,38 +380,56 @@ export const getHomeContent = async (req: Request, res: Response) => {
       .select("name image icon color slug")
       .sort({ order: 1 });
 
-    // 4. Shop By Store - Fetch from database
-    const shopDocuments = await Shop.find({ isActive: true })
-      .populate("category", "name slug")
-      .sort({ order: 1, createdAt: -1 })
+    // 4. Shop By Store - Fetch active Seller stores strictly based on location/city
+    let shopSellerQuery: any = {
+      status: "Approved",
+      isEnabled: true,
+      category: { $ne: "Admin" }
+    };
+
+    const userCity = req.query.city ? String(req.query.city).trim() : null;
+
+    if (locationProvided) {
+      const nonAdminNearbyIds = nearbySellerIds.filter(
+        (id) => !adminSellerIds.includes(id.toString())
+      );
+      shopSellerQuery._id = { $in: nonAdminNearbyIds };
+    } else if (userCity) {
+      shopSellerQuery.city = { $regex: new RegExp(`^${userCity}$`, "i") };
+    } else {
+      // Fallback for unlocalized test browsing: show Indore stores
+      shopSellerQuery.city = { $regex: /Indore/i };
+    }
+
+    const sellerStores = await Seller.find(shopSellerQuery)
+      .select("storeName sellerName logo storeBanner image category city address location")
+      .sort({ createdAt: -1 })
       .lean();
 
-    // Transform shop data to match frontend expected format and include preview images
     const shops = await Promise.all(
-      shopDocuments.map(async (shop: any) => {
-        let productImages: string[] = [];
+      sellerStores.map(async (seller: any) => {
+        const sellerProducts = await Product.find({
+          seller: seller._id,
+          status: "Active",
+          publish: true,
+        })
+          .select("mainImage")
+          .limit(4)
+          .lean();
 
-        if (shop.products && shop.products.length > 0) {
-          const shopProducts = await Product.find({
-            _id: { $in: shop.products.slice(0, 4) },
-            status: "Active",
-            publish: true,
-          })
-            .select("mainImage")
-            .lean();
-
-          productImages = shopProducts.map((p: any) => p.mainImage).filter(Boolean);
-        }
+        const productImages = sellerProducts.map((p: any) => p.mainImage).filter(Boolean);
 
         return {
-          id: shop.storeId || shop._id.toString(),
-          name: shop.name,
-          image: shop.image,
-          productImages, // Include preview images irrespective of location
-          slug: shop.storeId || shop._id.toString(),
-          category: shop.category,
-          productIds: shop.products?.map((p: any) => p.toString()) || [],
-          bgColor: shop.bgColor || "bg-neutral-50",
+          id: seller._id.toString(),
+          name: seller.storeName || seller.sellerName,
+          storeBanner: seller.storeBanner || "",
+          logo: seller.logo || seller.image || "",
+          image: seller.storeBanner || seller.logo || seller.image || (productImages.length > 0 ? productImages[0] : ""),
+          productImages,
+          slug: seller._id.toString(),
+          category: seller.category,
+          city: seller.city,
+          bgColor: "bg-neutral-50",
         };
       })
     );
@@ -710,7 +728,39 @@ export const getStoreProducts = async (req: Request, res: Response) => {
     const activeCategoryIds = activeCategories.map(c => c._id);
     query.category = { $in: activeCategoryIds };
 
-    console.log(`[getStoreProducts] Looking for shop with storeId: ${storeId}`);
+    console.log(`[getStoreProducts] Looking for store with storeId: ${storeId}`);
+
+    // Check if storeId is a valid Seller ID
+    if (mongoose.Types.ObjectId.isValid(storeId)) {
+      const seller = await Seller.findById(storeId).lean();
+      if (seller) {
+        const shopData = {
+          name: seller.storeName || seller.sellerName,
+          storeBanner: seller.storeBanner || "",
+          logo: seller.logo || seller.profile || "",
+          image: seller.storeBanner || seller.logo || seller.profile || "",
+          description: seller.address ? `${seller.address}, ${seller.city}` : seller.city || "",
+          category: seller.category,
+        };
+
+        const sellerProducts = await Product.find({
+          seller: seller._id,
+          status: "Active",
+          publish: true,
+        })
+          .populate("category", "name icon image")
+          .sort({ createdAt: -1 })
+          .lean();
+
+        const mapped = toListItems(sellerProducts);
+
+        return res.status(200).json({
+          success: true,
+          data: mapped,
+          shop: shopData,
+        });
+      }
+    }
 
     // Build shop query - only include _id if storeId is a valid ObjectId
     const shopQuery: any = { isActive: true };
@@ -734,9 +784,18 @@ export const getStoreProducts = async (req: Request, res: Response) => {
     let shopData: any = null;
 
     if (shop) {
+      let sellerBanner = "";
+      if ((shop as any).seller) {
+        const linkedSeller = await Seller.findById((shop as any).seller).select("storeBanner logo").lean();
+        if (linkedSeller) {
+          sellerBanner = linkedSeller.storeBanner || "";
+        }
+      }
+
       shopData = {
         name: shop.name,
-        image: shop.image,
+        storeBanner: (shop as any).storeBanner || sellerBanner || shop.image || "",
+        image: shop.image || sellerBanner || "",
         description: shop.description || '',
         category: shop.category,
       };

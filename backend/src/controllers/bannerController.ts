@@ -115,8 +115,8 @@ export const getFlashDeals = asyncHandler(async (req: Request, res: Response) =>
   }
 
   const data = {
-    flashDealTargetDate: settings.flashDeal?.targetDate 
-      ? new Date(settings.flashDeal.targetDate).toISOString() 
+    flashDealTargetDate: settings.flashDeal?.targetDate
+      ? new Date(settings.flashDeal.targetDate).toISOString()
       : new Date(Date.now() + 86400000).toISOString(),
     flashDealImage: settings.flashDeal?.image || '',
     isActive: settings.flashDeal?.active ?? true,
@@ -145,8 +145,8 @@ export const updateFlashDeals = asyncHandler(async (req: Request, res: Response)
   let settings: any = await AppSettings.findOne();
   if (!settings) {
       settings = await AppSettings.create({
-          appName: "Geeta Stores",
-          contactEmail: "contact@geetastores.com",
+          appName: "Unnati Stores",
+          contactEmail: "contact@Unnatistores.com",
           contactPhone: "1234567890",
       });
   }

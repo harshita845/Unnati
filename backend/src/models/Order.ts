@@ -33,18 +33,26 @@ export interface IOrder extends Document {
   platformFee: number;
   discount: number;
   couponCode?: string;
+  couponDiscount?: number;
+  tipAmount?: number;
+  giftPackagingFee?: number;
   total: number;
 
   // Payment
   paymentMethod: string;
   paymentStatus: "Pending" | "Paid" | "Failed" | "Refunded";
   paymentId?: string;
+  paymentGateway?: string;
+  gatewayOrderId?: string;
+  paymentExpiresAt?: Date;
 
   // Order Status
   status:
   | "Received"
   | "Pending"
   | "Processed"
+  | "Ready for pickup"
+  | "Picked up"
   | "Shipped"
   | "Out for Delivery"
   | "Delivered"
@@ -61,11 +69,19 @@ export interface IOrder extends Document {
   | "Delivered"
   | "Failed";
   assignedAt?: Date;
+  // Delivery partners offered this order and who declined it (persisted so restarts don't lose it)
+  dispatch?: {
+    notifiedDeliveryBoys: mongoose.Types.ObjectId[];
+    rejectedDeliveryBoys: mongoose.Types.ObjectId[];
+    notifiedAt?: Date;
+  };
 
   // Tracking
   trackingNumber?: string;
   estimatedDeliveryDate?: Date;
   deliveredAt?: Date;
+  // When the rider confirmed (scan / code) they collected the right package at the store
+  pickupVerifiedAt?: Date;
 
   // Delivery OTP
   deliveryOtp?: string;
@@ -194,6 +210,21 @@ const OrderSchema = new Schema<IOrder>(
       type: String,
       trim: true,
     },
+    couponDiscount: {
+      type: Number,
+      default: 0,
+      min: [0, "Coupon discount cannot be negative"],
+    },
+    tipAmount: {
+      type: Number,
+      default: 0,
+      min: [0, "Tip cannot be negative"],
+    },
+    giftPackagingFee: {
+      type: Number,
+      default: 0,
+      min: [0, "Gift packaging fee cannot be negative"],
+    },
     total: {
       type: Number,
       required: [true, "Total is required"],
@@ -215,6 +246,19 @@ const OrderSchema = new Schema<IOrder>(
       type: String,
       trim: true,
     },
+    // Online payment gateway reference, used to verify the payment server-side
+    paymentGateway: {
+      type: String,
+      trim: true,
+    },
+    gatewayOrderId: {
+      type: String,
+      trim: true,
+    },
+    // Unpaid online orders release their stock after this time
+    paymentExpiresAt: {
+      type: Date,
+    },
 
     // Order Status
     status: {
@@ -223,6 +267,8 @@ const OrderSchema = new Schema<IOrder>(
         "Received",
         "Pending",
         "Processed",
+        "Ready for pickup",
+        "Picked up",
         "Shipped",
         "Out for Delivery",
         "Delivered",
@@ -245,6 +291,11 @@ const OrderSchema = new Schema<IOrder>(
     assignedAt: {
       type: Date,
     },
+    dispatch: {
+      notifiedDeliveryBoys: [{ type: Schema.Types.ObjectId, ref: "Delivery" }],
+      rejectedDeliveryBoys: [{ type: Schema.Types.ObjectId, ref: "Delivery" }],
+      notifiedAt: { type: Date },
+    },
 
     // Tracking
     trackingNumber: {
@@ -255,6 +306,9 @@ const OrderSchema = new Schema<IOrder>(
       type: Date,
     },
     deliveredAt: {
+      type: Date,
+    },
+    pickupVerifiedAt: {
       type: Date,
     },
 
@@ -328,7 +382,7 @@ OrderSchema.index({ customer: 1, orderDate: -1 });
 OrderSchema.index({ status: 1 });
 OrderSchema.index({ orderDate: -1 });
 OrderSchema.index({ deliveryBoy: 1 });
-OrderSchema.index({ orderNumber: 1 });
+OrderSchema.index({ status: 1, paymentStatus: 1, paymentExpiresAt: 1 });
 
 const Order = mongoose.models.Order || mongoose.model<IOrder>("Order", OrderSchema);
 

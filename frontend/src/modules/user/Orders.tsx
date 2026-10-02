@@ -59,7 +59,7 @@ export default function Orders() {
 
       <div className="px-4 md:px-6 lg:px-8 space-y-4 md:space-y-6">
         {orders.map((order) => {
-          const shortId = order.id.split('-').slice(-1)[0];
+          const shortId = order.orderNumber || order.id.split('-').slice(-1)[0];
           return (
             <Link
               key={order.id}

@@ -128,7 +128,7 @@ export default function ProductDetail() {
           setSimilarProductsPage(1);
           setHasMoreSimilar(similar.length >= 6);
 
-          getSemanticSimilarProducts(id)
+          getSemanticSimilarProducts(id, undefined, { latitude: location?.latitude, longitude: location?.longitude })
             .then((similarResponse) => {
               if (similarResponse.success && similarResponse.data.length > 0) {
                 setSimilarProducts(similarResponse.data);
@@ -309,6 +309,25 @@ export default function ProductDetail() {
       }) ?? null
     );
   }, [cart.items, product, hasVariations, selectedVariant, variantTitle]);
+
+  // Recommendations: not this product, not the same item from another store, not already in the cart
+  const visibleSimilarProducts = useMemo(() => {
+    const normalize = (value: unknown) => String(value || '').trim().toLowerCase();
+    const currentId = String(product?._id || product?.id || id || '');
+    const currentName = normalize(product?.productName || product?.name);
+    const inCartIds = new Set(
+      cart.items.map((item: any) => String(item?.product?.id || item?.product?._id || '')).filter(Boolean)
+    );
+    const seenNames = new Set<string>();
+    return similarProducts.filter((p: any) => {
+      const pid = String(p?._id || p?.id || '');
+      const name = normalize(p?.productName || p?.name);
+      if (!pid || pid === currentId || inCartIds.has(pid)) return false;
+      if (name && (name === currentName || seenNames.has(name))) return false;
+      if (name) seenNames.add(name);
+      return true;
+    });
+  }, [similarProducts, cart.items, product, id]);
 
   const { displayPrice: baseVariantPrice, mrp: variantMrp, discount: baseDiscount, hasDiscount: baseHasDiscount } = calculateProductPrice(product, activeVariationSelector);
 
@@ -1165,7 +1184,7 @@ export default function ProductDetail() {
       )}
 
       {/* Recommended Products Section */}
-      {similarProducts && similarProducts.length > 0 && (
+      {visibleSimilarProducts.length > 0 && (
         <div className="mt-12 mb-8">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl md:text-2xl font-bold text-neutral-900 font-sans tracking-tight">
@@ -1189,7 +1208,7 @@ export default function ProductDetail() {
             )}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {similarProducts.map((simProduct) => (
+            {visibleSimilarProducts.map((simProduct) => (
               <ProductCard
                 key={simProduct._id || simProduct.id}
                 product={simProduct}

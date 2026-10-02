@@ -550,7 +550,7 @@ export default function SellerStockBulkEdit({
     setEditableProducts((prev) => {
       const updated = [...prev];
       const oldProd = updated[index];
-      let newProd = { ...oldProd, [field]: value, isChanged: true };
+      const newProd = { ...oldProd, [field]: value, isChanged: true };
 
       if (field === "price" && oldProd.price === oldProd.offerPrice) {
         newProd.offerPrice = value;

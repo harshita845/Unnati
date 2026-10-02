@@ -19,6 +19,7 @@ export interface CreateOrderData {
         };
         quantity: number;
         variant?: string;
+        variantId?: string;
         isFreeGift?: boolean;
         price?: number;
         freeGiftReason?: string;
@@ -37,6 +38,9 @@ export interface CreateOrderData {
         deliveryFee: number;
         platformFee: number;
     };
+    couponCode?: string;
+    tipAmount?: number;
+    giftPackaging?: boolean;
 }
 
 export interface OrderResponse {
@@ -118,8 +122,21 @@ export const initiateOnlineOrder = async (data: CreateOrderData & { gateway: str
 /**
  * Verify Online Payment
  */
-export const verifyOnlinePayment = async (data: { orderId: string; paymentId: string; status: string }): Promise<OrderResponse> => {
+export const verifyOnlinePayment = async (data: {
+    orderId: string;
+    paymentId?: string;
+    razorpayOrderId?: string;
+    razorpaySignature?: string;
+}): Promise<OrderResponse> => {
     const response = await api.post<OrderResponse>('/customer/orders/verify-payment', data);
+    return response.data;
+};
+
+/**
+ * Release an unpaid online order (payment popup closed) so its stock is freed
+ */
+export const abandonOnlinePayment = async (orderId: string): Promise<OrderResponse> => {
+    const response = await api.post<OrderResponse>(`/customer/orders/${orderId}/abandon-payment`);
     return response.data;
 };
 
