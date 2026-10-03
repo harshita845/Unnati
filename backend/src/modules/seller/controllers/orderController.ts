@@ -229,22 +229,28 @@ export const getOrders = asyncHandler(
         }
       }
 
+      const qty = item.quantity || 1;
+      const subtotal = item.total || 0;
+      const computedUnitPrice = (item.unitPrice > 0 && Math.abs(item.unitPrice * qty - subtotal) < 1)
+        ? item.unitPrice
+        : (qty > 0 && subtotal > 0 ? subtotal / qty : item.unitPrice || 0);
+
       return {
         _id: item._id,
-        srNo: item._id.toString().slice(-4), // Use last 4 chars of ID as srNo
+        srNo: item._id.toString().slice(-4),
         product: item.productName || 'Unknown Product',
         productId: product?._id?.toString?.() || item.product?.toString?.() || '',
         productName: item.productName || 'Unknown Product',
         productImage: item.productImage || product?.mainImage || '',
         soldBy: (item.seller as any)?.storeName || 'N/A',
         unit: unit,
-        price: item.unitPrice || 0,
-        unitPrice: item.unitPrice || 0,
+        price: computedUnitPrice,
+        unitPrice: computedUnitPrice,
         tax: 0,
         taxPercent: 0,
         qty: item.quantity || 0,
         quantity: item.quantity || 0,
-        subtotal: item.total || 0,
+        subtotal: subtotal || computedUnitPrice * qty,
         sku: item.sku || '',
         variation: item.variation || '',
         variationId: resolvedVariationId,

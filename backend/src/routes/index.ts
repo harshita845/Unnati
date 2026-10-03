@@ -154,6 +154,12 @@ router.get("/admin/products/check-barcode", authenticate, requireUserType("Admin
 router.get("/products/check-barcode", authenticate, requireUserType("Seller"), sellerCheckBarcode);
 
 // Admin routes (protected, admin only)
+import adminSubscriptionRoutes from "./adminSubscriptionRoutes";
+import sellerSubscriptionRoutes from "./sellerSubscriptionRoutes";
+// Seller subscription plans: Super Admin manages plans/settings, sellers buy and renew
+router.use("/admin/subscriptions", authenticate, requireUserType("Admin"), adminSubscriptionRoutes);
+router.use("/seller/subscriptions", authenticate, requireUserType("Seller"), sellerSubscriptionRoutes);
+
 router.use("/admin", adminRoutes);
 
 // Admin Variation Type Routes

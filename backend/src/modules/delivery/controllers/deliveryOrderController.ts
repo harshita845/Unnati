@@ -37,12 +37,21 @@ import Return from "../../../models/Return";
  */
 const mapOrderItems = (items: any[]) => {
     if (!items || !Array.isArray(items)) return [];
-    return items.map((item: any) => ({
-        name: item.productName || "Unknown Item",
-        quantity: item.quantity || 0,
-        price: item.total || 0, // Using total price for the line item
-        image: item.productImage
-    }));
+    return items.map((item: any) => {
+        const qty = item.quantity || 1;
+        const total = item.total || 0;
+        const unitPrice = item.unitPrice > 0 ? item.unitPrice : (total > 0 ? total / qty : 0);
+        return {
+            name: item.productName || "Unknown Item",
+            productName: item.productName || "Unknown Item",
+            quantity: qty,
+            unitPrice,
+            price: unitPrice,
+            total: total || unitPrice * qty,
+            image: item.productImage,
+            isFreeGift: !!item.isFreeGift
+        };
+    });
 };
 
 /**

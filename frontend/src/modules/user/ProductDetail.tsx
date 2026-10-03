@@ -93,9 +93,9 @@ export default function ProductDetail() {
 
         // Fetch product details with location
         const response = await getProductById(
-          id
-          // location?.latitude,
-          // location?.longitude
+          id,
+          location?.latitude,
+          location?.longitude
         );
         if (response.success && response.data) {
           const productData = response.data as any;

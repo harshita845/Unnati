@@ -720,7 +720,7 @@ export default function DeliveryOrderDetail() {
                                     </div>
                                 </div>
                                 <span className={`text-sm font-semibold ${item.isFreeGift ? 'text-[var(--primary-darker)]' : 'text-neutral-900'}`}>
-                                    {item.isFreeGift ? 'FREE' : `₹${item.price * item.quantity}`}
+                                    {item.isFreeGift ? 'FREE' : `₹${item.total ?? (item.unitPrice ? item.unitPrice * item.quantity : item.price)}`}
                                 </span>
                             </div>
                         ))}

@@ -36,7 +36,7 @@ export const getWishlist = async (req: Request, res: Response) => {
             path: 'products',
             match: {
                 status: 'Active',
-                publish: true,
+                publish: true, subscriptionHidden: { $ne: true },
                 seller: { $in: nearbySellerIds }
             },
             populate: {
@@ -88,7 +88,7 @@ export const addToWishlist = async (req: Request, res: Response) => {
         }
 
         // Verify product exists and is available at location
-        const product = await Product.findOne({ _id: productId, status: 'Active', publish: true });
+        const product = await Product.findOne({ _id: productId, status: 'Active', publish: true, subscriptionHidden: { $ne: true } });
         if (!product) {
             return res.status(404).json({ success: false, message: 'Product not found or unavailable' });
         }

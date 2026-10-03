@@ -17,7 +17,12 @@ export interface ICategory extends Document {
   parentId?: mongoose.Types.ObjectId;
   headerCategoryId?: mongoose.Types.ObjectId;
   subscriptionEnabled: boolean;
+  /** @deprecated fixed frequencies; plans are now created on the Subscription Plans page */
   allowedPlans: SubscriptionPlan[];
+  /** Days products stay visible after a plan expires (0 = hide immediately). null = global default */
+  subscriptionGraceDays?: number | null;
+  /** Bill for subscriptions in this category: GST invoice (GST charged) or payment receipt. null = global default */
+  subscriptionBillType?: "gst" | "receipt" | null;
   createdAt: Date;
   updatedAt: Date;
   getAllDescendants(): Promise<ICategory[]>;
@@ -89,6 +94,17 @@ const CategorySchema = new Schema<ICategory>(
     subscriptionEnabled: {
       type: Boolean,
       default: false,
+    },
+    subscriptionGraceDays: {
+      type: Number,
+      min: [0, "Grace days cannot be negative"],
+      max: [90, "Grace days cannot exceed 90"],
+      default: null,
+    },
+    subscriptionBillType: {
+      type: String,
+      enum: ["gst", "receipt", null],
+      default: null,
     },
     allowedPlans: {
       type: [

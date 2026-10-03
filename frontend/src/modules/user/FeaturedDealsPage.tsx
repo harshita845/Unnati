@@ -3,15 +3,17 @@ import { useNavigate } from "react-router-dom";
 import ProductCard from "./components/ProductCard";
 import { getProductById } from "../../services/api/customerProductService";
 import { bannerService } from "../../services/bannerService";
+import { useLocation } from "../../hooks/useLocation";
 
 const BRAND_GRADIENT =
   "linear-gradient(135deg, var(--customer-primary) 0%, var(--customer-primary-light) 100%)";
 
-async function fetchProductsByIds(ids: string[]) {
+// Products whose store doesn't deliver to the user's location are left out (the API returns 404)
+async function fetchProductsByIds(ids: string[], location?: { latitude?: number; longitude?: number } | null) {
   const results = await Promise.all(
     ids.map(async (id) => {
       try {
-        return await getProductById(id);
+        return await getProductById(id, location?.latitude, location?.longitude);
       } catch {
         return null;
       }
@@ -31,6 +33,7 @@ export default function FeaturedDealsPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { location } = useLocation();
 
   useEffect(() => {
     const fetchDeals = async () => {
@@ -41,9 +44,9 @@ export default function FeaturedDealsPage() {
         let fetchedProducts: any[] = [];
 
         if (config.featuredDealProductIds && config.featuredDealProductIds.length > 0) {
-          fetchedProducts = await fetchProductsByIds(config.featuredDealProductIds);
+          fetchedProducts = await fetchProductsByIds(config.featuredDealProductIds, location);
         } else if (config.featuredDealProductId) {
-          fetchedProducts = await fetchProductsByIds([config.featuredDealProductId]);
+          fetchedProducts = await fetchProductsByIds([config.featuredDealProductId], location);
         }
 
         setProducts(fetchedProducts);
@@ -56,7 +59,7 @@ export default function FeaturedDealsPage() {
     };
 
     fetchDeals();
-  }, []);
+  }, [location?.latitude, location?.longitude]);
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-20">

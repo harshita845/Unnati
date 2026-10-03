@@ -3,17 +3,19 @@ import { useNavigate } from "react-router-dom";
 import ProductCard from "./components/ProductCard";
 import { getProductById } from "../../services/api/customerProductService";
 import { bannerService } from "../../services/bannerService";
+import { useLocation } from "../../hooks/useLocation";
 import BannerSlider from "./components/banners/BannerSlider";
 
 // Drive the hero band and CTA off the admin-managed Customer App Theme rather
 // than the previously hardcoded orange (#FF6D00 / #FF9100 / #E65100).
 const BRAND_GRADIENT = "linear-gradient(135deg, var(--customer-primary) 0%, var(--customer-primary-light) 100%)";
 
-async function fetchProductsByIds(ids: string[]) {
+// Products whose store doesn't deliver to the user's location are left out (the API returns 404)
+async function fetchProductsByIds(ids: string[], location?: { latitude?: number; longitude?: number } | null) {
   const results = await Promise.all(
     ids.map(async (id) => {
       try {
-        return await getProductById(id);
+        return await getProductById(id, location?.latitude, location?.longitude);
       } catch {
         return null;
       }
@@ -33,6 +35,7 @@ export default function DealOfTheDayPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { location } = useLocation();
 
   useEffect(() => {
     const fetchDeals = async () => {
@@ -43,9 +46,9 @@ export default function DealOfTheDayPage() {
         let fetchedProducts: any[] = [];
 
         if (configResponse.dealOfTheDayProductIds && configResponse.dealOfTheDayProductIds.length > 0) {
-          fetchedProducts = await fetchProductsByIds(configResponse.dealOfTheDayProductIds);
+          fetchedProducts = await fetchProductsByIds(configResponse.dealOfTheDayProductIds, location);
         } else if ((configResponse as any).dealOfTheDayProductId) {
-          fetchedProducts = await fetchProductsByIds([(configResponse as any).dealOfTheDayProductId]);
+          fetchedProducts = await fetchProductsByIds([(configResponse as any).dealOfTheDayProductId], location);
         }
 
         setProducts(fetchedProducts);
@@ -58,7 +61,7 @@ export default function DealOfTheDayPage() {
     };
 
     fetchDeals();
-  }, []);
+  }, [location?.latitude, location?.longitude]);
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-20">

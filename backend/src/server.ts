@@ -19,6 +19,7 @@ import { seedHeaderCategories } from "./utils/seedHeaderCategories";
 import { initializeSocket } from "./socket/socketService";
 import ThemeSettings from "./models/ThemeSettings";
 import { expireUnpaidOnlineOrders } from "./services/orderLifecycleService";
+import { runSubscriptionJob, setSubscriptionSocket } from "./services/sellerSubscriptionService";
 
 // Load environment variables (.env file reload)
 dotenv.config();
@@ -129,6 +130,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // Initialize Socket.io
 const io = initializeSocket(httpServer);
 app.set("io", io);
+setSubscriptionSocket(io);
 
 // Routes
 app.get("/", (_req: Request, res: Response) => {
@@ -167,6 +169,14 @@ async function startServer() {
       .catch((err) => console.error("Failed to release unpaid online orders:", err));
   releaseUnpaidOrders();
   setInterval(releaseUnpaidOrders, 5 * 60 * 1000);
+
+  // Seller subscriptions: reminders before expiry, expiry, hiding products after the grace period
+  const runSubscriptions = () =>
+    runSubscriptionJob()
+      .then((stats) => (stats.reminders || stats.expired || stats.hidden) && console.log("   Subscriptions:", stats))
+      .catch((err) => console.error("Subscription job failed:", err));
+  runSubscriptions();
+  setInterval(runSubscriptions, 60 * 60 * 1000);
 
   httpServer.timeout = 300000; // 5 minutes
   httpServer.listen(PORT, () => {

@@ -68,5 +68,5 @@ export function enrichCartItemProduct(product: any, cartItem: any) {
 }
 
 export const CART_PRODUCT_SELECT =
-  "productName seller status publish category variations gst hsnCode publish popular dealOfDay price discPrice compareAtPrice unitPricing tieredPrices mainImage stock pack";
+  "productName seller status publish subscriptionHidden category variations gst hsnCode publish popular dealOfDay price discPrice compareAtPrice unitPricing tieredPrices mainImage stock pack";
 

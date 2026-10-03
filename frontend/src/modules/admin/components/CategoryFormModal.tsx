@@ -2,11 +2,10 @@ import { useState, useEffect } from "react";
 import {
   Category,
   CreateCategoryData,
-  SUBSCRIPTION_PLAN_OPTIONS,
-  SubscriptionPlan,
   UpdateCategoryData,
 } from "../../../services/api/admin/adminProductService";
 import { uploadImage } from "../../../services/api/uploadService";
+import { dateInputToISO, toDateInput } from "../../../services/api/subscriptionService";
 import {
   validateImageFile,
   createImagePreview,
@@ -50,7 +49,6 @@ export default function CategoryFormModal({
     hasWarning: false,
     groupCategory: "",
     subscriptionEnabled: false,
-    allowedPlans: [] as SubscriptionPlan[],
   });
 
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -64,6 +62,25 @@ export default function CategoryFormModal({
   );
   const [loadingHeaderCategories, setLoadingHeaderCategories] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Subscription rules for this category (Super Admin)
+  const [graceMode, setGraceMode] = useState<"default" | "custom">("default");
+  const [graceDays, setGraceDays] = useState(3);
+  const [billType, setBillType] = useState<"" | "gst" | "receipt">("");
+  const [existingMode, setExistingMode] = useState<"trial" | "buy">("trial");
+  const [trialStart, setTrialStart] = useState(toDateInput(new Date()));
+  const [trialEnd, setTrialEnd] = useState(toDateInput(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)));
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const custom = mode === "edit" && typeof category?.subscriptionGraceDays === "number";
+    setGraceMode(custom ? "custom" : "default");
+    setGraceDays(custom ? (category!.subscriptionGraceDays as number) : 3);
+    setBillType((mode === "edit" && category?.subscriptionBillType) || "");
+    setExistingMode("trial");
+    setTrialStart(toDateInput(new Date()));
+    setTrialEnd(toDateInput(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)));
+  }, [isOpen, mode, category]);
 
   // Get available parent categories
   const availableParents = getAvailableParents(
@@ -110,7 +127,6 @@ export default function CategoryFormModal({
           hasWarning: category.hasWarning || false,
           groupCategory: category.groupCategory || "",
           subscriptionEnabled: category.subscriptionEnabled || false,
-          allowedPlans: category.allowedPlans || [],
         });
         if (category.image) {
           setImagePreview(category.image);
@@ -153,7 +169,6 @@ export default function CategoryFormModal({
           hasWarning: false,
           groupCategory: "",
           subscriptionEnabled: false,
-          allowedPlans: [],
         });
       } else {
         // Reset form for new category
@@ -168,7 +183,6 @@ export default function CategoryFormModal({
           hasWarning: false,
           groupCategory: "",
           subscriptionEnabled: false,
-          allowedPlans: [],
         });
       }
       setImageFile(null);
@@ -201,22 +215,6 @@ export default function CategoryFormModal({
       setErrors((prev) => {
         const newErrors = { ...prev };
         delete newErrors[name];
-        return newErrors;
-      });
-    }
-  };
-
-  const toggleSubscriptionPlan = (plan: SubscriptionPlan) => {
-    setFormData((prev) => ({
-      ...prev,
-      allowedPlans: prev.allowedPlans.includes(plan)
-        ? prev.allowedPlans.filter((p) => p !== plan)
-        : [...prev.allowedPlans, plan],
-    }));
-    if (errors.allowedPlans) {
-      setErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors.allowedPlans;
         return newErrors;
       });
     }
@@ -329,10 +327,6 @@ export default function CategoryFormModal({
       }
     }
 
-    if (formData.subscriptionEnabled && formData.allowedPlans.length === 0) {
-      newErrors.allowedPlans = "Select at least one subscription plan";
-    }
-
     // Validate parent change if editing
     if (mode === "edit" && category) {
       const validation = validateParentChange(
@@ -379,7 +373,21 @@ export default function CategoryFormModal({
         hasWarning: formData.hasWarning,
         groupCategory: formData.groupCategory || undefined,
         subscriptionEnabled: formData.subscriptionEnabled,
-        allowedPlans: formData.subscriptionEnabled ? formData.allowedPlans : [],
+        subscriptionGraceDays: graceMode === "custom" ? Math.max(0, Math.round(graceDays)) : null,
+        subscriptionBillType: billType || null,
+        // Switching the requirement on for an existing category: what current sellers get
+        ...(mode === "edit" && formData.subscriptionEnabled && !category?.subscriptionEnabled
+          ? {
+              existingSellers:
+                existingMode === "buy"
+                  ? { mode: "buy" as const }
+                  : {
+                      mode: "trial" as const,
+                      trialStartDate: dateInputToISO(trialStart, "start"),
+                      trialEndDate: dateInputToISO(trialEnd, "end"),
+                    },
+            }
+          : {}),
       };
 
       await onSubmit(submitData);
@@ -753,60 +761,112 @@ export default function CategoryFormModal({
 
           {/* Subscription Settings */}
           <div className="mb-4 p-4 border border-neutral-200 rounded-lg">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-medium text-neutral-700">
-                  Subscription Settings
-                </p>
+                <p className="text-sm font-medium text-neutral-700">Subscription required</p>
                 <p className="text-xs text-neutral-500">
-                  Choose which subscription plans are available for this category
+                  Sellers need an active plan that includes this category to sell here. Plans, prices,
+                  durations and features are managed in Manage Seller → Seller Subscriptions.
                 </p>
               </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <span className="text-sm text-neutral-700">Enable Subscription</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={formData.subscriptionEnabled}
-                  onClick={() =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      subscriptionEnabled: !prev.subscriptionEnabled,
-                    }))
-                  }
-                  disabled={submitting}
-                  className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors ${
-                    formData.subscriptionEnabled
-                      ? "bg-[var(--primary-color)]"
-                      : "bg-neutral-300"
-                  }`}>
-                  <span
-                    className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                      formData.subscriptionEnabled ? "translate-x-4" : ""
-                    }`}
-                  />
-                </button>
-              </label>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={formData.subscriptionEnabled}
+                onClick={() =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    subscriptionEnabled: !prev.subscriptionEnabled,
+                  }))
+                }
+                disabled={submitting}
+                className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors ${
+                  formData.subscriptionEnabled ? "bg-[var(--primary-color)]" : "bg-neutral-300"
+                }`}>
+                <span
+                  className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                    formData.subscriptionEnabled ? "translate-x-4" : ""
+                  }`}
+                />
+              </button>
             </div>
-
             {formData.subscriptionEnabled && (
-              <div className="mt-3">
-                <div className="flex flex-wrap gap-4">
-                  {SUBSCRIPTION_PLAN_OPTIONS.map((plan) => (
-                    <label key={plan.value} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={formData.allowedPlans.includes(plan.value)}
-                        onChange={() => toggleSubscriptionPlan(plan.value)}
-                        className="mr-2"
-                        disabled={submitting}
-                      />
-                      <span className="text-sm text-neutral-700">{plan.label}</span>
-                    </label>
-                  ))}
+              <div className="mt-3 space-y-3">
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-700 mb-1">After a seller's plan expires</label>
+                    <select
+                      value={graceMode === "custom" && graceDays === 0 ? "hide" : graceMode}
+                      onChange={(e) => {
+                        if (e.target.value === "hide") {
+                          setGraceMode("custom");
+                          setGraceDays(0);
+                        } else if (e.target.value === "custom") {
+                          setGraceMode("custom");
+                          setGraceDays((d) => (d > 0 ? d : 3));
+                        } else setGraceMode("default");
+                      }}
+                      className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+                      disabled={submitting}>
+                      <option value="default">Use default grace period</option>
+                      <option value="custom">Custom grace period</option>
+                      <option value="hide">Hide products immediately</option>
+                    </select>
+                    {graceMode === "custom" && graceDays > 0 && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={1}
+                          max={90}
+                          value={graceDays}
+                          onChange={(e) => setGraceDays(Number(e.target.value))}
+                          className="w-24 px-3 py-1.5 border border-neutral-300 rounded-lg text-sm"
+                          disabled={submitting}
+                        />
+                        <span className="text-xs text-neutral-600">days, then products are hidden</span>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-700 mb-1">Bill for subscription payments</label>
+                    <select
+                      value={billType}
+                      onChange={(e) => setBillType(e.target.value as "" | "gst" | "receipt")}
+                      className="w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm"
+                      disabled={submitting}>
+                      <option value="">Use default</option>
+                      <option value="gst">GST invoice (GST charged)</option>
+                      <option value="receipt">Payment receipt (no GST)</option>
+                    </select>
+                  </div>
                 </div>
-                {errors.allowedPlans && (
-                  <p className="mt-1 text-sm text-red-600">{errors.allowedPlans}</p>
+
+                {mode === "edit" && !category?.subscriptionEnabled && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
+                    <p className="text-xs font-medium text-amber-900">Sellers already selling in this category:</p>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="radio" checked={existingMode === "trial"} onChange={() => setExistingMode("trial")} disabled={submitting} />
+                      Give a free trial
+                    </label>
+                    {existingMode === "trial" && (
+                      <div className="grid grid-cols-2 gap-2 pl-6">
+                        <div>
+                          <label className="block text-xs text-neutral-600 mb-1">Start date</label>
+                          <input type="date" value={trialStart} onChange={(e) => setTrialStart(e.target.value)}
+                            className="w-full px-2 py-1.5 border border-neutral-300 rounded-lg text-sm" disabled={submitting} />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-neutral-600 mb-1">End date</label>
+                          <input type="date" value={trialEnd} onChange={(e) => setTrialEnd(e.target.value)}
+                            className="w-full px-2 py-1.5 border border-neutral-300 rounded-lg text-sm" disabled={submitting} />
+                        </div>
+                      </div>
+                    )}
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="radio" checked={existingMode === "buy"} onChange={() => setExistingMode("buy")} disabled={submitting} />
+                      They must buy a plan now (their products here are hidden until they do)
+                    </label>
+                  </div>
                 )}
               </div>
             )}

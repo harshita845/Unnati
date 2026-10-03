@@ -92,6 +92,7 @@ const SellerTaxes = lazy(() => import("./modules/seller/pages/SellerTaxes"));
 const SellerProductList = lazy(() => import("./modules/seller/pages/SellerProductList"));
 const SellerStockManagement = lazy(() => import("./modules/seller/pages/SellerStockManagement"));
 const SellerWallet = lazy(() => import("./modules/seller/pages/SellerWallet"));
+const SellerSubscriptions = lazy(() => import("./modules/seller/pages/SellerSubscriptions"));
 const SellerWalletTransactions = lazy(() => import("./modules/seller/pages/SellerWalletTransactions"));
 const SellerWithdrawalRequests = lazy(() => import("./modules/seller/pages/SellerWithdrawalRequests"));
 const SellerSalesReport = lazy(() => import("./modules/seller/pages/SellerSalesReport"));
@@ -158,6 +159,7 @@ const AdminManageSellerList = lazy(() => import("./modules/admin/pages/AdminMana
 const AdminAddSeller = lazy(() => import("./modules/admin/pages/AdminAddSeller"));
 const AdminSellerUserLimit = lazy(() => import("./modules/admin/pages/AdminSellerUserLimit"));
 const AdminCoupon = lazy(() => import("./modules/admin/pages/AdminCoupon"));
+const AdminSellerSubscriptions = lazy(() => import("./modules/admin/pages/AdminSellerSubscriptions"));
 const AdminNotification = lazy(() => import("./modules/admin/pages/AdminNotification"));
 const AdminSellerLocation = lazy(() => import("./modules/admin/pages/AdminSellerLocation"));
 const AdminWallet = lazy(() => import("./modules/admin/pages/AdminWallet"));
@@ -478,6 +480,7 @@ function App() {
                               <Route path="product/storage-location" element={<SellerStorageLocationSetup />} />
                               <Route path="product/stock" element={<SellerStockManagement />} />
                               <Route path="wallet" element={<SellerWallet />} />
+                              <Route path="subscriptions" element={<SellerSubscriptions />} />
                               <Route path="wallet/transactions" element={<SellerWalletTransactions />} />
                               <Route path="wallet/withdrawals" element={<SellerWithdrawalRequests />} />
                               <Route path="reports/sales" element={<SellerSalesReport />} />
@@ -565,6 +568,7 @@ function App() {
                             <Route path="manage-location/seller-location" element={<AdminSellerLocation />} />
                             <Route path="wallet" element={<AdminWallet />} />
                             <Route path="coupon" element={<AdminCoupon />} />
+                            <Route path="seller-subscriptions" element={<AdminSellerSubscriptions />} />
                             <Route path="return" element={<AdminReturnRequest />} />
                             <Route path="notification" element={<AdminNotification />} />
                             <Route path="orders" element={<AdminOrders />} />

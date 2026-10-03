@@ -103,7 +103,7 @@ export const getProducts = async (req: Request, res: Response) => {
 
     const query: any = {
       status: "Active",
-      publish: true,
+      publish: true, subscriptionHidden: { $ne: true },
     };
 
     // Only show products from active categories
@@ -154,23 +154,13 @@ export const getProducts = async (req: Request, res: Response) => {
       visibleSellerIds = visibleSellers.map(s => s._id);
     } else if (userCity) {
       const visibleSellers = await Seller.find({
-        $or: [
-          { city: { $regex: new RegExp(`^${userCity}$`, "i") } },
-          { category: "Admin" }
-        ],
+        city: { $regex: new RegExp(`^${userCity}$`, "i") },
         ...getVisibleSellersQuery()
       }).select("_id");
       visibleSellerIds = visibleSellers.map(s => s._id);
     } else {
-      // Default fallback for unlocalized browsing: show Indore stores and Admin
-      const visibleSellers = await Seller.find({
-        $or: [
-          { city: { $regex: /Indore/i } },
-          { category: "Admin" }
-        ],
-        ...getVisibleSellersQuery()
-      }).select("_id");
-      visibleSellerIds = visibleSellers.map(s => s._id);
+      // Location unknown: show no products (never default to another city's stores)
+      visibleSellerIds = [];
     }
 
     query.seller = { $in: visibleSellerIds };
@@ -382,7 +372,7 @@ export const getSearchSuggestions = async (req: Request, res: Response) => {
 
     const query: any = {
       status: "Active",
-      publish: true,
+      publish: true, subscriptionHidden: { $ne: true },
       category: { $in: activeCategoryIds },
       $or: [
         { productName: searchRegex },
@@ -407,8 +397,8 @@ export const getSearchSuggestions = async (req: Request, res: Response) => {
       }).select("_id");
       query.seller = { $in: visibleSellers.map(s => s._id) };
     } else {
-      const visibleSellers = await Seller.find(visibleSellersQuery).select("_id");
-      query.seller = { $in: visibleSellers.map(s => s._id) };
+      // Location unknown: no product suggestions
+      query.seller = { $in: [] };
     }
 
     const products = await Product.find(query)
@@ -470,7 +460,7 @@ export const getProductById = async (req: Request, res: Response) => {
     const product = await Product.findOne({
       _id: id,
       status: "Active",
-      publish: true,
+      publish: true, subscriptionHidden: { $ne: true },
     })
       .populate("category", "name parentId status")
       .populate("subcategory", "name parentId")
@@ -515,35 +505,23 @@ export const getProductById = async (req: Request, res: Response) => {
     const seller = product.seller as any;
 
     // Initialize availability flag
-    let isAvailableAtLocation = false;
+    let isAvailableAtLocation = true;
     let sellerId: mongoose.Types.ObjectId | null = null;
 
     if (seller) {
       if (typeof seller === "object" && seller._id) {
-        // Seller is populated
         sellerId = seller._id;
       } else if (seller instanceof mongoose.Types.ObjectId) {
-        // Seller is an ObjectId (not populated)
         sellerId = seller;
       } else if (typeof seller === "string") {
-        // Seller is a string ID
         sellerId = new mongoose.Types.ObjectId(seller);
       }
     }
 
-    // Check availability
-    // Always available if it's the Admin Store
-    if (seller && (
-      seller.email === "admin-store@Unnatistores.com" ||
-      seller.category === "Admin" ||
-      /Admin/i.test(seller.storeName || "")
-    )) {
-       isAvailableAtLocation = true;
-    }
-    // Otherwise check location availability if coordinates are provided
-    else if (
-      userLat &&
-      userLng &&
+    // Check availability: the product's store must deliver to the user's location
+    if (
+      userLat !== null &&
+      userLng !== null &&
       !isNaN(userLat) &&
       !isNaN(userLng) &&
       sellerId &&
@@ -553,15 +531,9 @@ export const getProductById = async (req: Request, res: Response) => {
       isAvailableAtLocation = nearbySellerIds.some(
         (id) => id.toString() === sellerId!.toString()
       );
-    } else if (!userLat || !userLng) {
-       // If user has no location set, assume available (browsing mode)
-       // Or depends on business logic; here we default to false if location is mandatory,
-       // but typically we allowed it above in getProducts warning.
-       // Let's set it to true if no location is provided to allow adding to cart (user will be prompted later or stopped at checkout)
-       // But wait, the previous code initialized it to false.
-       // If no location provided, we often assume we can't deliver.
-       // However, to match the "WARNING: Location missing, showing all products" logic:
-       isAvailableAtLocation = true;
+    } else {
+      // If no location provided, allow viewing in browsing mode
+      isAvailableAtLocation = true;
     }
 
     // Find similar products (by category)
@@ -578,7 +550,7 @@ export const getProductById = async (req: Request, res: Response) => {
     const similarProductsQuery: any = {
       _id: { $ne: product._id },
       status: "Active",
-      publish: true,
+      publish: true, subscriptionHidden: { $ne: true },
       $and: [
         {
           $or: [

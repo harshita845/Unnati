@@ -1651,7 +1651,7 @@ export default function OrderDetail() {
                         {isFree && <span className="text-[var(--customer-primary-dark)] font-bold ml-2 text-xs bg-[var(--customer-primary-alpha-10)] px-2 py-0.5 rounded">Free Gift</span>}
                       </p>
                       <p className="text-sm text-gray-500">
-                        Qty: {item.quantity}
+                        Qty: {item.quantity} {item.quantity > 1 && !isFree && (item.total || item.unitPrice) ? `(₹${((item.total || (item.unitPrice * item.quantity)) / item.quantity).toFixed(2)} each)` : ""}
                       </p>
                       {item.variant && (
                         <p className="text-xs text-gray-500">{item.variant}</p>
@@ -1660,7 +1660,7 @@ export default function OrderDetail() {
                         {isFree ? (
                             <span className="text-[var(--customer-primary-dark)]">Free</span>
                         ) : (
-                            <>{item.total?.toFixed(2) || (item.unitPrice * item.quantity).toFixed(2)}</>
+                            <>₹{(item.total || (item.unitPrice * item.quantity)).toFixed(2)}</>
                         )}
                       </p>
                     </div>

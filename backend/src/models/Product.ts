@@ -61,6 +61,8 @@ export interface IProduct extends Document {
   }>;
 
   publish: boolean;
+  /** Set by the subscription job when the seller's plan for this category lapsed; never set by sellers */
+  subscriptionHidden?: boolean;
   popular: boolean;
   dealOfDay: boolean;
   status: "Active" | "Inactive" | "Pending" | "Rejected";
@@ -263,6 +265,10 @@ export interface IProduct extends Document {
     publish: {
       type: Boolean,
       default: true,
+    },
+    subscriptionHidden: {
+      type: Boolean,
+      default: false,
     },
     popular: {
       type: Boolean,

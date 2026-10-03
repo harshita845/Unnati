@@ -83,12 +83,13 @@ export const semanticSearch = async (
 
 export const getSemanticSuggestions = async (
   q: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  location?: { latitude?: number; longitude?: number }
 ): Promise<{ success: boolean; data: SearchSuggestion[] }> => {
   const response = await api.get<{ success: boolean; data: SearchSuggestion[] }>(
     "/search/suggestions",
     {
-      params: { q },
+      params: { q, latitude: location?.latitude, longitude: location?.longitude },
       signal,
     }
   );

@@ -12,6 +12,7 @@ import Seller from "../../../models/Seller";
 import mongoose from "mongoose";
 import { cache } from "../../../utils/cache";
 import { findSellersWithinRange } from "../../../utils/locationHelper";
+import { getFeaturedSellerIds } from "../../../services/sellerSubscriptionService";
 import { toListItem, toListItems } from "../../product/productReadMapper";
 
 // Helper function to fetch data for a home section based on its configuration
@@ -55,7 +56,7 @@ async function fetchSectionData(
     if (displayType === "products") {
       const query: any = {
         status: "Active",
-        publish: true,
+        publish: true, subscriptionHidden: { $ne: true },
         // Exclude shop-by-store-only products from home sections
         $or: [
           { isShopByStoreOnly: { $ne: true } },
@@ -75,14 +76,11 @@ async function fetchSectionData(
       const visibleSellers = await Seller.find({ isEnabled: true }).select("_id");
       const visibleSellerIds = visibleSellers.map(s => s._id);
 
-      if (nearbySellerIds && nearbySellerIds.length > 0) {
-        const finalIds = visibleSellerIds.filter(id =>
-          nearbySellerIds.some(nearbyId => nearbyId.toString() === id.toString())
-        );
-        query.seller = { $in: finalIds };
-      } else {
-        query.seller = { $in: visibleSellerIds };
-      }
+      // Only stores that deliver to the user's location (unknown location or none nearby -> no products)
+      const finalIds = visibleSellerIds.filter(id =>
+        (nearbySellerIds || []).some(nearbyId => nearbyId.toString() === id.toString())
+      );
+      query.seller = { $in: finalIds };
 
       if (categories && categories.length > 0) {
         const categoryIds = categories
@@ -194,7 +192,11 @@ async function fetchLowestPricesProducts(
   };
 
   const visibleSellers = await Seller.find({ isEnabled: true }).select("_id");
-  const visibleSellerIds = visibleSellers.map((s) => s._id);
+  // With a location, only stores that deliver to the user (other cities are not shown at all)
+  // Only stores that deliver to the user (location unknown -> none)
+  const visibleSellerIds = visibleSellers
+    .map((s) => s._id)
+    .filter((id) => nearbySellerIds.some((n) => n.toString() === id.toString()));
 
   const lowestPricesProducts = await LowestPricesProduct.find(
     lowestPricesProductsQuery
@@ -205,7 +207,7 @@ async function fetchLowestPricesProducts(
         "productName mainImage price discPrice compareAtPrice mrp variations unitPricing discount status publish category subcategory seller",
       match: {
         status: "Active",
-        publish: true,
+        publish: true, subscriptionHidden: { $ne: true },
         seller: { $in: visibleSellerIds },
       },
       populate: {
@@ -302,11 +304,12 @@ export const getHomeContent = async (req: Request, res: Response) => {
         const categoryId = card?.category?._id ?? card?.category;
         if (!categoryId) return null;
 
-        // Build product query for images (ignore location to show category preview)
+        // Preview images come from stores that deliver to the user (when location is known)
         const productQuery: any = {
           category: categoryId,
           status: "Active",
-          publish: true,
+          publish: true, subscriptionHidden: { $ne: true },
+          seller: { $in: nearbySellerIds },
         };
 
         // Ensure category is active
@@ -397,8 +400,8 @@ export const getHomeContent = async (req: Request, res: Response) => {
     } else if (userCity) {
       shopSellerQuery.city = { $regex: new RegExp(`^${userCity}$`, "i") };
     } else {
-      // Fallback for unlocalized test browsing: show Indore stores
-      shopSellerQuery.city = { $regex: /Indore/i };
+      // Location unknown: no stores (never default to another city)
+      shopSellerQuery._id = { $in: [] };
     }
 
     const sellerStores = await Seller.find(shopSellerQuery)
@@ -411,7 +414,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
         const sellerProducts = await Product.find({
           seller: seller._id,
           status: "Active",
-          publish: true,
+          publish: true, subscriptionHidden: { $ne: true },
         })
           .select("mainImage")
           .limit(4)
@@ -433,6 +436,11 @@ export const getHomeContent = async (req: Request, res: Response) => {
         };
       })
     );
+
+    // Sellers whose subscription plan includes "featured store" are listed first
+    const featuredSellerIds = new Set(await getFeaturedSellerIds());
+    shops.forEach((shop: any) => (shop.isFeatured = featuredSellerIds.has(shop.id)));
+    shops.sort((a: any, b: any) => Number(!!b.isFeatured) - Number(!!a.isFeatured));
 
     // 5. Trending Items (Fetch some popular categories or products)
     const trendingCategories = await Category.find({
@@ -457,8 +465,10 @@ export const getHomeContent = async (req: Request, res: Response) => {
 
     const foodProductsQuery: any = {
       status: "Active",
-      publish: true,
-      category: { $in: activeCategoryIds }
+      publish: true, subscriptionHidden: { $ne: true },
+      category: { $in: activeCategoryIds },
+      // From stores that deliver to the user (when location is known)
+      seller: { $in: nearbySellerIds },
     };
 
     const foodProducts = await Product.find(foodProductsQuery)
@@ -621,22 +631,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
 
       promoStrip = promoStripDoc;
 
-      // If we have promoStrip, add availability flag to featured products
-      if (promoStrip && (promoStrip as any).featuredProducts) {
-        (promoStrip as any).featuredProducts = (promoStrip as any).featuredProducts.map((p: any) => {
-          const sellerIdStr = p.seller ? p.seller.toString() : "";
-          const isAdmin = adminSellerIds.includes(sellerIdStr);
-          const isAvailable = isAdmin
-            ? true
-            : (!locationProvided
-              ? true
-              : (nearbySellerIds && nearbySellerIds.length > 0 && p.seller
-                  ? nearbySellerIds.some(id => id.toString() === sellerIdStr)
-                  : false));
-          return { ...p, isAvailable };
-        });
-      }
-
+      // (Location filtering of featured products happens below, per request: this cache is shared)
       // Cache for 3 minutes (PromoStrip data doesn't change frequently)
       if (promoStrip) {
         cache.set(promoStripCacheKey, promoStrip, 3 * 60 * 1000);
@@ -644,6 +639,17 @@ export const getHomeContent = async (req: Request, res: Response) => {
         // Cache null result for 1 minute to prevent repeated DB queries
         cache.set(promoStripCacheKey, null, 60 * 1000);
       }
+    }
+
+    // Featured products in the promo strip: only from stores that deliver to this user
+    if (promoStrip && Array.isArray((promoStrip as any).featuredProducts)) {
+      const nearby = new Set(nearbySellerIds.map((id) => id.toString()));
+      promoStrip = {
+        ...(promoStrip as any),
+        featuredProducts: (promoStrip as any).featuredProducts
+          .filter((p: any) => p && p.seller && nearby.has(p.seller.toString()))
+          .map((p: any) => ({ ...p, isAvailable: true })),
+      };
     }
 
     res.status(200).json({
@@ -695,7 +701,8 @@ export const getLowestPricesProducts = async (req: Request, res: Response) => {
       nearbySellerIds = await findSellersWithinRange(userLat, userLng);
     }
 
-    const products = await fetchLowestPricesProducts(nearbySellerIds);
+    const locationProvided = userLat !== null && userLng !== null && !isNaN(userLat) && !isNaN(userLng);
+    const products = await fetchLowestPricesProducts(nearbySellerIds, [], locationProvided);
 
     res.status(200).json({
       success: true,
@@ -718,7 +725,7 @@ export const getStoreProducts = async (req: Request, res: Response) => {
     const { latitude, longitude } = req.query; // User location for filtering
     let query: any = {
       status: "Active",
-      publish: true,
+      publish: true, subscriptionHidden: { $ne: true },
       // Only show shop-by-store-only products in shop by store section
       isShopByStoreOnly: true,
     };
@@ -734,6 +741,22 @@ export const getStoreProducts = async (req: Request, res: Response) => {
     if (mongoose.Types.ObjectId.isValid(storeId)) {
       const seller = await Seller.findById(storeId).lean();
       if (seller) {
+        const storeLat = latitude ? parseFloat(latitude as string) : NaN;
+        const storeLng = longitude ? parseFloat(longitude as string) : NaN;
+        {
+          // Store must deliver to the user's location (location unknown -> not shown)
+          const nearby = Number.isFinite(storeLat) && Number.isFinite(storeLng)
+            ? await findSellersWithinRange(storeLat, storeLng)
+            : [];
+          if (!nearby.some((id) => id.toString() === seller._id.toString())) {
+            return res.status(404).json({
+              success: false,
+              data: [],
+              shop: null,
+              message: "This store doesn't deliver to your location.",
+            });
+          }
+        }
         const shopData = {
           name: seller.storeName || seller.sellerName,
           storeBanner: seller.storeBanner || "",
@@ -746,7 +769,7 @@ export const getStoreProducts = async (req: Request, res: Response) => {
         const sellerProducts = await Product.find({
           seller: seller._id,
           status: "Active",
-          publish: true,
+          publish: true, subscriptionHidden: { $ne: true },
         })
           .populate("category", "name icon image")
           .sort({ createdAt: -1 })
@@ -909,9 +932,8 @@ export const getStoreProducts = async (req: Request, res: Response) => {
 
       query.seller = { $in: visibleSellerIds };
     } else {
-      const visibleSellers = await Seller.find(visibleSellersQuery).select("_id");
-      const visibleSellerIds = visibleSellers.map(s => s._id);
-      query.seller = { $in: visibleSellerIds };
+      // Location unknown: no products
+      query.seller = { $in: [] };
     }
 
     console.log(`[getStoreProducts] Final query:`, JSON.stringify(query, null, 2));

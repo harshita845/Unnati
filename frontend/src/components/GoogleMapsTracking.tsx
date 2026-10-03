@@ -105,20 +105,33 @@ export default function GoogleMapsTracking({
         googleMapsApiKey: apiKey || ''
     })
 
-    // Combine storeLocation with sellerLocations
-    const allSellers = storeLocation ? [storeLocation, ...sellerLocations] : sellerLocations;
+    // Helper to validate coordinates (filters out Null Island / 0,0 and invalid points)
+    const isValidLoc = (loc?: { lat?: number; lng?: number } | null): boolean => {
+        if (!loc) return false;
+        const lat = Number(loc.lat);
+        const lng = Number(loc.lng);
+        return !isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+    };
 
-    // Center will be updated dynamically based on deliveryLocation
-    const center = deliveryLocation || (allSellers.length > 0 ? {
-        lat: (allSellers[0].lat + customerLocation.lat) / 2,
-        lng: (allSellers[0].lng + customerLocation.lng) / 2
-    } : customerLocation)
+    // Combine storeLocation with sellerLocations, filtering valid coordinates
+    const allSellers = (storeLocation ? [storeLocation, ...sellerLocations] : sellerLocations).filter(isValidLoc);
+    const validCustomer = isValidLoc(customerLocation) ? customerLocation : null;
+    const validDelivery = isValidLoc(deliveryLocation) ? deliveryLocation : null;
+    const validRouteOrigin = isValidLoc(routeOrigin) ? routeOrigin : null;
+    const validRouteDest = isValidLoc(routeDestination) ? routeDestination : null;
 
+    // Fallback default coordinates (Indore / Palasia, India: 22.7196, 75.8577)
+    const defaultCenter = { lat: 22.7196, lng: 75.8577 };
+
+    // Center will be updated dynamically based on valid locations
+    const center = validDelivery || (allSellers.length > 0 ? allSellers[0] : (validCustomer || defaultCenter));
+
+    // Combined path for fallback polyline
     const path = [
         ...allSellers,
-        ...(deliveryLocation ? [deliveryLocation] : []),
-        customerLocation
-    ]
+        ...(validDelivery ? [validDelivery] : []),
+        ...(validCustomer ? [validCustomer] : [])
+    ];
 
     // Auto-center and fit bounds when location or route changes
     useEffect(() => {
@@ -127,30 +140,28 @@ export default function GoogleMapsTracking({
         const bounds = new window.google.maps.LatLngBounds();
         let hasPoints = false;
 
-        // Add delivery location (focus point)
-        if (deliveryLocation) {
-            bounds.extend(deliveryLocation);
+        // Add valid delivery location
+        if (validDelivery) {
+            bounds.extend(validDelivery);
             hasPoints = true;
         }
 
-        // Add route points if visible
-        if (showRoute && routeOrigin && routeDestination) {
-            bounds.extend(routeOrigin);
-            bounds.extend(routeDestination);
-            routeWaypoints.forEach(wp => bounds.extend(wp));
+        // Add valid route points if visible
+        if (showRoute && validRouteOrigin && validRouteDest) {
+            bounds.extend(validRouteOrigin);
+            bounds.extend(validRouteDest);
+            routeWaypoints.filter(isValidLoc).forEach(wp => bounds.extend(wp));
             hasPoints = true;
         } else {
-            // Add other locations if route not showing
-            if (storeLocation) {
-                bounds.extend(storeLocation);
-                hasPoints = true;
-            }
-            sellerLocations.forEach(s => {
+            // Add valid seller and customer locations
+            allSellers.forEach(s => {
                 bounds.extend(s);
                 hasPoints = true;
             });
-            bounds.extend(customerLocation);
-            hasPoints = true;
+            if (validCustomer) {
+                bounds.extend(validCustomer);
+                hasPoints = true;
+            }
         }
 
         if (hasPoints) {
@@ -158,9 +169,9 @@ export default function GoogleMapsTracking({
                 mapRef.current._setProgrammaticChange(true);
             }
 
-            // If in full screen or only have delivery location, focus on delivery boy
-            if (deliveryLocation && (isFullScreen || !showRoute)) {
-                mapRef.current.panTo(deliveryLocation);
+            // If in full screen or focusing on delivery boy
+            if (validDelivery && (isFullScreen || !showRoute)) {
+                mapRef.current.panTo(validDelivery);
                 if (!hasInitialBoundsFitted.current || isFullScreen) {
                     mapRef.current.setZoom(isFullScreen ? 17 : 15);
                     hasInitialBoundsFitted.current = true;
@@ -179,8 +190,11 @@ export default function GoogleMapsTracking({
             if (mapRef.current._setProgrammaticChange) {
                 setTimeout(() => mapRef.current._setProgrammaticChange(false), 500);
             }
+        } else {
+            mapRef.current.panTo(defaultCenter);
+            mapRef.current.setZoom(14);
         }
-    }, [isLoaded, deliveryLocation, showRoute, routeOrigin, routeDestination, routeWaypoints, storeLocation, sellerLocations, customerLocation, userHasInteracted, isFullScreen]);
+    }, [isLoaded, validDelivery, showRoute, validRouteOrigin, validRouteDest, routeWaypoints, allSellers, validCustomer, userHasInteracted, isFullScreen]);
 
     const handleRecenter = () => {
         setUserHasInteracted(false);

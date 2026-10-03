@@ -13,7 +13,11 @@ import {
 } from '../../product/cartProductHelper';
 import { getTotalStock, variantsFromProductDoc } from '../../product/variantHelpers';
 
-const calculateCartTotal = async (cartId: any, nearbySellerIds: mongoose.Types.ObjectId[] = []) => {
+const calculateCartTotal = async (
+    cartId: any,
+    nearbySellerIds: mongoose.Types.ObjectId[] = [],
+    locationProvided: boolean = nearbySellerIds.length > 0
+) => {
     const items = await CartItem.find({ cart: cartId }).populate({
         path: 'product',
         select: CART_PRODUCT_SELECT,
@@ -32,7 +36,7 @@ const calculateCartTotal = async (cartId: any, nearbySellerIds: mongoose.Types.O
     let total = 0;
     for (const item of items) {
         const product = item.product as any;
-        if (product && product.status === 'Active' && product.publish) {
+        if (product && product.status === 'Active' && product.publish && !product.subscriptionHidden) {
             const pricing = resolveCartLinePricing(product, {
               variantId: item.variantId ? String(item.variantId) : undefined,
               variation: item.variation,
@@ -42,7 +46,9 @@ const calculateCartTotal = async (cartId: any, nearbySellerIds: mongoose.Types.O
             }
 
             const sellerId = product.seller.toString();
-            const isAvailable = nearbySellerIds.some(id => id.toString() === sellerId) || visibleSellerIds.includes(sellerId);
+            // Store must be enabled AND (when the user's location is known) deliver to them
+            const isAvailable = visibleSellerIds.includes(sellerId) &&
+                (!locationProvided || nearbySellerIds.some(id => id.toString() === sellerId));
 
             if (isAvailable) {
                 total += pricing.unitPrice * item.quantity;
@@ -96,7 +102,7 @@ export const getCart = async (req: Request, res: Response) => {
 
         for (const item of (cart.items as any)) {
             const product = item.product;
-            if (product && product.status === 'Active' && product.publish) {
+            if (product && product.status === 'Active' && product.publish && !product.subscriptionHidden) {
                 const pricing = resolveCartLinePricing(product, {
               variantId: item.variantId ? String(item.variantId) : undefined,
               variation: item.variation,
@@ -111,7 +117,8 @@ export const getCart = async (req: Request, res: Response) => {
                     const sellerId = product.seller.toString();
                     const isVisible = visibleSellerIds.includes(sellerId);
                     const isNearby = nearbySellerIds.some(id => id.toString() === sellerId);
-                    isAvailable = isVisible || isNearby;
+                    // Items from stores that don't deliver to the current location are not shown
+                    isAvailable = isVisible && isNearby;
                 }
 
                 if (isAvailable) {
@@ -157,7 +164,7 @@ export const addToCart = async (req: Request, res: Response) => {
         const userLng = longitude ? parseFloat(longitude as string) : null;
         const locationProvided = userLat !== null && userLng !== null && !isNaN(userLat) && !isNaN(userLng);
 
-        const product = await Product.findOne({ _id: productId, status: 'Active', publish: true });
+        const product = await Product.findOne({ _id: productId, status: 'Active', publish: true, subscriptionHidden: { $ne: true } });
         if (!product) {
             return res.status(404).json({ success: false, message: 'Product not found or unavailable' });
         }
@@ -217,7 +224,11 @@ export const addToCart = async (req: Request, res: Response) => {
              nearbySellerIds = await findSellersWithinRange(userLat, userLng);
         }
 
-        cart.total = await calculateCartTotal(cart._id, nearbySellerIds);
+        cart.total = await calculateCartTotal(
+            cart._id,
+            nearbySellerIds,
+            userLat !== null && userLng !== null && !isNaN(userLat as number) && !isNaN(userLng as number)
+        );
         await cart.save();
 
         const updatedCart = await Cart.findById(cart._id).populate({
@@ -241,7 +252,7 @@ export const addToCart = async (req: Request, res: Response) => {
             if (nearbySellerIds.length === 0 && !locationProvided) {
                 return true;
             }
-            return prod && (nearbySellerIds.some(id => id.toString() === sellerId) || visibleSellerIds.includes(sellerId));
+            return prod && nearbySellerIds.some(id => id.toString() === sellerId) && visibleSellerIds.includes(sellerId);
           })
           .map((item) => enrichCartItemProduct(item.product, item));
 
@@ -297,7 +308,11 @@ export const updateCartItem = async (req: Request, res: Response) => {
         cartItem.quantity = quantity;
         await cartItem.save();
 
-        cart.total = await calculateCartTotal(cart._id, nearbySellerIds);
+        cart.total = await calculateCartTotal(
+            cart._id,
+            nearbySellerIds,
+            userLat !== null && userLng !== null && !isNaN(userLat as number) && !isNaN(userLng as number)
+        );
         await cart.save();
 
         const updatedCart = await Cart.findById(cart._id).populate({
@@ -319,7 +334,7 @@ export const updateCartItem = async (req: Request, res: Response) => {
             const prod = item.product;
             const sellerId = prod?.seller?.toString();
             if (!locationProvided) return true;
-            return prod && (nearbySellerIds.some(id => id.toString() === sellerId) || visibleSellerIds.includes(sellerId));
+            return prod && nearbySellerIds.some(id => id.toString() === sellerId) && visibleSellerIds.includes(sellerId);
           })
           .map((item) => enrichCartItemProduct(item.product, item));
 
@@ -363,7 +378,11 @@ export const removeFromCart = async (req: Request, res: Response) => {
             nearbySellerIds = await findSellersWithinRange(userLat, userLng);
         }
 
-        cart.total = await calculateCartTotal(cart._id, nearbySellerIds);
+        cart.total = await calculateCartTotal(
+            cart._id,
+            nearbySellerIds,
+            userLat !== null && userLng !== null && !isNaN(userLat as number) && !isNaN(userLng as number)
+        );
         await cart.save();
 
         const updatedCart = await Cart.findById(cart._id).populate({
@@ -377,7 +396,7 @@ export const removeFromCart = async (req: Request, res: Response) => {
         const filteredItems = (updatedCart?.items as any[] || [])
           .filter(item => {
             const prod = item.product;
-            if (nearbySellerIds.length > 0) {
+            if (userLat !== null && userLng !== null && !isNaN(userLat) && !isNaN(userLng)) {
                 return prod && nearbySellerIds.some(id => id.toString() === prod.seller.toString());
             }
             return true;

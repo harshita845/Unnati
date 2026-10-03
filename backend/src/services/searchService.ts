@@ -190,7 +190,7 @@ const visibleSellerQuery = { isEnabled: true } as const;
 const buildVisibleProductQuery = async (options: Partial<SearchOptions>) => {
   const query: Record<string, any> = {
     status: "Active",
-    publish: true,
+    publish: true, subscriptionHidden: { $ne: true },
   };
 
   const activeCategories = await Category.find({ status: "Active" }).select("_id").lean();
@@ -243,8 +243,9 @@ const buildVisibleProductQuery = async (options: Partial<SearchOptions>) => {
     }).select("_id");
     query.seller = { $in: visibleSellers.map((seller) => seller._id) };
   } else {
-    const visibleSellers = await Seller.find(visibleSellerQuery).select("_id");
-    query.seller = { $in: visibleSellers.map((seller) => seller._id) };
+    // Location unknown: we can't tell which city's stores apply, so show nothing
+    // (the app asks for the location first, like other quick-commerce apps)
+    query.seller = { $in: [] };
   }
 
   if (andConditions.length) query.$and = andConditions;
@@ -474,7 +475,7 @@ export const getSimilarProductsForProduct = async (
   const cached = cache.get<any[]>(cacheKey);
   if (cached) return cached;
 
-  const target = await Product.findOne({ _id: productId, status: "Active", publish: true })
+  const target = await Product.findOne({ _id: productId, status: "Active", publish: true, subscriptionHidden: { $ne: true } })
     .select(productProjection)
     .populate("category", "name image")
     .populate("subcategory", "name")
@@ -492,21 +493,11 @@ export const getSimilarProductsForProduct = async (
     targetEmbedding = await generateEmbedding(await buildProductSearchText(target as any));
   }
 
-  // Only recommend products the customer can actually order: stores that deliver to them,
-  // or (no location) stores in the same city as this product's store.
+  // Only recommend products the customer can actually order: stores that deliver to them
+  // (no location -> nothing)
   const baseQuery: Record<string, any> = await buildVisibleProductQuery(
     hasLocation ? { latitude: lat, longitude: lng } : {}
   );
-  if (!hasLocation && (target as any).seller) {
-    const targetSeller = await Seller.findById((target as any).seller).select("city").lean();
-    if (targetSeller?.city) {
-      const sameCity = await Seller.find({
-        _id: baseQuery.seller?.$in || { $exists: true },
-        city: { $regex: new RegExp(`^${escapeRegex(String(targetSeller.city).trim())}$`, "i") },
-      }).select("_id");
-      baseQuery.seller = { $in: sameCity.map((seller) => seller._id) };
-    }
-  }
 
   const targetName = String((target as any).productName || "").trim();
   const candidates = await Product.find({
@@ -548,19 +539,28 @@ export const getSimilarProductsForProduct = async (
   return similarProducts;
 };
 
-export const getSearchSuggestionsForQuery = async (rawQuery: unknown, limit = 10) => {
+export const getSearchSuggestionsForQuery = async (
+  rawQuery: unknown,
+  limit = 10,
+  location?: { latitude?: number; longitude?: number }
+) => {
   const query = sanitizeSearchQuery(rawQuery, 80);
   if (!query || query.length < 2) return [];
 
+  const lat = Number(location?.latitude);
+  const lng = Number(location?.longitude);
+  const hasLocation = Number.isFinite(lat) && Number.isFinite(lng);
   const cacheKey = buildSearchCacheKey("search:suggestions", {
     query: normalizeText(query),
     limit,
+    loc: hasLocation ? `${lat.toFixed(2)},${lng.toFixed(2)}` : "none",
   });
   const cached = cache.get<any[]>(cacheKey);
   if (cached) return cached;
 
   const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-  const productQuery = await buildVisibleProductQuery({});
+  // Suggest only products from stores that deliver to the user
+  const productQuery = await buildVisibleProductQuery(hasLocation ? { latitude: lat, longitude: lng } : {});
 
   const [products, categories, brands, tags, trending] = await Promise.all([
     Product.find({ ...productQuery, productName: regex })

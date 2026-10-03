@@ -1,7 +1,12 @@
 import mongoose from "mongoose";
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
-import Category, { SUBSCRIPTION_PLANS } from "../../../models/Category";
+import Category from "../../../models/Category";
+import {
+  onCategorySubscriptionChanged,
+  parseDateRange,
+  syncSellerCategoryVisibility,
+} from "../../../services/sellerSubscriptionService";
 import SubCategory from "../../../models/SubCategory";
 import Brand from "../../../models/Brand";
 import Product from "../../../models/Product";
@@ -19,41 +24,57 @@ import { toDetail, toListItem, toListItems } from "../../product/productReadMapp
 // ==================== Category Controllers ====================
 
 /**
- * Validate subscription settings from a create/update body, falling back to the
- * category's current values for fields the request does not send.
+ * Category subscription rules set by Super Admin:
+ *  - subscriptionEnabled: sellers need a plan covering this category
+ *  - subscriptionGraceDays: days products stay visible after a plan expires (0 = hide at once, null = default)
+ *  - subscriptionBillType: "gst" (GST invoice, GST charged) or "receipt" (no GST); null = default
+ * Plans, prices, durations and features are managed on the Seller Subscriptions page.
  */
 const resolveSubscriptionSettings = (
   body: any,
-  current?: { subscriptionEnabled?: boolean; allowedPlans?: string[] }
-): { subscriptionEnabled: boolean; allowedPlans: string[] } | { error: string } => {
-  const enabledInput =
-    body.subscriptionEnabled !== undefined ? body.subscriptionEnabled : current?.subscriptionEnabled ?? false;
-  if (typeof enabledInput !== "boolean") {
-    return { error: "subscriptionEnabled must be true or false" };
+  current?: { subscriptionEnabled?: boolean; subscriptionGraceDays?: number | null; subscriptionBillType?: string | null }
+):
+  | { subscriptionEnabled: boolean; allowedPlans: string[]; subscriptionGraceDays: number | null; subscriptionBillType: "gst" | "receipt" | null }
+  | { error: string } => {
+  const enabled = body.subscriptionEnabled !== undefined ? body.subscriptionEnabled : current?.subscriptionEnabled ?? false;
+  if (typeof enabled !== "boolean") return { error: "subscriptionEnabled must be true or false" };
+
+  let grace: number | null = current?.subscriptionGraceDays ?? null;
+  if (body.subscriptionGraceDays !== undefined) {
+    if (body.subscriptionGraceDays === null || body.subscriptionGraceDays === "") grace = null;
+    else {
+      const n = Number(body.subscriptionGraceDays);
+      if (!Number.isInteger(n) || n < 0 || n > 90) return { error: "Grace period must be a whole number of days from 0 to 90" };
+      grace = n;
+    }
   }
 
-  const plansInput = body.allowedPlans !== undefined ? body.allowedPlans : current?.allowedPlans ?? [];
-  if (!Array.isArray(plansInput)) {
-    return { error: "allowedPlans must be an array" };
+  let billType = (current?.subscriptionBillType as "gst" | "receipt" | null) ?? null;
+  if (body.subscriptionBillType !== undefined) {
+    if (body.subscriptionBillType === null || body.subscriptionBillType === "") billType = null;
+    else if (["gst", "receipt"].includes(body.subscriptionBillType)) billType = body.subscriptionBillType;
+    else return { error: "Bill type must be GST invoice or payment receipt" };
   }
 
-  const plans = Array.from(new Set(plansInput.map((p: unknown) => String(p).trim().toLowerCase())));
-  const invalid = plans.filter((p) => !(SUBSCRIPTION_PLANS as readonly string[]).includes(p));
-  if (invalid.length) {
-    return {
-      error: `Invalid subscription plan(s): ${invalid.join(", ")}. Allowed: ${SUBSCRIPTION_PLANS.join(", ")}`,
-    };
-  }
+  // allowedPlans (fixed frequencies) is superseded by admin-defined plans
+  return { subscriptionEnabled: enabled, allowedPlans: [], subscriptionGraceDays: grace, subscriptionBillType: billType };
+};
 
-  if (enabledInput && plans.length === 0) {
-    return { error: "Select at least one subscription plan when subscription is enabled" };
+/**
+ * What existing sellers get when "subscription required" is switched on (chosen by Super Admin):
+ * { mode: "trial", trialStartDate, trialEndDate } or { mode: "buy" }. Not given = default trial days.
+ */
+const resolveExistingSellerOption = (option: any): { trial?: { startDate: Date; endDate: Date } | null } | { error: string } => {
+  if (!option) return {};
+  if (option.mode === "buy") return { trial: null };
+  if (option.mode === "trial") {
+    try {
+      return { trial: parseDateRange(option.trialStartDate, option.trialEndDate) };
+    } catch (error: any) {
+      return { error: `Free trial: ${error.message}` };
+    }
   }
-
-  // Keep stored order consistent (daily, weekly, monthly, yearly); disabled categories carry no plans
-  return {
-    subscriptionEnabled: enabledInput,
-    allowedPlans: enabledInput ? SUBSCRIPTION_PLANS.filter((p) => plans.includes(p)) : [],
-  };
+  return { error: "Choose a free trial or 'must buy a plan' for existing sellers" };
 };
 
 /**
@@ -177,6 +198,8 @@ export const createCategory = asyncHandler(
       headerCategoryId: finalHeaderCategoryId || null,
       status,
       subscriptionEnabled: subscription.subscriptionEnabled,
+      subscriptionGraceDays: subscription.subscriptionGraceDays,
+      subscriptionBillType: subscription.subscriptionBillType,
       allowedPlans: subscription.allowedPlans,
     });
 
@@ -361,14 +384,25 @@ export const updateCategory = asyncHandler(
       }
     }
 
-    // Validate subscription settings when either field is being changed
-    if (updateData.subscriptionEnabled !== undefined || updateData.allowedPlans !== undefined) {
-      const subscription = resolveSubscriptionSettings(updateData, category);
+    // Validate subscription rules when any of them is being changed
+    const existingSellerOption = resolveExistingSellerOption(updateData.existingSellers);
+    delete updateData.existingSellers;
+    if ("error" in existingSellerOption) {
+      return res.status(400).json({ success: false, message: existingSellerOption.error });
+    }
+    if (
+      updateData.subscriptionEnabled !== undefined ||
+      updateData.subscriptionGraceDays !== undefined ||
+      updateData.subscriptionBillType !== undefined
+    ) {
+      const subscription = resolveSubscriptionSettings(updateData, category as any);
       if ("error" in subscription) {
         return res.status(400).json({ success: false, message: subscription.error });
       }
       updateData.subscriptionEnabled = subscription.subscriptionEnabled;
       updateData.allowedPlans = subscription.allowedPlans;
+      updateData.subscriptionGraceDays = subscription.subscriptionGraceDays;
+      updateData.subscriptionBillType = subscription.subscriptionBillType;
     }
 
     // Track if status is changing
@@ -391,6 +425,26 @@ export const updateCategory = asyncHandler(
       // await syncProductsWithCategoryStatus(id, updatedCategory.status);
     }
 
+    // Subscription requirement switched on/off: trials for existing sellers, hide/show products
+    let subscriptionNote = "";
+    if (updatedCategory && updateData.subscriptionEnabled !== undefined && !!category.subscriptionEnabled !== !!updatedCategory.subscriptionEnabled) {
+      const { trialsGranted, sellersAffected } = await onCategorySubscriptionChanged(id, !!updatedCategory.subscriptionEnabled, {
+        ...("trial" in existingSellerOption ? { trial: existingSellerOption.trial } : {}),
+        adminId: req.user?.userId,
+      });
+      if (trialsGranted) subscriptionNote = ` ${trialsGranted} existing seller(s) got a free trial.`;
+      else if (updatedCategory.subscriptionEnabled && sellersAffected) {
+        subscriptionNote = ` ${sellersAffected} existing seller(s) must buy a plan; their products here are hidden until they do.`;
+      }
+    } else if (
+      updatedCategory?.subscriptionEnabled &&
+      (updatedCategory as any).subscriptionGraceDays !== (category as any).subscriptionGraceDays
+    ) {
+      // Grace period changed: re-check which sellers' products should be visible right now
+      const sellerIds: any[] = await Product.distinct("seller", { category: id });
+      for (const sellerId of sellerIds) await syncSellerCategoryVisibility(sellerId, [id]);
+    }
+
     // Invalidate category caches
     cache.delete("customer-categories-list");
     cache.delete("customer-categories-tree");
@@ -398,7 +452,7 @@ export const updateCategory = asyncHandler(
 
     return res.status(200).json({
       success: true,
-      message: "Category updated successfully",
+      message: `Category updated successfully.${subscriptionNote}`,
       data: updatedCategory,
     });
   }

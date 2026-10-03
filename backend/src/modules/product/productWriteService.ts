@@ -10,6 +10,11 @@ import {
 import { ProductWritePolicy } from "./types";
 import { variantToMongooseSubdoc } from "./variantHelpers";
 import { toDetail } from "./productReadMapper";
+import {
+  SubscriptionError,
+  assertSellerCanListProduct,
+  getCategoryAccess,
+} from "../../services/sellerSubscriptionService";
 
 async function resolveAdminSeller(sellerId?: string): Promise<string> {
   if (sellerId && mongoose.Types.ObjectId.isValid(sellerId)) {
@@ -143,6 +148,16 @@ function buildMongooseDoc(
   return doc;
 }
 
+/** Subscription check for seller product writes, surfaced as a normal product error. */
+const assertSubscriptionAllows = async (sellerId: string, categoryId: unknown, excludeProductId?: unknown) => {
+  try {
+    await assertSellerCanListProduct(sellerId, categoryId, excludeProductId);
+  } catch (error) {
+    if (error instanceof SubscriptionError) throw new ProductWriteError(error.message, error.statusCode);
+    throw error;
+  }
+};
+
 export class ProductWriteService {
   static async createProduct(
     body: Record<string, unknown>,
@@ -229,7 +244,12 @@ export class ProductWriteService {
       normalized.headerCategoryId
     );
 
+    // Subscription categories: sellers need an active plan (and room under its product limit)
+    if (policy.role === "seller") await assertSubscriptionAllows(sellerId, normalized.category);
+
     const doc = buildMongooseDoc(normalized, sellerId);
+    // Hidden from customers if the seller has no plan for this category (e.g. added by admin)
+    (doc as any).subscriptionHidden = !(await getCategoryAccess(sellerId, normalized.category)).allowed;
     const product = await Product.create(doc);
     return toDetail(product);
   }
@@ -315,10 +335,17 @@ export class ProductWriteService {
           ? await resolveAdminSeller(normalized.seller)
           : String(existing.seller);
 
+    // Moving a product into another subscription category needs a plan for that category
+    const finalCategory = normalized.category ?? String(existing.category);
+    if (policy.role === "seller" && normalized.category && String(normalized.category) !== String(existing.category)) {
+      await assertSubscriptionAllows(sellerId, normalized.category, existing._id);
+    }
+
     const doc = buildMongooseDoc(normalized, sellerId);
     delete doc.seller;
 
     Object.assign(existing, doc);
+    (existing as any).subscriptionHidden = !(await getCategoryAccess(sellerId, finalCategory)).allowed;
     if (doc.storageLocation) {
       const sl = doc.storageLocation as any;
       existing.storageLocation = {

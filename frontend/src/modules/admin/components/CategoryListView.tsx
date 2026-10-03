@@ -1,4 +1,4 @@
-import { Category, formatSubscriptionPlans } from "../../../services/api/admin/adminProductService";
+import { Category } from "../../../services/api/admin/adminProductService";
 
 interface CategoryListViewProps {
   categories: Category[];
@@ -185,12 +185,11 @@ export default function CategoryListView({
                     }`}>
                     {category.status}
                   </span>
-                  {category.subscriptionEnabled &&
-                    (category.allowedPlans?.length || 0) > 0 && (
+                  {category.subscriptionEnabled && (
                       <span
                         className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]"
                         title="Subscription plans">
-                        {formatSubscriptionPlans(category.allowedPlans)}
+                        Subscription required
                       </span>
                     )}
                 </td>

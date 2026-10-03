@@ -16,6 +16,7 @@ import WishlistButton from '../../components/WishlistButton';
 import { getCoupons, validateCoupon, Coupon as ApiCoupon } from '../../services/api/customerCouponService';
 import { getAppConfig, AppConfig, appConfig as defaultAppConfig } from '../../services/configService';
 import { getAddresses } from '../../services/api/customerAddressService';
+import { getCart as fetchCartForLocation } from '../../services/api/customerCartService';
 import { getProducts } from '../../services/api/customerProductService';
 import { addToWishlist } from '../../services/api/customerWishlistService';
 import { calculateProductPrice, getCartItemVariantSelector, getCartLineUnitPrice } from '../../utils/priceUtils';
@@ -251,6 +252,34 @@ export default function Checkout() {
     fetchSimilar();
   }, [cart?.items?.length]);
 
+  // Items whose store doesn't deliver to the selected address (e.g. added while browsing another city).
+  // The server returns the cart as seen from that address; anything missing there can't be delivered.
+  const [deliverableProductIds, setDeliverableProductIds] = useState<Set<string> | null>(null);
+  const cartProductKey = (cart?.items || [])
+    .map((item: any) => String(item?.product?.id || item?.product?._id || ''))
+    .join(',');
+  useEffect(() => {
+    const lat = Number(selectedAddress?.latitude ?? userLocation?.latitude);
+    const lng = Number(selectedAddress?.longitude ?? userLocation?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || !cartProductKey) {
+      setDeliverableProductIds(null);
+      return;
+    }
+    let cancelled = false;
+    fetchCartForLocation({ latitude: lat, longitude: lng })
+      .then((res: any) => {
+        if (cancelled || !res?.success) return;
+        const ids = new Set<string>(
+          (res.data?.items || []).map((i: any) => String(i?.product?.id || i?.product?._id || ''))
+        );
+        setDeliverableProductIds(ids);
+      })
+      .catch(() => !cancelled && setDeliverableProductIds(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAddress?.latitude, selectedAddress?.longitude, userLocation?.latitude, userLocation?.longitude, cartProductKey]);
+
   if (cartLoading || ((cart?.items?.length || 0) === 0 && !showOrderSuccess)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
@@ -426,6 +455,13 @@ export default function Checkout() {
     outOfStockItems[0]?.product?.productName ||
     "one or more items";
 
+  const isUndeliverableItem = (item: any) =>
+    !!deliverableProductIds &&
+    !item?.isFreeGift &&
+    !deliverableProductIds.has(String(item?.product?.id || item?.product?._id || ''));
+  const undeliverableItems = displayItems.filter(isUndeliverableItem);
+  const undeliverableMessage = `${undeliverableItems.length === 1 ? '1 item' : `${undeliverableItems.length} items`} in your cart can't be delivered to this address. Remove ${undeliverableItems.length === 1 ? 'it' : 'them'} to continue.`;
+
   const handleApplyCoupon = async (coupon: ApiCoupon) => {
     setIsValidatingCoupon(true);
     setCouponError(null);
@@ -525,6 +561,10 @@ export default function Checkout() {
     if (!selectedAddress || cart.items.length === 0) return;
     if (outOfStockItems.length > 0) {
       showGlobalToast(`"${firstOutOfStockName}" is out of stock. Please update cart first.`, "error");
+      return;
+    }
+    if (undeliverableItems.length > 0) {
+      showGlobalToast(undeliverableMessage, "error");
       return;
     }
 
@@ -675,6 +715,10 @@ export default function Checkout() {
       showGlobalToast(`"${firstOutOfStockName}" is out of stock. Please update cart first.`, "error");
       return;
     }
+    if (undeliverableItems.length > 0) {
+      showGlobalToast(undeliverableMessage, "error");
+      return;
+    }
     setIsProcessingPayment(true);
 
     const finalLatitude = selectedAddress.latitude ?? userLocation?.latitude;
@@ -750,6 +794,10 @@ export default function Checkout() {
     }
     if (outOfStockItems.length > 0) {
       showGlobalToast(`"${firstOutOfStockName}" is out of stock. Please remove it or update quantity to proceed.`, "error");
+      return;
+    }
+    if (undeliverableItems.length > 0) {
+      showGlobalToast(undeliverableMessage, "error");
       return;
     }
 
@@ -1184,6 +1232,11 @@ export default function Checkout() {
                         {isInsufficientStock && (
                           <p className="text-xs md:text-sm text-red-600 font-bold mt-1.5 bg-red-50 border border-red-200 px-2.5 py-1 rounded block">
                             ⚠️ Only {availableStock} items left in stock (requested {item.quantity})
+                          </p>
+                        )}
+                        {isUndeliverableItem(item) && (
+                          <p className="text-xs md:text-sm text-red-600 font-bold mt-1.5 bg-red-50 border border-red-200 px-2.5 py-1 rounded block">
+                            ⚠️ Not available for delivery to this address. Please remove it.
                           </p>
                         )}
 
@@ -1708,7 +1761,7 @@ export default function Checkout() {
                 <button
                   onClick={handlePlaceOrderClick}
                   disabled={isProcessingPayment}
-                  className={`w-full py-4 px-4 font-bold text-base uppercase tracking-wide transition-colors rounded-xl shadow-md ${cart.items.length > 0 && outOfStockItems.length === 0 && !isProcessingPayment
+                  className={`w-full py-4 px-4 font-bold text-base uppercase tracking-wide transition-colors rounded-xl shadow-md ${cart.items.length > 0 && outOfStockItems.length === 0 && undeliverableItems.length === 0 && !isProcessingPayment
                     ? 'bg-[var(--customer-primary-dark)] text-white hover:bg-[var(--customer-primary-darker)]'
                     : 'bg-neutral-300 text-neutral-500 cursor-not-allowed'
                     }`}
@@ -1957,7 +2010,7 @@ export default function Checkout() {
           <button
             onClick={handlePlaceOrderClick}
             disabled={isProcessingPayment}
-            className={`w-full py-3 px-4 font-bold text-sm md:text-base uppercase tracking-wide transition-colors ${cart.items.length > 0 && outOfStockItems.length === 0 && !isProcessingPayment
+            className={`w-full py-3 px-4 font-bold text-sm md:text-base uppercase tracking-wide transition-colors ${cart.items.length > 0 && outOfStockItems.length === 0 && undeliverableItems.length === 0 && !isProcessingPayment
               ? 'bg-[var(--customer-primary-dark)] text-white hover:bg-[var(--customer-primary-darker)]'
               : 'bg-neutral-300 text-neutral-500 cursor-not-allowed'
               }`}

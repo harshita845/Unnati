@@ -130,7 +130,7 @@ export default function Search() {
     const controller = new AbortController();
     setSuggestionsLoading(true);
 
-    getSemanticSuggestions(query, controller.signal)
+    getSemanticSuggestions(query, controller.signal, { latitude: location?.latitude, longitude: location?.longitude })
       .then((response) => {
         if (response.success) {
           setSuggestions(response.data);
@@ -146,7 +146,7 @@ export default function Search() {
       .finally(() => setSuggestionsLoading(false));
 
     return () => controller.abort();
-  }, [debouncedQuery]);
+  }, [debouncedQuery, location?.latitude, location?.longitude]);
 
   useEffect(() => {
     const query = activeQuery.trim();

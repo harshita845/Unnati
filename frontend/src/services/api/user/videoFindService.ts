@@ -19,8 +19,11 @@ export interface VideoFind {
   };
 }
 
-export const getVideoFinds = async () => {
-  const response = await api.get<{ success: boolean; data: VideoFind[] }>('/customer/video-finds');
+export const getVideoFinds = async (location?: { latitude?: number; longitude?: number }) => {
+  // Customer app passes the user's location so only nearby stores' videos are returned
+  const response = await api.get<{ success: boolean; data: VideoFind[] }>('/customer/video-finds', {
+    params: { latitude: location?.latitude, longitude: location?.longitude },
+  });
   return response.data;
 };
 

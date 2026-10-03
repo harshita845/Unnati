@@ -41,6 +41,10 @@ export interface Category {
     status: "Published" | "Unpublished";
   };
   subscriptionEnabled?: boolean;
+  /** Days products stay visible after a plan expires (0 = hide immediately); null = default */
+  subscriptionGraceDays?: number | null;
+  /** Bill for subscriptions in this category; null = default */
+  subscriptionBillType?: "gst" | "receipt" | null;
   allowedPlans?: SubscriptionPlan[];
   createdAt?: string;
   updatedAt?: string;
@@ -57,6 +61,12 @@ export interface CreateCategoryData {
   headerCategoryId?: string | null;
   status?: "Active" | "Inactive";
   subscriptionEnabled?: boolean;
+  /** Days products stay visible after a plan expires (0 = hide immediately); null = default */
+  subscriptionGraceDays?: number | null;
+  /** Bill for subscriptions in this category; null = default */
+  subscriptionBillType?: "gst" | "receipt" | null;
+  /** Only when switching "subscription required" on: what sellers already selling here get */
+  existingSellers?: { mode: "trial"; trialStartDate?: string; trialEndDate?: string } | { mode: "buy" };
   allowedPlans?: SubscriptionPlan[];
 }
 

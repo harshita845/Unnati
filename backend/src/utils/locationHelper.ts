@@ -49,34 +49,22 @@ export async function findSellersWithinRange(
 
   try {
     // Fetch all approved sellers with location or Admin status
+    // Only stores whose delivery radius covers the user. (The Admin Store used to be included
+    // everywhere, but it has no real location, so its products showed in every city and then
+    // failed at checkout as out of range.)
     const sellers = await Seller.find({
       status: "Approved",
-      $or: [
-        { location: { $exists: true, $ne: null }, serviceRadiusKm: { $exists: true, $gt: 0 } },
-        { email: /admin/i },
-        { category: "Admin" },
-        { storeName: { $regex: /Admin/i } }
-      ]
+      location: { $exists: true, $ne: null },
     }).select("_id location serviceRadiusKm email category storeName");
 
-    // Filter sellers where user is within their service radius, or it's an Admin seller
+    // Keep sellers whose service radius covers the user
     const nearbySellerIds: mongoose.Types.ObjectId[] = [];
 
     for (const seller of sellers) {
-      // Always include Admin sellers regardless of distance/coordinates
-      const isAdminSeller =
-        /admin/i.test(seller.email || "") ||
-        seller.category === "Admin" ||
-        /Admin/i.test(seller.storeName || "");
-
-      if (isAdminSeller) {
-        nearbySellerIds.push(seller._id as mongoose.Types.ObjectId);
-        continue;
-      }
-
-      if (seller.location && seller.location.coordinates) {
-        const sellerLng = seller.location.coordinates[0];
-        const sellerLat = seller.location.coordinates[1];
+      const coords = seller.location?.coordinates;
+      if (coords && coords.length === 2 && !(coords[0] === 0 && coords[1] === 0)) {
+        const sellerLng = coords[0];
+        const sellerLat = coords[1];
         const distance = calculateDistance(
           userLat,
           userLng,

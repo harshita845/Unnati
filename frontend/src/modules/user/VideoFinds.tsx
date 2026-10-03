@@ -6,6 +6,7 @@ import { getVideoFinds, VideoFind, toggleLikeVideo, incrementShareCount } from '
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
+import { useLocation } from '../../hooks/useLocation';
 
 // --- Sub-components ---
 
@@ -378,11 +379,12 @@ export default function VideoFinds() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDesktop, setIsDesktop] = useState(window.matchMedia("(min-width: 768px)").matches);
   const [videoList, setVideoList] = useState<VideoFind[]>([]);
+  const { location } = useLocation();
 
   useEffect(() => {
     const fetchVideos = async () => {
       try {
-        const response = await getVideoFinds();
+        const response = await getVideoFinds({ latitude: location?.latitude, longitude: location?.longitude });
         if (response.success && response.data) {
            setVideoList(response.data);
         }
@@ -393,7 +395,7 @@ export default function VideoFinds() {
     };
 
     fetchVideos();
-  }, []);
+  }, [location?.latitude, location?.longitude]);
 
 
   // Validate active index when list changes

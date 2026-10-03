@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 import Order from "../models/Order";
 import { IOrderItem } from "../models/OrderItem";
 import Commission from "../models/Commission";
+import Product from "../models/Product";
+import { getCommissionOverride } from "./sellerSubscriptionService";
 import Seller from "../models/Seller";
 import WalletTransaction from "../models/WalletTransaction";
 import { clearOrderCache } from "../socket/socketService";
@@ -105,7 +107,12 @@ export const createCommissions = async (
     const seller = await Seller.findById(item.seller).session(session || null);
     if (!seller) continue;
 
-    const commissionRate = seller.commission || 0;
+    // A subscription plan can set its own commission rate for its categories
+    const product = item.product
+      ? await Product.findById(item.product).select("category").session(session || null).lean()
+      : null;
+    const planRate = product ? await getCommissionOverride(item.seller, (product as any).category) : null;
+    const commissionRate = planRate ?? (seller.commission || 0);
     const commissionAmount = (item.total * commissionRate) / 100;
 
     await Commission.create(

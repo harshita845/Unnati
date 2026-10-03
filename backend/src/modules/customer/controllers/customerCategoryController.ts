@@ -66,7 +66,7 @@ export const getCategoriesWithSubs = async (_req: Request, res: Response) => {
 
     const activeProductMatch: any = { 
       status: "Active", 
-      publish: true,
+      publish: true, subscriptionHidden: { $ne: true },
       seller: { $in: visibleSellerIds }
     };
 

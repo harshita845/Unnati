@@ -51,7 +51,10 @@ export const getSuggestions = async (req: Request, res: Response) => {
     }
 
     const limit = Math.min(15, Math.max(1, Number(req.query.limit || 10)));
-    const suggestions = await getSearchSuggestionsForQuery(query, limit);
+    const suggestions = await getSearchSuggestionsForQuery(query, limit, {
+      latitude: req.query.latitude !== undefined ? Number(req.query.latitude) : undefined,
+      longitude: req.query.longitude !== undefined ? Number(req.query.longitude) : undefined,
+    });
 
     return res.status(200).json({
       success: true,

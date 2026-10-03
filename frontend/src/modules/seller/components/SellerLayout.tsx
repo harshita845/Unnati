@@ -1,5 +1,6 @@
 import { ReactNode, useState, useCallback, useEffect } from 'react';
 import SellerHeader from './SellerHeader';
+import SubscriptionBanner from './SubscriptionBanner';
 import SellerSidebar from './SellerSidebar';
 import { useSellerSocket, SellerNotification } from '../hooks/useSellerSocket';
 import SellerNotificationAlert from './SellerNotificationAlert';
@@ -125,7 +126,10 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
         <SellerHeader onMenuClick={toggleSidebar} isSidebarOpen={isSidebarOpen} />
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-[#F5F7F4]">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-[#F5F7F4]">
+          <SubscriptionBanner />
+          {children}
+        </main>
       </div>
     </div>
   );
