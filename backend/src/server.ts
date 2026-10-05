@@ -1,4 +1,4 @@
-import express, { Application, Request, Response } from "express";
+import express, { Application, NextFunction, Request, Response } from "express";
 import { createServer } from "http";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -127,6 +127,30 @@ app.use((req: Request, _res: Response, next) => {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Vercel runs this file as a serverless function: no listen(), so make sure the DB
+// (and one-time setup) is ready before any request is handled.
+const isServerless = !!process.env.VERCEL;
+let setupPromise: Promise<void> | null = null;
+const ensureSetup = () => {
+  if (!setupPromise) {
+    setupPromise = (async () => {
+      await connectDB();
+      await ensureDefaultAdmin();
+      await seedHeaderCategories();
+      await ThemeSettings.getSettings();
+    })().catch((err) => {
+      setupPromise = null; // retry on the next request instead of failing forever
+      throw err;
+    });
+  }
+  return setupPromise;
+};
+if (isServerless) {
+  app.use((_req: Request, _res: Response, next: NextFunction) => {
+    ensureSetup().then(() => next(), next);
+  });
+}
+
 // Initialize Socket.io
 const io = initializeSocket(httpServer);
 app.set("io", io);
@@ -189,10 +213,16 @@ async function startServer() {
   });
 }
 
-startServer().catch((err) => {
-  console.error("\n\x1b[31m✗ Failed to start server\x1b[0m");
-  console.error(err);
-  process.exit(1);
-});
+// On a normal server (local / Render / VPS) start listening and run the background jobs.
+// On Vercel the platform calls the exported app per request instead.
+if (!isServerless) {
+  startServer().catch((err) => {
+    console.error("\n\x1b[31m✗ Failed to start server\x1b[0m");
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+export default app;
 
 // Trigger dev server restart for storage locations reload - v3.

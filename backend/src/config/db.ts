@@ -9,6 +9,9 @@ const connectDB = async (): Promise<void> => {
       throw new Error('MONGODB_URI is not defined in environment variables');
     }
 
+    // Serverless (Vercel) reuses a warm instance between requests: reuse the open connection
+    if (mongoose.connection.readyState === 1) return;
+
     const conn = await mongoose.connect(process.env.MONGODB_URI);
 
     console.log('\n\x1b[32m✓\x1b[0m \x1b[1mMongoDB Connected Successfully\x1b[0m');
@@ -21,6 +24,8 @@ const connectDB = async (): Promise<void> => {
     } else {
       console.error(`   \x1b[31m${String(error)}\x1b[0m\n`);
     }
+    // On Vercel a request fails instead; exiting would crash the function for every request
+    if (process.env.VERCEL) throw error;
     process.exit(1);
   }
 };

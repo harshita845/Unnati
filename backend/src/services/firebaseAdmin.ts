@@ -5,23 +5,40 @@ import fs from 'fs';
 
 dotenv.config();
 
-const serviceAccountPath = path.resolve(process.cwd(), 'config/firebase-service-account.json');
+// Where the key can come from, in order:
+//  1. FIREBASE_SERVICE_ACCOUNT env var (the JSON itself, or base64 of it) — use this on Vercel/hosting
+//  2. config/firebase-service-account.json next to the backend code (not the folder the process started in,
+//     which on Vercel is the repo root)
+const candidatePaths = [
+  path.resolve(__dirname, '../../config/firebase-service-account.json'),
+  path.resolve(process.cwd(), 'config/firebase-service-account.json'),
+  path.resolve(process.cwd(), 'backend/config/firebase-service-account.json'),
+];
+
+const loadServiceAccount = (): any | null => {
+  const fromEnv = process.env.FIREBASE_SERVICE_ACCOUNT?.trim();
+  if (fromEnv) {
+    const json = fromEnv.startsWith('{') ? fromEnv : Buffer.from(fromEnv, 'base64').toString('utf8');
+    console.log('Firebase Admin: Loading config from FIREBASE_SERVICE_ACCOUNT env var');
+    return JSON.parse(json);
+  }
+  const found = candidatePaths.find((p) => fs.existsSync(p));
+  if (!found) return null;
+  console.log('Firebase Admin: Loading config from', found);
+  return JSON.parse(fs.readFileSync(found, 'utf8'));
+};
 
 console.log('Firebase Admin: Initialization sequence started');
-console.log('Firebase Admin: Current working directory:', process.cwd());
-console.log('Firebase Admin: Service account path:', serviceAccountPath);
 
 // Check if already initialized
 try {
   if (!admin.apps.length) {
-    if (!fs.existsSync(serviceAccountPath)) {
-      console.error('❌ Firebase Service Account file not found at:', serviceAccountPath);
-      throw new Error(`Service account file missing at ${serviceAccountPath}`);
+    const serviceAccount = loadServiceAccount();
+    if (!serviceAccount) {
+      // Push notifications are optional: the rest of the app keeps working without them
+      console.warn('⚠️ Firebase Admin not configured (set FIREBASE_SERVICE_ACCOUNT) — push notifications are disabled');
+      throw new Error('Firebase service account not configured');
     }
-
-    console.log('Firebase Admin: Loading config from', serviceAccountPath);
-    const fileContent = fs.readFileSync(serviceAccountPath, 'utf8');
-    const serviceAccount = JSON.parse(fileContent);
 
     console.log('Firebase Admin: Project ID:', serviceAccount.project_id);
     console.log('Firebase Admin: Client Email:', serviceAccount.client_email);
