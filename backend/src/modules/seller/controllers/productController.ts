@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 import Product from "../../../models/Product";
 import Shop from "../../../models/Shop";
 import Category from "../../../models/Category";
+import SubCategory from "../../../models/SubCategory";
+import Brand from "../../../models/Brand";
 import Seller from "../../../models/Seller";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import {

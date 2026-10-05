@@ -1117,12 +1117,11 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
       Category.find({ name: searchRegex }).select("_id").lean(),
       SubCategory.find({ $or: [{ name: searchRegex }, { subcategoryName: searchRegex }] }).select("_id").lean(),
       Brand.find({ name: searchRegex }).select("_id").lean(),
-      User.find({
+      Seller.find({
         $or: [
           { storeName: searchRegex },
           { sellerName: searchRegex },
-          { name: searchRegex },
-          { phone: searchRegex },
+          { mobile: searchRegex },
           { email: searchRegex },
         ],
       }).select("_id").lean(),
