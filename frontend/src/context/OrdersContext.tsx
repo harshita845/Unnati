@@ -197,13 +197,11 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
   };
 
   const updateOrderStatus = async (id: string, status: Order["status"]) => {
-    // This is likely for cancellation if allowed
     setOrders((prevOrders) =>
       prevOrders.map((order) =>
-        order.id === id ? { ...order, status } : order
+        (order.id === id || (order as any)._id === id) ? { ...order, status } : order
       )
     );
-    // Call API if exists
   };
 
   return (

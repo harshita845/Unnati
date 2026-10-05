@@ -124,7 +124,7 @@ export default function SellerLogin() {
             {/* Header / Logo */}
             <div className="flex flex-col items-center mb-6">
               <img
-                src={config?.appLogo || "/assets/Ecommercestoreslogo.png"}
+                src={config?.appLogo || "/assets/unnati_logo.png"}
                 alt={config?.appName || "Ecommerce"}
                 className="h-16 w-auto object-contain mb-2"
               />

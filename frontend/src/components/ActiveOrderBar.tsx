@@ -11,7 +11,12 @@ const CUSTOMER_STATUS: Record<string, string> = {
   'Picked up': 'Picked up by the delivery partner',
   'Out for Delivery': 'On the way to you',
 };
-const DONE = ['Delivered', 'Cancelled', 'Rejected', 'Returned'];
+const DONE_STATUSES = ['delivered', 'cancelled', 'rejected', 'returned', 'failed'];
+
+const isDone = (status?: string) => {
+  if (!status) return true;
+  return DONE_STATUSES.includes(status.toLowerCase().trim());
+};
 
 /** Shown above the bottom nav on Home while the customer has an order in progress. */
 export default function ActiveOrderBar() {
@@ -31,8 +36,11 @@ export default function ActiveOrderBar() {
 
   if (!isAuthenticated) return null;
   const active = (orders as any[])
-    .filter((o) => !DONE.includes(o.status) && !(o.status === 'Pending' && o.paymentStatus !== 'Paid'))
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    .filter((o) => {
+      const status = o.status || o.orderStatus || '';
+      return !isDone(status) && !(status.toLowerCase() === 'pending' && o.paymentStatus !== 'Paid');
+    })
+    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
   if (!active.length) return null;
   const order = active[0];
 

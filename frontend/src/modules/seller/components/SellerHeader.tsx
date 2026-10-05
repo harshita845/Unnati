@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import EcommerceStoresLogo from '@assets/Ecommercestoreslogo.png';
+import EcommerceStoresLogo from '@assets/unnati_logo.png';
 import { useAuth } from '../../../context/AuthContext';
 import { logout as sellerApiLogout } from '../../../services/api/auth/sellerAuthService';
 import { useAppContext } from '../../../context/AppContext';
@@ -105,7 +105,7 @@ export default function SellerHeader({ onMenuClick, isSidebarOpen }: SellerHeade
             className="hover:opacity-90 transition-opacity flex items-center"
           >
             <img
-              src={config?.appLogo || "/assets/Ecommercestoreslogo.png"}
+              src={config?.appLogo || "/assets/unnati_logo.png"}
               alt={config?.appName || "Ecommerce"}
               className="h-8 w-auto object-contain cursor-pointer"
               style={{ maxWidth: '160px' }}

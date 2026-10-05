@@ -3,18 +3,51 @@ import { useOrders } from '../../hooks/useOrders';
 import { formatAmount } from '../../utils/priceUtils';
 
 
-const getStatusColor = (status: string) => {
+const getCustomerStatusInfo = (status: string) => {
   switch (status) {
-    case 'Delivered':
-      return 'bg-[var(--customer-primary-alpha-20)] text-[var(--customer-primary-dark)]';
-    case 'On the way':
-      return 'bg-[var(--customer-primary-alpha-20)] text-blue-700';
-    case 'Accepted':
-      return 'bg-yellow-100 text-yellow-700';
+    case 'Received':
     case 'Placed':
-      return 'bg-neutral-100 text-neutral-700';
+    case 'Pending':
+      return {
+        label: 'Order Placed',
+        className: 'bg-amber-100 text-amber-800 border border-amber-200/60',
+      };
+    case 'Accepted':
+    case 'Processed':
+      return {
+        label: 'Preparing',
+        className: 'bg-blue-100 text-blue-800 border border-blue-200/60',
+      };
+    case 'Shipped':
+    case 'Picked up':
+    case 'Out for Delivery':
+    case 'On the way':
+      return {
+        label: 'Out for Delivery',
+        className: 'bg-indigo-100 text-indigo-800 border border-indigo-200/60',
+      };
+    case 'Delivered':
+      return {
+        label: 'Delivered',
+        className: 'bg-emerald-100 text-emerald-800 border border-emerald-200/60',
+      };
+    case 'Cancelled':
+    case 'Rejected':
+      return {
+        label: 'Cancelled',
+        className: 'bg-rose-100 text-rose-800 border border-rose-200/60',
+      };
+    case 'Returned':
+    case 'Return Requested':
+      return {
+        label: 'Returned',
+        className: 'bg-gray-100 text-gray-800 border border-gray-200/60',
+      };
     default:
-      return 'bg-neutral-100 text-neutral-700';
+      return {
+        label: status || 'Order Placed',
+        className: 'bg-neutral-100 text-neutral-800 border border-neutral-200/60',
+      };
   }
 };
 
@@ -31,9 +64,6 @@ const formatDate = (dateString: string) => {
 
 export default function Orders() {
   const { orders } = useOrders();
-
-  console.log('📋 Orders component - orders:', orders);
-  console.log('📋 Orders count:', orders.length);
 
   if (orders.length === 0) {
     return (
@@ -60,6 +90,7 @@ export default function Orders() {
       <div className="px-4 md:px-6 lg:px-8 space-y-4 md:space-y-6">
         {orders.map((order) => {
           const shortId = order.orderNumber || order.id.split('-').slice(-1)[0];
+          const statusInfo = getCustomerStatusInfo(order.status);
           return (
             <Link
               key={order.id}
@@ -74,11 +105,9 @@ export default function Orders() {
                   <div className="text-xs text-neutral-500">{formatDate(order.createdAt)}</div>
                 </div>
                 <span
-                  className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                    order.status
-                  )}`}
+                  className={`px-2.5 py-1 rounded-full text-xs font-semibold ${statusInfo.className}`}
                 >
-                  {order.status}
+                  {statusInfo.label}
                 </span>
               </div>
               <div className="flex items-center justify-between">

@@ -1023,10 +1023,10 @@ export default function AdminStockManagement() {
         (product.description || "").toLowerCase().includes(term) ||
         (product.hsnCode || "").toLowerCase().includes(term) ||
         (product.rackNumber || "").toLowerCase().includes(term) ||
-        (product.storageLocation || "").toLowerCase().includes(term) ||
-        (product.storageCity || "").toLowerCase().includes(term) ||
-        (product.storageWarehouse || "").toLowerCase().includes(term) ||
-        (product.storageRoom || "").toLowerCase().includes(term) ||
+        ((product as any).storageLocation || "").toLowerCase().includes(term) ||
+        ((product as any).storageCity || "").toLowerCase().includes(term) ||
+        ((product as any).storageWarehouse || "").toLowerCase().includes(term) ||
+        ((product as any).storageRoom || "").toLowerCase().includes(term) ||
         (product.unit || "").toLowerCase().includes(term) ||
         (product.variation || "").toLowerCase().includes(term) ||
         (product.sizeName || "").toLowerCase().includes(term) ||

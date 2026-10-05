@@ -448,7 +448,7 @@ export default function OrderDetail() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const confirmed = searchParams.get("confirmed") === "true";
-  const { getOrderById, fetchOrderById, loading: contextLoading } = useOrders();
+  const { getOrderById, fetchOrderById, updateOrderStatus, refreshOrders, loading: contextLoading } = useOrders();
   const { config } = useAppContext();
   const [order, setOrder] = useState<any>(id ? getOrderById(id) : undefined);
   const [loading, setLoading] = useState(!order);
@@ -675,6 +675,8 @@ export default function OrderDetail() {
     try {
       await cancelOrder(id, cancellationReason);
       setOrderStatus("Cancelled" as any);
+      updateOrderStatus(id, "Cancelled" as any);
+      await refreshOrders();
       setShowCancelModal(false);
       alert("Order cancelled successfully");
       // Refresh order to get updated status

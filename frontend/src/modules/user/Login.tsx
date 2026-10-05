@@ -108,7 +108,7 @@ export default function Login() {
         <div className="w-full max-w-sm flex flex-col items-center">
           {/* Brand header on desktop */}
           <div className="hidden md:flex flex-col items-center mb-8">
-            <img src={config?.appLogo || "/assets/Ecommercestoreslogo.png"} alt="Logo" className="h-14 w-auto object-contain rounded-md mb-3" />
+            <img src={config?.appLogo || "/assets/unnati_logo.png"} alt="Logo" className="h-14 w-auto object-contain rounded-md mb-3" />
             <h2 className="text-2xl font-bold text-neutral-800">Welcome Back</h2>
             <p className="text-sm text-neutral-500 mt-1">Please login to your account of {config?.appName || 'Ecommerce Stores'}</p>
           </div>

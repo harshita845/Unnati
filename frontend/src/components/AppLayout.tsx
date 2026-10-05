@@ -449,7 +449,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 {/* Logo */}
                 <Link to="/" className="flex-shrink-0 flex items-center">
                   <img
-                    src={config?.appLogo || "/assets/Ecommercestoreslogo.png"}
+                    src={config?.appLogo || "/assets/unnati_logo.png"}
                     alt={config?.appName || "Ecommerce"}
                     className="h-[42px] w-auto object-contain rounded-md"
                   />

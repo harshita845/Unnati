@@ -7,7 +7,7 @@ export default function Footer() {
   const { config } = useAppContext();
 
   // Use dynamic configuration from AppContext
-  const appLogo = config?.appLogo || '/assets/Ecommercestoreslogo.png';
+  const appLogo = config?.appLogo || '/assets/unnati_logo.png';
   const appName = config?.appName || 'Ecommerce Stores';
   // Contact details come from admin settings; a row is hidden when it isn't set
   const contactPhone = config?.contactPhone || '';
@@ -69,7 +69,7 @@ export default function Footer() {
                 alt={appName}
                 className="h-10 w-auto object-contain"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = '/assets/Ecommercestoreslogo.png';
+                  (e.target as HTMLImageElement).src = '/assets/unnati_logo.png';
                 }}
               />
             </div>

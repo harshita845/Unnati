@@ -299,7 +299,7 @@ export default function DeliverySignUp() {
             {/* Header / Logo */}
             <div className="flex flex-col items-center mb-4">
               <img
-                src={config?.appLogo || "/assets/Ecommercestoreslogo.png"}
+                src={config?.appLogo || "/assets/unnati_logo.png"}
                 alt={config?.appName || "Ecommerce"}
                 className="h-12 w-auto object-contain mb-1"
               />

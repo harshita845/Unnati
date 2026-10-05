@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
-import EcommerceStoresLogo from '@assets/Ecommercestoreslogo.png';
+import EcommerceStoresLogo from '@assets/unnati_logo.png';
 import { io, Socket } from 'socket.io-client';
 import { getSocketBaseURL } from '../../../services/api/config';
 import { getNotifications, Notification as AdminNotificationData } from '../../../services/api/admin/adminNotificationService';
@@ -203,7 +203,7 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
               className="hover:opacity-90 transition-opacity flex items-center"
             >
               <img
-                src={config?.appLogo || "/assets/Ecommercestoreslogo.png"}
+                src={config?.appLogo || "/assets/unnati_logo.png"}
                 alt={config?.appName || "Ecommerce"}
                 className="h-8 w-auto object-contain cursor-pointer"
                 style={{ maxWidth: '160px' }}
