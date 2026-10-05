@@ -103,6 +103,22 @@ export default function AdminSellerSubscriptions() {
   const rootCategories = useMemo(() => categories.filter((c: any) => !c.parentId), [categories]);
   const requiredCategories = useMemo(() => rootCategories.filter((c: any) => c.subscriptionEnabled), [rootCategories]);
 
+  // Main categories grouped by header (Grocery, Electronics, ...), so a plan can be applied to
+  // a whole header group in one click instead of checking 20-30 individual categories.
+  const categoriesByHeader = useMemo(() => {
+    const groups = new Map<string, { headerId: string; headerName: string; cats: any[] }>();
+    for (const c of rootCategories as any[]) {
+      // The API populates headerCategoryId with { _id, name } even though the declared type is just a string
+      const raw = c.headerCategoryId;
+      const header = raw && typeof raw === "object" ? raw : null;
+      const headerId = header?._id || (typeof raw === "string" ? raw : "") || "none";
+      const headerName = header?.name || "Other (no header category)";
+      if (!groups.has(headerId)) groups.set(headerId, { headerId, headerName, cats: [] });
+      groups.get(headerId)!.cats.push(c);
+    }
+    return [...groups.values()].sort((a, b) => a.headerName.localeCompare(b.headerName));
+  }, [rootCategories]);
+
   const loadPlans = async () => {
     try {
       const res = await getPlans();
@@ -591,26 +607,72 @@ export default function AdminSellerSubscriptions() {
                 </div>
               </div>
               <div>
-                <label className={labelClass}>Categories this plan covers *</label>
-                <div className="max-h-44 overflow-y-auto border border-neutral-200 rounded-lg p-2 grid sm:grid-cols-2 gap-1">
-                  {rootCategories.map((c: any) => (
-                    <label key={c._id} className="flex items-center gap-2 text-sm px-1 py-0.5">
-                      <input
-                        type="checkbox"
-                        checked={editing.data.categories.includes(c._id)}
-                        onChange={(e) =>
-                          setPlanField({
-                            categories: e.target.checked ? [...editing.data.categories, c._id] : editing.data.categories.filter((id) => id !== c._id),
-                          })
-                        }
-                      />
-                      <span>{c.name}</span>
-                      {c.subscriptionEnabled && <span className="text-[10px] px-1.5 rounded bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]">required</span>}
-                    </label>
-                  ))}
+                <div className="flex items-center justify-between gap-2">
+                  <label className={labelClass}>Categories this plan covers *</label>
+                  <label className="flex items-center gap-1.5 text-xs text-neutral-600 font-medium">
+                    <input
+                      type="checkbox"
+                      checked={rootCategories.length > 0 && editing.data.categories.length === rootCategories.length}
+                      onChange={(e) => setPlanField({ categories: e.target.checked ? rootCategories.map((c: any) => c._id) : [] })}
+                    />
+                    Select all categories
+                  </label>
+                </div>
+                <div className="max-h-56 overflow-y-auto border border-neutral-200 rounded-lg p-2 space-y-2">
+                  {categoriesByHeader.map((group) => {
+                    const ids = group.cats.map((c: any) => c._id);
+                    const selectedCount = ids.filter((id) => editing.data.categories.includes(id)).length;
+                    const allSelected = selectedCount === ids.length;
+                    return (
+                      <div key={group.headerId} className="border border-neutral-100 rounded-lg">
+                        <label className="flex items-center gap-2 text-sm font-semibold bg-neutral-50 px-2 py-1.5 rounded-t-lg">
+                          <input
+                            type="checkbox"
+                            checked={allSelected}
+                            ref={(el) => {
+                              if (el) el.indeterminate = selectedCount > 0 && !allSelected;
+                            }}
+                            onChange={(e) =>
+                              setPlanField({
+                                categories: e.target.checked
+                                  ? [...new Set([...editing.data.categories, ...ids])]
+                                  : editing.data.categories.filter((id) => !ids.includes(id)),
+                              })
+                            }
+                          />
+                          <span>{group.headerName}</span>
+                          <span className="text-xs text-neutral-400 font-normal">
+                            ({selectedCount}/{ids.length} selected — covers every item in these categories)
+                          </span>
+                        </label>
+                        <div className="grid sm:grid-cols-2 gap-1 px-2 py-1.5">
+                          {group.cats.map((c: any) => (
+                            <label key={c._id} className="flex items-center gap-2 text-sm px-1 py-0.5">
+                              <input
+                                type="checkbox"
+                                checked={editing.data.categories.includes(c._id)}
+                                onChange={(e) =>
+                                  setPlanField({
+                                    categories: e.target.checked
+                                      ? [...editing.data.categories, c._id]
+                                      : editing.data.categories.filter((id) => id !== c._id),
+                                  })
+                                }
+                              />
+                              <span>{c.name}</span>
+                              {c.subscriptionEnabled && (
+                                <span className="text-[10px] px-1.5 rounded bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]">required</span>
+                              )}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
                 <p className="text-xs text-neutral-500 mt-1">
-                  Sellers only need a plan for categories marked "Subscription required". GST is added only for categories that bill with a GST invoice.
+                  Checking a category covers every product filed under it, including its subcategories. Sellers only actually need a plan for
+                  categories marked "required" (turned on in Category settings); GST is added only for categories that bill with a GST invoice.
                 </p>
               </div>
               <div className="border border-neutral-200 rounded-lg p-3 space-y-3">

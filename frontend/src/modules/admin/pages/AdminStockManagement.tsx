@@ -1010,13 +1010,31 @@ export default function AdminStockManagement() {
           product.stock !== "Unlimited" &&
           typeof product.stock === "number" &&
           product.stock === 0);
+      const term = (searchTerm || "").trim().toLowerCase();
       const matchesSearch =
-        (product.name || "").toLowerCase().includes((searchTerm || "").toLowerCase()) ||
-        (product.seller || "").toLowerCase().includes((searchTerm || "").toLowerCase()) ||
-        (product.sku || "").toLowerCase().includes((searchTerm || "").toLowerCase()) ||
+        !term ||
+        (product.name || "").toLowerCase().includes(term) ||
+        (product.seller || "").toLowerCase().includes(term) ||
+        (product.sku || "").toLowerCase().includes(term) ||
+        (product.category || "").toLowerCase().includes(term) ||
+        (product.subCategory || "").toLowerCase().includes(term) ||
+        (product.subSubCategory || "").toLowerCase().includes(term) ||
+        (product.brand || "").toLowerCase().includes(term) ||
+        (product.description || "").toLowerCase().includes(term) ||
+        (product.hsnCode || "").toLowerCase().includes(term) ||
+        (product.rackNumber || "").toLowerCase().includes(term) ||
+        (product.storageLocation || "").toLowerCase().includes(term) ||
+        (product.storageCity || "").toLowerCase().includes(term) ||
+        (product.storageWarehouse || "").toLowerCase().includes(term) ||
+        (product.storageRoom || "").toLowerCase().includes(term) ||
+        (product.unit || "").toLowerCase().includes(term) ||
+        (product.variation || "").toLowerCase().includes(term) ||
+        (product.sizeName || "").toLowerCase().includes(term) ||
+        (product.colorName || "").toLowerCase().includes(term) ||
+        (product.attributeName || "").toLowerCase().includes(term) ||
         (Array.isArray(product.barcode)
-          ? product.barcode.some((b: string) => String(b).toLowerCase().includes(searchTerm.toLowerCase()))
-          : (product.barcode && String(product.barcode).toLowerCase().includes(searchTerm.toLowerCase())));
+          ? product.barcode.some((b: string) => String(b).toLowerCase().includes(term))
+          : (product.barcode && String(product.barcode).toLowerCase().includes(term)));
 
       return (
         matchesCategory &&
@@ -1397,18 +1415,19 @@ export default function AdminStockManagement() {
 
                   <div className="relative w-full sm:w-auto flex items-center gap-1">
                     <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 text-xs">
-                        Search:
-                      </span>
+                      <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                      </svg>
                       <input
                         type="text"
-                        className="pl-14 pr-10 py-2 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-[var(--primary-color)] w-full sm:w-48"
+                        className="pl-9 pr-10 py-2 bg-neutral-100 border-none rounded text-sm focus:ring-1 focus:ring-[var(--primary-color)] w-full sm:w-56"
                         value={searchTerm}
                         onChange={(e) => {
                           setSearchTerm(e.target.value);
                           setCurrentPage(1);
                         }}
-                        placeholder="..."
+                        placeholder="Search products..."
                       />
                       <button
                         onClick={() => {

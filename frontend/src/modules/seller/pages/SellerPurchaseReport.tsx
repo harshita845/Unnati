@@ -415,8 +415,7 @@ const SellerPurchaseReport: React.FC = () => {
         <body>
           <div class="header">
             <h1>Ecommerce Purchase Inward</h1>
-            <p>Nagda, Madhya Pradesh, India - 454001<br>Mobile: 7898111456</p>
-          </div>
+            </div>
           <div class="meta">
             <div class="meta-box">
               <h3>Supplier Details</h3>

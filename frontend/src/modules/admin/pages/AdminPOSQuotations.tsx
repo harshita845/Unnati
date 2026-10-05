@@ -611,10 +611,8 @@ const AdminPOSQuotations: React.FC = () => {
         </head>
         <body>
           <div class="top">
-            <h1>Ecommerce</h1>
-            <p>Nagda, Madhya Pradesh, India - 454001</p>
-            <p>Mobile: 7898111456</p>
-          </div>
+            <h1>Unnati</h1>
+            </div>
 
           <div class="meta">
             <div class="box">

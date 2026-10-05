@@ -22,161 +22,8 @@ interface SellerOption {
   sellerName: string;
 }
 
-const DUMMY_SELLERS: SellerOption[] = [
-  { _id: "sel_1", storeName: "Kisan Agri Store", sellerName: "Ramesh Patel" },
-  { _id: "sel_2", storeName: "Bharat Seeds & Pesticides", sellerName: "Sunil Sharma" },
-  { _id: "sel_3", storeName: "Mahalaxmi Bio Fertilizers", sellerName: "Pooja Verma" },
-  { _id: "sel_4", storeName: "Krishi Tools & Sprayers", sellerName: "Mahesh Joshi" },
-  { _id: "sel_5", storeName: "Greenfield Organics", sellerName: "Anil Choudhary" },
-  { _id: "sel_6", storeName: "Ujjain Agro Machinery", sellerName: "Rajesh Solanki" },
-];
-
-const DUMMY_TRANSACTIONS: Transaction[] = [
-  {
-    id: "tx_901001",
-    sellerName: "Kisan Agri Store (Ramesh Patel)",
-    orderId: "ORD-84920",
-    orderItemId: "ITM-10291",
-    productName: "NPK 19:19:19 Soluble Fertilizer 25kg",
-    variation: "25kg Bag",
-    flag: "Paid",
-    amount: 43500.0,
-    remark: "Order delivery completed & commission payout processed",
-    date: "2026-09-08T10:30:00.000Z",
-  },
-  {
-    id: "tx_901002",
-    sellerName: "Bharat Seeds & Pesticides (Sunil Sharma)",
-    orderId: "ORD-84921",
-    orderItemId: "ITM-10292",
-    productName: "Hybrid Bt Cotton Seeds (450g packet)",
-    variation: "450g Pack",
-    flag: "Paid",
-    amount: 39000.0,
-    remark: "Direct seller wallet credit for verified customer order",
-    date: "2026-09-08T09:15:00.000Z",
-  },
-  {
-    id: "tx_901003",
-    sellerName: "Krishi Tools & Sprayers (Mahesh Joshi)",
-    orderId: "ORD-84918",
-    orderItemId: "ITM-10285",
-    productName: "Knapsack Battery Sprayer 16L Dual Motor",
-    variation: "16L / 12V-12Ah",
-    flag: "Pending",
-    amount: 29400.0,
-    remark: "Awaiting final delivery verification scan from delivery boy",
-    date: "2026-09-07T16:45:00.000Z",
-  },
-  {
-    id: "tx_901004",
-    sellerName: "Mahalaxmi Bio Fertilizers (Pooja Verma)",
-    orderId: "ORD-84915",
-    orderItemId: "ITM-10280",
-    productName: "Organic Vermicompost Premium Grade 50kg",
-    variation: "50kg Enriched",
-    flag: "Paid",
-    amount: 27200.0,
-    remark: "Platform settlement for multi-item bulk dispatch",
-    date: "2026-09-07T14:20:00.000Z",
-  },
-  {
-    id: "tx_901005",
-    sellerName: "Greenfield Organics (Anil Choudhary)",
-    orderId: "ORD-84912",
-    orderItemId: "ITM-10274",
-    productName: "Bio-stimulant Plant Growth Tonic 1L",
-    variation: "1 Litre Bottle",
-    flag: "Paid",
-    amount: 18600.0,
-    remark: "Commission payout on successful COD cash collection",
-    date: "2026-09-06T18:00:00.000Z",
-  },
-  {
-    id: "tx_901006",
-    sellerName: "Ujjain Agro Machinery (Rajesh Solanki)",
-    orderId: "ORD-84908",
-    orderItemId: "ITM-10269",
-    productName: "Drip Irrigation Lateral Pipe 16mm (500m)",
-    variation: "500m Roll",
-    flag: "Settled",
-    amount: 38500.0,
-    remark: "Weekly automated bank payout transfer",
-    date: "2026-09-06T11:10:00.000Z",
-  },
-  {
-    id: "tx_901007",
-    sellerName: "Bharat Seeds & Pesticides (Sunil Sharma)",
-    orderId: "ORD-84902",
-    orderItemId: "ITM-10261",
-    productName: "Chlorpyrifos 20% EC Insecticide 5L",
-    variation: "5L Can",
-    flag: "Paid",
-    amount: 22000.0,
-    remark: "Item fulfillment payout credited to seller wallet",
-    date: "2026-09-05T15:30:00.000Z",
-  },
-  {
-    id: "tx_901008",
-    sellerName: "Kisan Agri Store (Ramesh Patel)",
-    orderId: "FND-77102",
-    orderItemId: "MNL-0091",
-    productName: "Manual Wallet Credit Adjustment",
-    variation: "Admin Bonus",
-    flag: "Credit",
-    amount: 5000.0,
-    remark: "Performance incentive & marketing subsidy reimbursement",
-    date: "2026-09-05T10:00:00.000Z",
-  },
-  {
-    id: "tx_901009",
-    sellerName: "Krishi Tools & Sprayers (Mahesh Joshi)",
-    orderId: "ORD-84896",
-    orderItemId: "ITM-10250",
-    productName: "Heavy Duty Brush Cutter 52cc 4-Stroke",
-    variation: "52cc Engine",
-    flag: "Paid",
-    amount: 35600.0,
-    remark: "Direct bank settlement completed",
-    date: "2026-09-04T12:15:00.000Z",
-  },
-  {
-    id: "tx_901010",
-    sellerName: "Greenfield Organics (Anil Choudhary)",
-    orderId: "ORD-84890",
-    orderItemId: "ITM-10242",
-    productName: "Solar Insect Trap Auto LED Unit",
-    variation: "Standard Model",
-    flag: "Pending",
-    amount: 16200.0,
-    remark: "Order in transit with delivery partner",
-    date: "2026-09-03T16:40:00.000Z",
-  },
-  {
-    id: "tx_901011",
-    sellerName: "Mahalaxmi Bio Fertilizers (Pooja Verma)",
-    orderId: "ORD-84882",
-    orderItemId: "ITM-10231",
-    productName: "Zinc Sulphate Monohydrate 33% 25kg",
-    variation: "25kg Bag",
-    flag: "Paid",
-    amount: 14250.0,
-    remark: "Full settlement upon customer delivery confirmation",
-    date: "2026-09-02T13:25:00.000Z",
-  },
-  {
-    id: "tx_901012",
-    sellerName: "Ujjain Agro Machinery (Rajesh Solanki)",
-    orderId: "ORD-84875",
-    orderItemId: "ITM-10219",
-    productName: "Waterproof Tarpaulin Sheet 250 GSM 24x18ft",
-    variation: "24x18 Feet",
-    flag: "Settled",
-    amount: 26250.0,
-    remark: "Settlement cycle payment via NEFT",
-    date: "2026-08-31T17:50:00.000Z",
-  },
-];
+const DUMMY_SELLERS: SellerOption[] = [];
+const DUMMY_TRANSACTIONS: Transaction[] = [];
 
 export default function AdminSellerTransaction() {
   const [fromDate, setFromDate] = useState("");
@@ -206,18 +53,16 @@ export default function AdminSellerTransaction() {
   const fetchSellers = useCallback(async () => {
     try {
       const response = await getSellers();
-      if (response.success && Array.isArray(response.data) && response.data.length > 0) {
+      if (response.success && Array.isArray(response.data)) {
         setSellers(response.data.map((s: any) => ({
           _id: s._id,
           storeName: s.storeName,
           sellerName: s.sellerName
         })));
-        return;
       }
     } catch (error) {
       console.error("Error fetching sellers:", error);
     }
-    setSellers(DUMMY_SELLERS);
   }, []);
 
   const fetchTransactions = useCallback(async () => {
@@ -233,36 +78,20 @@ export default function AdminSellerTransaction() {
       };
 
       const response = await getSellerCommissions(params);
-      if (response.success && Array.isArray(response.data) && response.data.length > 0) {
+      if (response.success && Array.isArray(response.data)) {
         setTransactions(response.data);
         setTotalEntries(response.pagination?.total || response.data.length);
-        localStorage.setItem("admin_seller_transactions_data", JSON.stringify(response.data));
-        return;
+      } else {
+        setTransactions([]);
+        setTotalEntries(0);
       }
     } catch (error) {
       console.error("Error fetching transactions:", error);
+      setTransactions([]);
+      setTotalEntries(0);
     } finally {
       setLoading(false);
     }
-
-    try {
-      const raw = localStorage.getItem("admin_seller_transactions_data");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setTransactions(parsed);
-          setTotalEntries(parsed.length);
-          return;
-        }
-      }
-    } catch {
-      // ignore
-    }
-
-    // Default dummy data fallback
-    setTransactions(DUMMY_TRANSACTIONS);
-    setTotalEntries(DUMMY_TRANSACTIONS.length);
-    localStorage.setItem("admin_seller_transactions_data", JSON.stringify(DUMMY_TRANSACTIONS));
   }, [currentPage, perPage, filterBySeller, searchQuery, fromDate, toDate]);
 
   useEffect(() => {
@@ -273,13 +102,10 @@ export default function AdminSellerTransaction() {
     fetchTransactions();
   }, [fetchTransactions]);
 
-  const handleReloadDemoTransactions = () => {
-    setTransactions(DUMMY_TRANSACTIONS);
-    setTotalEntries(DUMMY_TRANSACTIONS.length);
-    setSellers(DUMMY_SELLERS);
-    localStorage.setItem("admin_seller_transactions_data", JSON.stringify(DUMMY_TRANSACTIONS));
-    setCurrentPage(1);
-    toast.success("Demo seller transactions loaded successfully");
+  const handleRefreshTransactions = () => {
+    fetchSellers();
+    fetchTransactions();
+    toast.success("Transactions refreshed from database");
   };
 
   const handleClear = () => {
@@ -480,14 +306,14 @@ export default function AdminSellerTransaction() {
 
         <div className="flex flex-wrap items-center gap-2 self-stretch md:self-auto">
           <button
-            onClick={handleReloadDemoTransactions}
+            onClick={handleRefreshTransactions}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 active:scale-95 transition-all shadow-sm"
-            title="Reset and reload dummy transactions"
+            title="Refresh transaction data from database"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            Reload Dummy Data
+            Refresh Real Data
           </button>
           <button
             onClick={handleAddFundTransfer}
@@ -712,12 +538,12 @@ export default function AdminSellerTransaction() {
                         </svg>
                       </div>
                       <p className="font-bold text-neutral-700 text-sm">No transactions found</p>
-                      <p className="text-xs text-neutral-400 mt-1">Try adjusting search filters or reload demo data.</p>
+                      <p className="text-xs text-neutral-400 mt-1">Try adjusting search filters or refresh data.</p>
                       <button
-                        onClick={handleReloadDemoTransactions}
+                        onClick={fetchTransactions}
                         className="mt-4 px-4 py-2 bg-[var(--primary-color)] text-white text-xs font-bold rounded-xl hover:bg-[var(--primary-dark)] active:scale-95 transition-all shadow-sm"
                       >
-                        Load Demo Data
+                        Refresh Real Data
                       </button>
                     </div>
                   </td>

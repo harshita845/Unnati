@@ -25,13 +25,14 @@ export default function CheckoutAddress() {
     name: editAddress?.name || '',
     phone: editAddress?.phone || '',
     flat: editAddress?.flat || '',
+    // New address: start from the customer's current delivery location, never a fixed city
     street: editAddress?.street || '',
-    city: editAddress?.city || 'Indore',
-    pincode: editAddress?.pincode || '',
-    state: editAddress?.state || '',
+    city: editAddress?.city || userLocation?.city || '',
+    pincode: editAddress?.pincode || userLocation?.pincode || '',
+    state: editAddress?.state || userLocation?.state || '',
     landmark: editAddress?.landmark || '',
-    latitude: editAddress?.latitude,
-    longitude: editAddress?.longitude,
+    latitude: editAddress?.latitude ?? userLocation?.latitude,
+    longitude: editAddress?.longitude ?? userLocation?.longitude,
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof OrderAddress, string>>>({});
@@ -121,7 +122,7 @@ export default function CheckoutAddress() {
         phone: editAddress.phone || '',
         flat: editAddress.flat || '',
         street: editAddress.street || '',
-        city: editAddress.city || 'Indore',
+        city: editAddress.city || userLocation?.city || '',
         pincode: editAddress.pincode || '',
         state: editAddress.state || '',
         landmark: editAddress.landmark || '',

@@ -45,12 +45,13 @@ const parsePlanBody = async (body: any) => {
   const durationUnit = String(body.durationUnit || "");
   if (!(PLAN_DURATION_UNITS as readonly string[]).includes(durationUnit)) errors.push("Duration unit must be day, month or year");
 
+  // Plans cover main (top-level) categories only — a subcategory always follows its main category
   const categoryIds: string[] = Array.isArray(body.categories) ? body.categories.map(String) : [];
   if (!categoryIds.length) errors.push("Select at least one category");
   if (categoryIds.some((id) => !mongoose.isValidObjectId(id))) errors.push("Invalid category selected");
   else if (categoryIds.length) {
-    const found = await Category.countDocuments({ _id: { $in: categoryIds } });
-    if (found !== new Set(categoryIds).size) errors.push("One or more categories no longer exist");
+    const found = await Category.countDocuments({ _id: { $in: categoryIds }, parentId: null });
+    if (found !== new Set(categoryIds).size) errors.push("Plans can only cover main categories, not subcategories");
   }
 
   const features = (Array.isArray(body.features) ? body.features : [])

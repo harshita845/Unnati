@@ -9,6 +9,7 @@ import { useDeliveryTracking } from "../../hooks/useDeliveryTracking";
 import DeliveryPartnerCard from "../../components/DeliveryPartnerCard";
 import { cancelOrder, updateOrderNotes, getSellerLocationsForOrder, refreshDeliveryOtp, requestReturnOrReplace } from "../../services/api/customerOrderService";
 import { uploadImage } from "../../services/api/uploadService";
+import { useAppContext } from "../../context/AppContext";
 
 // Icon Components
 const ArrowLeftIcon = ({ className }: { className?: string }) => (
@@ -448,6 +449,7 @@ export default function OrderDetail() {
   const [searchParams] = useSearchParams();
   const confirmed = searchParams.get("confirmed") === "true";
   const { getOrderById, fetchOrderById, loading: contextLoading } = useOrders();
+  const { config } = useAppContext();
   const [order, setOrder] = useState<any>(id ? getOrderById(id) : undefined);
   const [loading, setLoading] = useState(!order);
 
@@ -638,7 +640,7 @@ export default function OrderDetail() {
   const handleShare = async () => {
     const shareData = {
       title: `Order #${(order?.orderNumber || order?.id?.split("-").slice(-1)[0])}`,
-      text: `Track my Ecommerce order: Order #${
+      text: `Track my ${config?.appName || ""} order: Order #${
         (order?.orderNumber || order?.id?.split("-").slice(-1)[0])
       }`,
       url: window.location.href,
@@ -935,7 +937,7 @@ export default function OrderDetail() {
               <ArrowLeftIcon className="w-6 h-6" />
             </motion.button>
           </Link>
-          <h2 className="font-semibold text-lg">Ecommerce</h2>
+          <h2 className="font-semibold text-lg">{config?.appName || "Order details"}</h2>
           <motion.button
             className="w-10 h-10 flex items-center justify-center"
             whileTap={{ scale: 0.9 }}
@@ -979,31 +981,32 @@ export default function OrderDetail() {
       </motion.div>
 
       {/* Map Section */}
-      {!showConfirmation && (
+      {!showConfirmation && (() => {
+        // 0/missing means this address was never geocoded — never fall back to a real city's
+        // coordinates (e.g. New Delhi); just don't claim a location we don't actually have.
+        const custLat = order?.deliveryAddress?.latitude || order?.address?.latitude || 0;
+        const custLng = order?.deliveryAddress?.longitude || order?.address?.longitude || 0;
+        const hasCustomerCoords = !!custLat && !!custLng;
+        return (
         <GoogleMapsTracking
           sellerLocations={sellerLocations.map(s => ({
             lat: s.latitude,
             lng: s.longitude,
             name: s.storeName
           }))}
-          customerLocation={{
-            lat: order?.deliveryAddress?.latitude || order?.address?.latitude || 28.7041,
-            lng: order?.deliveryAddress?.longitude || order?.address?.longitude || 77.1025,
-          }}
+          customerLocation={{ lat: custLat, lng: custLng }}
           deliveryLocation={deliveryLocation || undefined}
           isTracking={isConnected && !!deliveryLocation}
           showRoute={
             isConnected &&
             !!deliveryLocation &&
+            hasCustomerCoords &&
             order?.status !== 'Delivered' &&
             order?.status !== 'Cancelled' &&
             order?.status !== 'Returned'
           }
           routeOrigin={deliveryLocation || undefined}
-          routeDestination={{
-            lat: order?.deliveryAddress?.latitude || order?.address?.latitude || 28.7041,
-            lng: order?.deliveryAddress?.longitude || order?.address?.longitude || 77.1025,
-          }}
+          routeDestination={hasCustomerCoords ? { lat: custLat, lng: custLng } : undefined}
           routeWaypoints={
             order?.status === 'Picked up' || order?.status === 'Out for Delivery'
               ? []
@@ -1022,7 +1025,8 @@ export default function OrderDetail() {
           onRouteInfoUpdate={setRouteInfo}
           lastUpdate={lastUpdate}
         />
-      )}
+        );
+      })()}
 
       {/* Tracking Error Display */}
       {trackingError && (

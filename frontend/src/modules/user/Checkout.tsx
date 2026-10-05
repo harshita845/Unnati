@@ -331,7 +331,7 @@ export default function Checkout() {
 
   const discountedTotal = displayCart.total;
   const savedAmount = itemsTotal - discountedTotal;
-  const handlingCharge = 0;
+  const handlingCharge = config.platformFee || 0;
   const deliveryCharge = displayCart.total >= config.freeDeliveryThreshold ? 0 : config.deliveryFee;
 
   // Recalculate or use validated discount
@@ -1609,6 +1609,14 @@ export default function Checkout() {
                     )}
                   </div>
                 </div>
+
+                {/* Platform Fee */}
+                {handlingCharge > 0 && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs md:text-sm text-neutral-700 font-normal">Platform Fee</span>
+                    <span className="text-xs md:text-sm font-medium text-neutral-900">₹{handlingCharge}</span>
+                  </div>
+                )}
 
                 {/* First order offer */}
                 {firstOrderDiscount > 0 && (

@@ -392,13 +392,16 @@ export const getHomeContent = async (req: Request, res: Response) => {
 
     const userCity = req.query.city ? String(req.query.city).trim() : null;
 
-    if (locationProvided) {
-      const nonAdminNearbyIds = nearbySellerIds.filter(
-        (id) => !adminSellerIds.includes(id.toString())
-      );
+    const nonAdminNearbyIds = nearbySellerIds.filter(
+      (id) => !adminSellerIds.includes(id.toString())
+    );
+
+    if (locationProvided && nonAdminNearbyIds.length > 0) {
       shopSellerQuery._id = { $in: nonAdminNearbyIds };
     } else if (userCity) {
       shopSellerQuery.city = { $regex: new RegExp(`^${userCity}$`, "i") };
+    } else if (locationProvided) {
+      shopSellerQuery._id = { $in: nonAdminNearbyIds };
     } else {
       // Location unknown: no stores (never default to another city)
       shopSellerQuery._id = { $in: [] };

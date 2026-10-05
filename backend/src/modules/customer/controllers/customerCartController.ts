@@ -66,13 +66,10 @@ export const getCart = async (req: Request, res: Response) => {
         const userLat = latitude ? parseFloat(latitude as string) : null;
         const userLng = longitude ? parseFloat(longitude as string) : null;
 
-        let nearbySellerIds: mongoose.Types.ObjectId[] = [];
-        let locationProvided = false;
-
-        if (userLat !== null && userLng !== null && !isNaN(userLat) && !isNaN(userLng)) {
-             nearbySellerIds = await findSellersWithinRange(userLat, userLng);
-             locationProvided = true;
-        }
+        // findSellersWithinRange returns [] for missing/invalid coordinates, so with no
+        // location every item is correctly hidden here too (matching the wishlist and every
+        // product listing) instead of showing items from every city until location is known.
+        const nearbySellerIds = await findSellersWithinRange(userLat as number, userLng as number);
 
         let visibleSellerIds: string[] = [];
         try {
@@ -111,15 +108,11 @@ export const getCart = async (req: Request, res: Response) => {
                     continue;
                 }
 
-                let isAvailable = true;
-
-                if (locationProvided) {
-                    const sellerId = product.seller.toString();
-                    const isVisible = visibleSellerIds.includes(sellerId);
-                    const isNearby = nearbySellerIds.some(id => id.toString() === sellerId);
-                    // Items from stores that don't deliver to the current location are not shown
-                    isAvailable = isVisible && isNearby;
-                }
+                const sellerId = product.seller.toString();
+                const isVisible = visibleSellerIds.includes(sellerId);
+                const isNearby = nearbySellerIds.some(id => id.toString() === sellerId);
+                // Items from stores that don't deliver to the current (or unknown) location are not shown
+                const isAvailable = isVisible && isNearby;
 
                 if (isAvailable) {
                     filteredItems.push(enrichCartItemProduct(product, item));

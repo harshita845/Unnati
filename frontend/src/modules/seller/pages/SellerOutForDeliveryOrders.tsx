@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { getOrders, Order, GetOrdersParams } from '../../../services/api/orderService';
 import ThemedDropdown from '../components/ThemedDropdown';
+import { useSellerOrderUpdates } from '../hooks/useSellerOrderUpdates';
 
 type SortField = 'orderId' | 'customerName' | 'deliveryBoyName' | 'deliveryDate' | 'orderDate' | 'status' | 'amount';
 type SortDirection = 'asc' | 'desc';
@@ -131,6 +132,8 @@ export default function SellerOutForDeliveryOrders() {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<SortField | null>('orderDate');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  // New orders and status changes from the server refresh the list
+  const orderUpdateTick = useSellerOrderUpdates();
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -170,7 +173,7 @@ export default function SellerOutForDeliveryOrders() {
       }
     };
     fetchOrders();
-  }, [dateRange, searchQuery, sortField, sortDirection]);
+  }, [dateRange, searchQuery, sortField, sortDirection, orderUpdateTick]);
 
   const handleClearDate = () => {
     setDateRange('');

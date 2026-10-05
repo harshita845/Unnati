@@ -15,6 +15,10 @@ export interface HeaderCategory {
     relatedCategory?: string;
     status: 'Published' | 'Unpublished';
     order?: number;
+    /** Does any main category under this header need a paid seller plan? */
+    subscriptionRequired?: boolean;
+    /** Cheapest active plan price covering it, when subscriptionRequired is true */
+    subscriptionFromPrice?: number | null;
 }
 
 const HEADER_CATEGORIES_CACHE_KEY = 'header-categories-public';

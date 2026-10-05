@@ -72,7 +72,7 @@ export interface OrderDetail {
   orderDate: string;
   deliveryDate: string;
   timeSlot: string;
-  status: 'Out For Delivery' | 'Received' | 'Payment Pending' | 'Cancelled' | 'Rejected';
+  status: string;
   customerName: string;
   customerEmail: string;
   customerPhone: string;
@@ -85,10 +85,38 @@ export interface OrderDetail {
   paymentMethod: string;
   paymentStatus: string;
   deliveryAddress: DeliveryAddress;
+  /** This store's part of the flow; null for POS orders */
+  sellerProgress?: SellerOrderProgress | null;
+  pickupVerifiedAt?: string | null;
+  /** The store's own details for the invoice header */
+  store?: StoreDetails | null;
 }
 
+export interface SellerOrderProgress {
+  acceptedAt: string | null;
+  readyAt: string | null;
+  totalStores: number;
+  storesAccepted: number;
+  storesReady: number;
+}
+
+export interface StoreDetails {
+  storeName?: string;
+  sellerName?: string;
+  mobile?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  taxName?: string;
+  taxNumber?: string;
+  fssaiLicNo?: string;
+  logo?: string;
+}
+
+/** Store actions: delivery itself is done by the delivery partner */
 export interface UpdateOrderStatusData {
-  status: 'Accepted' | 'On the way' | 'Processed' | 'Out for Delivery' | 'Delivered' | 'Cancelled';
+  status: 'Accepted' | 'Ready for pickup' | 'Rejected' | 'Cancelled';
+  reason?: string;
 }
 
 export interface GetOrdersParams {
@@ -131,8 +159,11 @@ export const getOrderById = async (id: string): Promise<ApiResponse<OrderDetail>
 /**
  * Update order status
  */
-export const updateOrderStatus = async (id: string, data: UpdateOrderStatusData): Promise<ApiResponse<{ id: string; status: string }>> => {
-  const response = await api.patch<ApiResponse<{ id: string; status: string }>>(`/orders/${id}/status`, data);
+export const updateOrderStatus = async (
+  id: string,
+  data: UpdateOrderStatusData
+): Promise<ApiResponse<{ id: string; status: string; sellerProgress?: SellerOrderProgress | null }>> => {
+  const response = await api.patch<ApiResponse<{ id: string; status: string; sellerProgress?: SellerOrderProgress | null }>>(`/orders/${id}/status`, data);
   return response.data;
 };
 

@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { useAppContext } from '../context/AppContext';
+import { getCategories } from '../services/api/customerProductService';
 
 export default function Footer() {
   const { config } = useAppContext();
@@ -7,9 +9,26 @@ export default function Footer() {
   // Use dynamic configuration from AppContext
   const appLogo = config?.appLogo || '/assets/Ecommercestoreslogo.png';
   const appName = config?.appName || 'Ecommerce Stores';
-  const contactPhone = config?.contactPhone || '+91 98765 43210';
-  const contactEmail = config?.contactEmail || 'support@example.com';
-  const address = config?.address || '123, Mall Road, Sector 15, Indore, MP, India';
+  // Contact details come from admin settings; a row is hidden when it isn't set
+  const contactPhone = config?.contactPhone || '';
+  const contactEmail = config?.contactEmail || '';
+  const address = config?.address || '';
+
+  // Categories from the catalogue (not a fixed list)
+  const [categories, setCategories] = useState<Array<{ id: string; name: string; slug?: string }>>([]);
+  useEffect(() => {
+    let cancelled = false;
+    getCategories()
+      .then((res: any) => {
+        if (cancelled) return;
+        const list = (res?.data || []).filter((c: any) => !c.parentId).slice(0, 6);
+        setCategories(list.map((c: any) => ({ id: String(c._id || c.id), name: c.name, slug: c.slug })));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <footer className="hidden md:block w-full relative bg-[#090b09] text-neutral-300 pt-20 pb-8 font-sans overflow-hidden mt-12 shadow-lg md:-mx-[50px] md:w-[calc(100%+100px)]">
@@ -138,21 +157,11 @@ export default function Footer() {
               <h4 className="text-sm font-bold text-white tracking-wider uppercase">Categories</h4>
             </div>
             <ul className="flex flex-col gap-2.5 text-sm font-medium">
-              <li>
-                <Link to="/category/home-decoration" className="hover:text-white transition-colors duration-200">Home Decoration</Link>
-              </li>
-              <li>
-                <Link to="/category/mosquito-net-machhar-dani" className="hover:text-white transition-colors duration-200">Mosquito Net & Machhar Dani</Link>
-              </li>
-              <li>
-                <Link to="/category/water-can-or-water-bottel" className="hover:text-white transition-colors duration-200">Water Can Or Water Bottel</Link>
-              </li>
-              <li>
-                <Link to="/category/towels" className="hover:text-white transition-colors duration-200">Towels</Link>
-              </li>
-              <li>
-                <Link to="/category/jhande" className="hover:text-white transition-colors duration-200">Jhande</Link>
-              </li>
+              {categories.map((cat) => (
+                <li key={cat.id}>
+                  <Link to={`/category/${cat.slug || cat.id}`} className="hover:text-white transition-colors duration-200">{cat.name}</Link>
+                </li>
+              ))}
             </ul>
           </div>
 
@@ -165,6 +174,7 @@ export default function Footer() {
             <div className="flex flex-col gap-3">
               
               {/* Address */}
+              {address && (
               <div className="flex items-start gap-3">
                 <div className="w-9 h-9 rounded-lg bg-neutral-800/60 border border-neutral-700/50 flex items-center justify-center flex-shrink-0 text-neutral-300">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -181,8 +191,10 @@ export default function Footer() {
                   {address}
                 </a>
               </div>
+              )}
 
               {/* Phone */}
+              {contactPhone && (
               <div className="flex items-start gap-3">
                 <div className="w-9 h-9 rounded-lg bg-neutral-800/60 border border-neutral-700/50 flex items-center justify-center flex-shrink-0 text-neutral-300">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -193,8 +205,10 @@ export default function Footer() {
                   {contactPhone}
                 </a>
               </div>
+              )}
 
               {/* Email */}
+              {contactEmail && (
               <div className="flex items-start gap-3">
                 <div className="w-9 h-9 rounded-lg bg-neutral-800/60 border border-neutral-700/50 flex items-center justify-center flex-shrink-0 text-neutral-300">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -206,6 +220,7 @@ export default function Footer() {
                   {contactEmail}
                 </a>
               </div>
+              )}
 
             </div>
           </div>

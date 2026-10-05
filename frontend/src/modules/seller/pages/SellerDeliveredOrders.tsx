@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { getOrders, Order, GetOrdersParams } from '../../../services/api/orderService';
 import ThemedDropdown from '../components/ThemedDropdown';
+import { useSellerOrderUpdates } from '../hooks/useSellerOrderUpdates';
 
 type SortField = 'orderId' | 'deliveryDate' | 'orderDate' | 'status' | 'amount';
 type SortDirection = 'asc' | 'desc';
@@ -18,7 +19,9 @@ export default function SellerDeliveredOrders() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<SortField | null>(null);
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  // New orders and status changes from the server refresh the list
+  const orderUpdateTick = useSellerOrderUpdates();
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -42,7 +45,7 @@ export default function SellerDeliveredOrders() {
       } catch (err: any) { setError(err.response?.data?.message || err.message || 'Failed to fetch orders'); } finally { setLoading(false); }
     };
     fetchOrders();
-  }, [dateRange, entriesPerPage, searchQuery, currentPage, sortField, sortDirection]);
+  }, [dateRange, entriesPerPage, searchQuery, currentPage, sortField, sortDirection, orderUpdateTick]);
 
   const handleClearDate = () => { setDateRange(''); setCurrentPage(1); };
   const handleSort = (field: SortField) => { if (sortField === field) { setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc'); } else { setSortField(field); setSortDirection('asc'); } };

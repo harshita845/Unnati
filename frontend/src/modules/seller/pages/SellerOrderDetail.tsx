@@ -1,16 +1,35 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { getOrderById, updateOrderStatus, OrderDetail } from '../../../services/api/orderService';
+import { useState, useEffect, useCallback } from 'react';
+import { getOrderById, updateOrderStatus, OrderDetail, UpdateOrderStatusData } from '../../../services/api/orderService';
 import jsPDF from 'jspdf';
 import Code128Barcode, { code128DataUrl } from '../../../components/Code128Barcode';
+import { useSellerOrderUpdates } from '../hooks/useSellerOrderUpdates';
 
-// Values are Order statuses; labels are what the seller sees
-const SELLER_STATUS_OPTIONS = [
-  { value: 'Processed', label: 'Accepted' },
-  { value: 'Out for Delivery', label: 'On the way' },
-  { value: 'Delivered', label: 'Delivered' },
-  { value: 'Cancelled', label: 'Cancelled' },
-];
+// What the store sees for each order status
+const STATUS_LABEL: Record<string, string> = {
+  Pending: 'Payment pending',
+  Received: 'New order',
+  Processed: 'Accepted',
+  'Ready for pickup': 'Ready for pickup',
+  'Picked up': 'Picked up',
+  'Out for Delivery': 'On the way',
+  'Out For Delivery': 'On the way',
+  Delivered: 'Delivered',
+  Cancelled: 'Cancelled',
+  Rejected: 'Rejected',
+  Returned: 'Returned',
+};
+const FLOW_STEPS = ['New order', 'Accepted', 'Ready for pickup', 'Picked up', 'On the way', 'Delivered'];
+const FLOW_INDEX: Record<string, number> = {
+  Received: 0,
+  Processed: 1,
+  'Ready for pickup': 2,
+  'Picked up': 3,
+  'Out for Delivery': 4,
+  'Out For Delivery': 4,
+  Delivered: 5,
+};
+const FINAL_STATUSES = ['Delivered', 'Cancelled', 'Rejected', 'Returned'];
 
 export default function SellerOrderDetail() {
   const { id } = useParams<{ id: string }>();
@@ -18,48 +37,65 @@ export default function SellerOrderDetail() {
   const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const [orderStatus, setOrderStatus] = useState<string>('Out For Delivery');
+  const [orderStatus, setOrderStatus] = useState<string>('');
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // Refreshes when the server reports a change to this order (rider accepted, picked up, ...)
+  const updateTick = useSellerOrderUpdates(id, 15000);
 
-  // Fetch order detail from API
-  useEffect(() => {
-    const fetchOrderDetail = async () => {
+  const loadOrder = useCallback(
+    async (silent: boolean) => {
       if (!id) return;
-
-      setLoading(true);
-      setError('');
+      if (!silent) {
+        setLoading(true);
+        setError('');
+      }
       try {
         const response = await getOrderById(id);
         if (response.success && response.data) {
           setOrderDetail(response.data);
           setOrderStatus(response.data.status);
-        } else {
+        } else if (!silent) {
           setError(response.message || 'Failed to fetch order details');
         }
       } catch (err: any) {
-        setError(err.response?.data?.message || err.message || 'Failed to fetch order details');
+        if (!silent) setError(err.response?.data?.message || err.message || 'Failed to fetch order details');
       } finally {
-        setLoading(false);
+        if (!silent) setLoading(false);
       }
-    };
+    },
+    [id]
+  );
 
-    fetchOrderDetail();
-  }, [id]);
+  useEffect(() => {
+    loadOrder(false);
+  }, [loadOrder]);
 
-  // Handle status update
-  const handleStatusUpdate = async (newStatus: string) => {
-    if (!orderDetail) return;
+  useEffect(() => {
+    if (updateTick > 0) loadOrder(true);
+  }, [updateTick, loadOrder]);
 
+  // Store actions: Accept, Ready for pickup, Reject, Cancel
+  const handleStatusUpdate = async (newStatus: UpdateOrderStatusData['status']) => {
+    if (!orderDetail || actionBusy) return;
+    if (newStatus === 'Rejected' && !window.confirm('Reject this order? The customer will be told the store could not take it.')) return;
+    if (newStatus === 'Cancelled' && !window.confirm('Cancel this order? This cannot be undone.')) return;
+
+    setActionBusy(true);
+    setActionMessage(null);
     try {
-      const response = await updateOrderStatus(orderDetail.id, { status: newStatus as any });
+      const response = await updateOrderStatus(orderDetail.id, { status: newStatus });
       if (response.success) {
-        const savedStatus = response.data?.status || newStatus;
-        setOrderStatus(savedStatus);
-        setOrderDetail({ ...orderDetail, status: savedStatus as any });
+        setActionMessage({ type: 'success', text: response.message || 'Order updated' });
+        await loadOrder(true);
       } else {
-        alert('Failed to update order status');
+        setActionMessage({ type: 'error', text: response.message || 'Failed to update order' });
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to update order status');
+      setActionMessage({ type: 'error', text: err.response?.data?.message || 'Failed to update order' });
+      await loadOrder(true);
+    } finally {
+      setActionBusy(false);
     }
   };
 
@@ -120,6 +156,18 @@ export default function SellerOrderDetail() {
     return `${day}${suffix} ${month}, ${year}`;
   };
 
+  const store = orderDetail.store || {};
+  const storeName = store.storeName || store.sellerName || '';
+  const storeAddress = [store.address, store.city].filter(Boolean).join(', ');
+  const storeTax = store.taxNumber ? `${store.taxName || 'GSTIN'}: ${store.taxNumber}` : '';
+  const storeLines = [
+    storeAddress,
+    store.mobile ? `Phone: ${store.mobile}` : '',
+    store.email ? `Email: ${store.email}` : '',
+    storeTax,
+    store.fssaiLicNo ? `FSSAI: ${store.fssaiLicNo}` : '',
+  ].filter(Boolean);
+
   const handleExportPDF = async () => {
     if (!orderDetail) return;
     const pickupBarcode = await code128DataUrl(orderDetail.orderNumber);
@@ -148,27 +196,25 @@ export default function SellerOrderDetail() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text('Ecommerce - 10 Minute App', margin + 5, yPos + 10);
+    doc.text(storeName || 'Tax Invoice', margin + 5, yPos + 10);
 
     yPos += 20;
 
-    // Company Details
+    // Store details (from the store's profile)
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('Ecommerce - 10 Minute App', margin, yPos);
+    doc.text(storeName, margin, yPos);
     yPos += 7;
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text('From: Ecommerce - 10 Minute App', margin, yPos);
+    // Keep the right-hand invoice block aligned: always reserve 4 lines
+    for (let i = 0; i < 4; i++) {
+      if (storeLines[i]) doc.text(storeLines[i].slice(0, 60), margin, yPos);
+      yPos += 6;
+    }
     yPos += 6;
-    doc.text('Phone: 8956656429', margin, yPos);
-    yPos += 6;
-    doc.text('Email: info@Ecommerce.com', margin, yPos);
-    yPos += 6;
-    doc.text('Website: https://Ecommerce.com', margin, yPos);
-    yPos += 12;
 
     // Invoice Details (Right aligned)
     const rightX = pageWidth - margin;
@@ -185,12 +231,13 @@ export default function SellerOrderDetail() {
     doc.text(`Time Slot: ${orderDetail.timeSlot}`, rightX, yPos - 2, { align: 'right' });
 
     // Status badge
-    const statusWidth = doc.getTextWidth(orderStatus) + 8;
+    const statusText = STATUS_LABEL[orderStatus] || orderStatus;
+    const statusWidth = doc.getTextWidth(statusText) + 8;
     doc.setFillColor(59, 130, 246); // Blue for status
     doc.roundedRect(rightX - statusWidth, yPos + 2, statusWidth, 6, 1, 1, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(9);
-    doc.text(orderStatus, rightX - statusWidth / 2, yPos + 5.5, { align: 'center' });
+    doc.text(statusText, rightX - statusWidth / 2, yPos + 5.5, { align: 'center' });
 
     yPos += 15;
     doc.setTextColor(0, 0, 0);
@@ -323,11 +370,7 @@ export default function SellerOrderDetail() {
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 100, 100);
-    doc.text('Bill Generated by Ecommerce - 10 Minute App', pageWidth / 2, yPos, { align: 'center' });
-    yPos += 8;
-
-    doc.setFontSize(8);
-    doc.text('Copyright © 2025. Developed By Ecommerce - 10 Minute App', pageWidth / 2, yPos, { align: 'center' });
+    doc.text(storeName ? `Bill generated by ${storeName}` : 'Computer generated bill', pageWidth / 2, yPos, { align: 'center' });
 
     // Save the PDF
     const fileName = `Invoice_${orderDetail.invoiceNumber}_${orderDetail.id}.pdf`;
@@ -381,8 +424,140 @@ export default function SellerOrderDetail() {
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-8">
-      {/* Pickup verification: rider must scan this or enter the code before collecting the package */}
-      {orderDetail.orderNumber && !['Delivered', 'Cancelled', 'Rejected', 'Returned'].includes(orderDetail.status) && (
+      {/* Order progress + what the store should do next */}
+      <div className="bg-white mb-6 rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
+        <div className="bg-[var(--primary-dark)] text-white px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+          <h2 className="text-base sm:text-lg font-semibold">Order #{orderDetail.orderNumber}</h2>
+          <span className="text-xs sm:text-sm bg-white/15 px-3 py-1 rounded-full">{STATUS_LABEL[orderStatus] || orderStatus}</span>
+        </div>
+        <div className="px-4 sm:px-6 py-5 space-y-5">
+          {FLOW_INDEX[orderStatus] !== undefined && (
+            <ol className="grid grid-cols-6 gap-1 text-center">
+              {FLOW_STEPS.map((step, index) => {
+                const done = index <= FLOW_INDEX[orderStatus];
+                return (
+                  <li key={step} className="flex flex-col items-center gap-1">
+                    <span
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                        done ? 'bg-[var(--primary-dark)] text-white' : 'bg-neutral-100 text-neutral-400 border border-neutral-200'
+                      }`}
+                    >
+                      {done ? '✓' : index + 1}
+                    </span>
+                    <span className={`text-[10px] sm:text-xs leading-tight ${done ? 'text-neutral-900 font-medium' : 'text-neutral-400'}`}>{step}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+
+          {(() => {
+            const progress = orderDetail.sellerProgress;
+            const accepted = !!progress?.acceptedAt || ['Processed', 'Ready for pickup'].includes(orderStatus);
+            const ready = !!progress?.readyAt || orderStatus === 'Ready for pickup';
+            const multiStore = (progress?.totalStores || 1) > 1;
+            const rider = orderDetail.deliveryBoyName
+              ? `${orderDetail.deliveryBoyName}${orderDetail.deliveryBoyPhone ? ` (${orderDetail.deliveryBoyPhone})` : ''}`
+              : '';
+            const primaryBtn =
+              'px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-[var(--primary-dark)] hover:bg-[var(--primary-darker)] disabled:opacity-50';
+            const dangerBtn =
+              'px-5 py-2.5 rounded-lg text-sm font-semibold text-red-700 bg-white border border-red-300 hover:bg-red-50 disabled:opacity-50';
+
+            if (orderStatus === 'Pending') {
+              return <p className="text-sm text-orange-700">Waiting for the customer's online payment. You can accept it once it is paid.</p>;
+            }
+            if (FINAL_STATUSES.includes(orderStatus)) {
+              return <p className="text-sm text-neutral-600">This order is {(STATUS_LABEL[orderStatus] || orderStatus).toLowerCase()}. No further action needed.</p>;
+            }
+            if (orderStatus === 'Received' && !accepted) {
+              return (
+                <div className="space-y-3">
+                  <p className="text-sm text-neutral-700">New order. Accept it to start packing; a delivery partner is assigned after you accept.</p>
+                  <div className="flex flex-wrap gap-3">
+                    <button disabled={actionBusy} onClick={() => handleStatusUpdate('Accepted')} className={primaryBtn}>
+                      Accept order
+                    </button>
+                    <button disabled={actionBusy} onClick={() => handleStatusUpdate('Rejected')} className={dangerBtn}>
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+            if (orderStatus === 'Received' && accepted) {
+              return (
+                <div className="space-y-3">
+                  <p className="text-sm text-neutral-700">
+                    You accepted. Waiting for the other store(s) in this order ({progress?.storesAccepted}/{progress?.totalStores} accepted).
+                  </p>
+                  <button disabled={actionBusy} onClick={() => handleStatusUpdate('Cancelled')} className={dangerBtn}>
+                    Cancel order
+                  </button>
+                </div>
+              );
+            }
+            if (['Processed', 'Ready for pickup'].includes(orderStatus)) {
+              return (
+                <div className="space-y-3">
+                  <p className="text-sm text-neutral-700">
+                    {ready
+                      ? multiStore && orderStatus !== 'Ready for pickup'
+                        ? `Packed. Waiting for the other store(s) to pack (${progress?.storesReady}/${progress?.totalStores} ready).`
+                        : 'Packed and ready. Hand it over when the delivery partner shows the pickup code.'
+                      : 'Accepted. Pack the items, then mark the order ready for pickup.'}
+                  </p>
+                  {/* Riders are only offered the order once it's Ready for pickup, not while it's being packed */}
+                  {orderStatus === 'Ready for pickup' && (
+                    <p className="text-sm text-neutral-500">
+                      {rider ? `Delivery partner: ${rider}` : 'Finding a delivery partner near your store…'}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-3">
+                    {!ready && (
+                      <button disabled={actionBusy} onClick={() => handleStatusUpdate('Ready for pickup')} className={primaryBtn}>
+                        Mark ready for pickup
+                      </button>
+                    )}
+                    <button disabled={actionBusy} onClick={() => handleStatusUpdate('Cancelled')} className={dangerBtn}>
+                      Cancel order
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <p className="text-sm text-neutral-700">
+                {orderStatus === 'Picked up' ? 'Collected by the delivery partner' : 'On the way to the customer'}
+                {rider ? `: ${rider}` : ''}.
+              </p>
+            );
+          })()}
+
+          {actionMessage && (
+            <p className={`text-sm ${actionMessage.type === 'success' ? 'text-[var(--primary-dark)]' : 'text-red-600'}`}>{actionMessage.text}</p>
+          )}
+
+          <div className="flex flex-wrap gap-3 pt-2 border-t border-neutral-100">
+            <button
+              onClick={handleExportPDF}
+              className="flex items-center gap-2 bg-[var(--primary-dark)] hover:bg-[var(--primary-darker)] text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+            >
+              Export Invoice PDF
+            </button>
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-2 bg-[var(--primary-dark)] hover:bg-[var(--primary-darker)] text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+            >
+              Print Invoice
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Pickup verification: shown once the store has accepted and until the rider collects the package */}
+      {orderDetail.orderNumber &&
+        (['Processed', 'Ready for pickup'].includes(orderStatus) || (orderStatus === 'Received' && !!orderDetail.sellerProgress?.acceptedAt)) && (
         <div className="bg-white mb-6 rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
           <div className="bg-[var(--primary-dark)] text-white px-4 sm:px-6 py-3">
             <h2 className="text-base sm:text-lg font-semibold">Pickup Verification</h2>
@@ -402,56 +577,6 @@ export default function SellerOrderDetail() {
         </div>
       )}
 
-      {/* Order Action Section */}
-      <div className="bg-white mb-6 rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-        <div className="bg-[var(--primary-dark)] text-white px-4 sm:px-6 py-3">
-          <h2 className="text-base sm:text-lg font-semibold">Order Action Section</h2>
-        </div>
-        <div className="bg-neutral-50 px-4 sm:px-6 py-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-            <div className="flex-1 w-full sm:w-auto">
-              <select
-                value={SELLER_STATUS_OPTIONS.some((o) => o.value === orderStatus) ? orderStatus : ''}
-                disabled={['Delivered', 'Cancelled', 'Rejected', 'Returned'].includes(orderStatus)}
-                onChange={(e) => e.target.value && handleStatusUpdate(e.target.value)}
-                className="w-full sm:w-64 px-4 py-2 border border-neutral-300 rounded-lg text-sm text-neutral-900 bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)]"
-              >
-                {!SELLER_STATUS_OPTIONS.some((o) => o.value === orderStatus) && (
-                  <option value="" disabled>{orderStatus || 'Select status'}</option>
-                )}
-                {SELLER_STATUS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </div>
-            <button
-              onClick={handleExportPDF}
-              className="flex items-center gap-2 bg-[var(--primary-dark)] hover:bg-[var(--primary-darker)] text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-                <polyline points="10 9 9 9 8 9" />
-              </svg>
-              Export Invoice PDF
-            </button>
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-2 bg-[var(--primary-dark)] hover:bg-[var(--primary-darker)] text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="6 9 6 2 18 2 18 9" />
-                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                <rect x="6" y="14" width="12" height="8" />
-              </svg>
-              Print Invoice
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* View Order Details Section */}
       <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
         <div className="bg-[var(--primary-dark)] text-white px-4 sm:px-6 py-3">
@@ -462,29 +587,20 @@ export default function SellerOrderDetail() {
           <div className="flex flex-col lg:flex-row justify-between gap-6 mb-6">
             {/* Left: Company Info */}
             <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 bg-[var(--primary-dark)] rounded flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">A</span>
-                </div>
-                <div>
-                  <div className="text-xs text-[var(--primary-dark)] font-semibold">Ecommerce</div>
-                  <div className="text-[10px] text-[var(--primary-dark)]">in 10 Minutes</div>
-                </div>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900 mb-2">Ecommerce - 10 Minute App</h1>
-              <div className="text-sm text-neutral-600 mb-1">
-                <span className="font-medium">From:</span> Ecommerce - 10 Minute App
+              <div className="flex items-center gap-3 mb-2">
+                {store.logo ? (
+                  <img src={store.logo} alt="" className="w-10 h-10 rounded object-cover border border-neutral-200" />
+                ) : (
+                  <div className="w-10 h-10 bg-[var(--primary-dark)] rounded flex items-center justify-center">
+                    <span className="text-white text-sm font-bold">{(storeName || '?').charAt(0).toUpperCase()}</span>
+                  </div>
+                )}
+                <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900">{storeName}</h1>
               </div>
               <div className="text-sm text-neutral-600 space-y-1">
-                <div>
-                  <span className="font-medium">Phone:</span> 8956656429
-                </div>
-                <div>
-                  <span className="font-medium">Email:</span> info@Ecommerce.com
-                </div>
-                <div>
-                  <span className="font-medium">Website:</span> https://Ecommerce.com
-                </div>
+                {storeLines.map((line) => (
+                  <div key={line}>{line}</div>
+                ))}
               </div>
             </div>
 
@@ -506,7 +622,7 @@ export default function SellerOrderDetail() {
               <div className="flex items-center gap-2 lg:justify-end">
                 <span className="text-sm font-medium text-neutral-700">Order Status:</span>
                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(orderStatus)}`}>
-                  {orderStatus}
+                  {STATUS_LABEL[orderStatus] || orderStatus}
                 </span>
               </div>
             </div>

@@ -132,18 +132,49 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // Search filter
-  if (search) {
-    const searchFilter = [
-      { productName: { $regex: search, $options: "i" } },
-      { smallDescription: { $regex: search, $options: "i" } },
-      { tags: { $in: [new RegExp(search as string, "i")] } },
-      { sku: { $regex: search, $options: "i" } },
-      { barcode: { $regex: search, $options: "i" } },
-      { rackNumber: { $regex: search, $options: "i" } },
-      { hsnCode: { $regex: search, $options: "i" } },
-      { "variations.sku": { $regex: search, $options: "i" } },
-      { "variations.barcode": { $regex: search, $options: "i" } },
+  if (search && (search as string).trim()) {
+    const searchRegex = new RegExp((search as string).trim(), "i");
+
+    const [matchingCategories, matchingSubCategories, matchingBrands] = await Promise.all([
+      Category.find({ name: searchRegex }).select("_id").lean(),
+      SubCategory.find({ $or: [{ name: searchRegex }, { subcategoryName: searchRegex }] }).select("_id").lean(),
+      Brand.find({ name: searchRegex }).select("_id").lean(),
+    ]);
+
+    const catIds = matchingCategories.map((c) => c._id);
+    const subCatIds = [
+      ...matchingCategories.map((c) => c._id),
+      ...matchingSubCategories.map((c) => c._id),
     ];
+    const brandIds = matchingBrands.map((b) => b._id);
+
+    const searchFilter: any[] = [
+      { productName: searchRegex },
+      { smallDescription: searchRegex },
+      { description: searchRegex },
+      { tags: { $in: [searchRegex] } },
+      { sku: searchRegex },
+      { itemCode: searchRegex },
+      { barcode: searchRegex },
+      { rackNumber: searchRegex },
+      { hsnCode: searchRegex },
+      { subSubCategory: searchRegex },
+      { pack: searchRegex },
+      { "variations.sku": searchRegex },
+      { "variations.barcode": searchRegex },
+      { "variations.title": searchRegex },
+      { "variations.name": searchRegex },
+      { "variations.value": searchRegex },
+      { "variations.variationType": searchRegex },
+      { "storageLocation.city": searchRegex },
+      { "storageLocation.warehouse": searchRegex },
+      { "storageLocation.room": searchRegex },
+      { "storageLocation.rackNumber": searchRegex },
+    ];
+
+    if (catIds.length > 0) searchFilter.push({ category: { $in: catIds } });
+    if (subCatIds.length > 0) searchFilter.push({ subcategory: { $in: subCatIds } });
+    if (brandIds.length > 0) searchFilter.push({ brand: { $in: brandIds } });
 
     if (query.$or) {
       // If redundant filter already added $or, we need to wrap it

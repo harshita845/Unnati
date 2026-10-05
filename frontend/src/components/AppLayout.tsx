@@ -1,4 +1,6 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import ActiveOrderBar from './ActiveOrderBar';
 import { Link, useLocation, useNavigate, useNavigationType, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import FloatingCartPill from './FloatingCartPill';
@@ -19,6 +21,7 @@ interface AppLayoutProps {
 
 export default function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
+  const { isAuthenticated: isLoggedIn } = useAuth();
   const navigationType = useNavigationType();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -967,6 +970,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
             />
           )}
 
+          {/* In-progress order shortcut on Home, so the customer can always get back to it */}
+          {showFooter && (location.pathname === '/' || location.pathname === '/user/home') && <ActiveOrderBar />}
+
           {/* Fixed Bottom Navigation - Mobile Only, Hidden on checkout pages */}
            {showFooter && (
              <nav
@@ -1247,7 +1253,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                         </motion.svg>
                       </div>
                       <span className={`text-[10px] mt-1 relative z-10 transition-colors duration-200 ${isActive('/account') ? 'font-semibold text-[var(--customer-primary-dark)]' : 'font-medium text-neutral-400'}`}>
-                        Login
+                        {isLoggedIn ? 'Account' : 'Login'}
                       </span>
                       {isActive('/account') && (
                         <motion.div layoutId="activeDot" className="absolute bottom-1.5 w-1 h-1 rounded-full bg-[var(--customer-primary)]" />

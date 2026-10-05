@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { getOrders, Order, GetOrdersParams } from '../../../services/api/orderService';
 import ThemedDropdown from '../components/ThemedDropdown';
 import { useToast } from '../../../context/ToastContext';
+import { useSellerOrderUpdates } from '../hooks/useSellerOrderUpdates';
 
 type SortField = 'orderId' | 'deliveryDate' | 'orderDate' | 'status' | 'amount';
 type SortDirection = 'asc' | 'desc';
@@ -21,7 +22,9 @@ export default function SellerAllOrders() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<SortField | null>(null);
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  // New orders and status changes from the server refresh the list
+  const orderUpdateTick = useSellerOrderUpdates();
 
   // Fetch orders from API
   useEffect(() => {
@@ -69,7 +72,7 @@ export default function SellerAllOrders() {
     };
 
     fetchOrders();
-  }, [dateRange, status, entriesPerPage, searchQuery, currentPage, sortField, sortDirection]);
+  }, [dateRange, status, entriesPerPage, searchQuery, currentPage, sortField, sortDirection, orderUpdateTick]);
 
   const handleClearDate = () => {
     setDateRange('');

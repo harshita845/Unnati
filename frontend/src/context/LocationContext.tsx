@@ -454,19 +454,19 @@ export function LocationProvider({ children }: { children: ReactNode }) {
         let state = '';
         let pincode = '';
 
-        // Improved address component parsing - prioritize more specific types
+        // City by priority, not by order: Google lists the neighbourhood (sublocality)
+        // before the city (locality), so "first match" would save e.g. "Chhoti Gwaltoli" instead of "Indore".
+        const componentOf = (type: string) =>
+          addressComponents.find((c: { types?: string[] }) => (c.types || []).includes(type))?.long_name || '';
+        city =
+          componentOf('locality') ||
+          componentOf('administrative_area_level_2') ||
+          componentOf('sublocality_level_1') ||
+          componentOf('sublocality') ||
+          '';
+
         addressComponents.forEach((component: { types?: string[]; long_name?: string; short_name?: string }) => {
           const types = component.types || [];
-          // City: prefer locality, then sublocality, then administrative_area_level_2
-          if (!city) {
-            if (types.includes('locality')) {
-              city = component.long_name || '';
-            } else if (types.includes('sublocality') || types.includes('sublocality_level_1')) {
-              city = component.long_name || city;
-            } else if (types.includes('administrative_area_level_2') && !city) {
-              city = component.long_name || city;
-            }
-          }
           // State: administrative_area_level_1
           if (!state && types.includes('administrative_area_level_1')) {
             state = component.long_name || '';

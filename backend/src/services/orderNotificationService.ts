@@ -404,7 +404,8 @@ export async function handleOrderAcceptance(
             {
                 _id: orderId,
                 deliveryBoy: null,
-                status: { $nin: TERMINAL_STATUSES },
+                // Riders can only take an order every store has finished packing
+                status: 'Ready for pickup',
                 'dispatch.rejectedDeliveryBoys': { $ne: riderId },
                 // Only partners who were offered the order (if the offer list was recorded)
                 $or: [
@@ -427,15 +428,19 @@ export async function handleOrderAcceptance(
             if (TERMINAL_STATUSES.includes(existing.status)) {
                 return { success: false, message: `Order is already ${existing.status}` };
             }
+            if (existing.status === 'Received' || existing.status === 'Pending') {
+                return { success: false, message: 'The store has not accepted this order yet' };
+            }
+            if (existing.status === 'Processed') {
+                return { success: false, message: 'The store is still packing this order' };
+            }
             if (existing.dispatch?.rejectedDeliveryBoys?.some((id: any) => String(id) === normalizedDeliveryBoyId)) {
                 return { success: false, message: 'You have already rejected this order' };
             }
             return { success: false, message: 'You were not notified about this order' };
         }
 
-        // Mark as processed when assigned (without moving a seller-advanced order backwards)
-        await Order.updateOne({ _id: order._id, status: { $in: ['Received', 'Pending'] } }, { $set: { status: 'Processed' } });
-
+        // Assignment does not change the order status: the store accepted it already
         // Emit order-accepted event to stop notifications for all delivery boys
         io.to('delivery-notifications').emit('order-accepted', {
             orderId,

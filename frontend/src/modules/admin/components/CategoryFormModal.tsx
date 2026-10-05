@@ -115,13 +115,35 @@ export default function CategoryFormModal({
   useEffect(() => {
     if (isOpen) {
       if (mode === "edit" && category) {
-        // Pre-fill form with category data
+        // Pre-fill form with category data safely extracting string IDs from populated objects
+        let editHeaderCategoryId: string | null = null;
+        if (category.headerCategoryId) {
+          if (typeof category.headerCategoryId === "string") {
+            editHeaderCategoryId = category.headerCategoryId;
+          } else if (typeof category.headerCategoryId === "object" && category.headerCategoryId !== null) {
+            editHeaderCategoryId = (category.headerCategoryId as { _id?: string })._id || null;
+          }
+        }
+        if (!editHeaderCategoryId && (category as any).headerCategory) {
+          const hc = (category as any).headerCategory;
+          editHeaderCategoryId = typeof hc === "string" ? hc : hc?._id || null;
+        }
+
+        let editParentId: string | null = null;
+        if (category.parentId) {
+          if (typeof category.parentId === "string") {
+            editParentId = category.parentId;
+          } else if (typeof category.parentId === "object" && category.parentId !== null) {
+            editParentId = (category.parentId as { _id?: string })._id || null;
+          }
+        }
+
         setFormData({
           name: category.name || "",
           image: category.image || "",
           order: category.order || 0,
-          parentId: category.parentId || null,
-          headerCategoryId: category.headerCategoryId || null,
+          parentId: editParentId,
+          headerCategoryId: editHeaderCategoryId,
           status: category.status || "Active",
           isBestseller: category.isBestseller || false,
           hasWarning: category.hasWarning || false,
@@ -345,6 +367,8 @@ export default function CategoryFormModal({
 
   const handleSubmit = async () => {
     if (!validateForm()) {
+      const modalEl = document.getElementById("category-form-modal-container");
+      if (modalEl) modalEl.scrollTop = 0;
       return;
     }
 
@@ -393,6 +417,8 @@ export default function CategoryFormModal({
       await onSubmit(submitData);
       onClose();
     } catch (error: any) {
+      const modalEl = document.getElementById("category-form-modal-container");
+      if (modalEl) modalEl.scrollTop = 0;
       setErrors({
         submit:
           error.response?.data?.message ||
@@ -425,7 +451,7 @@ export default function CategoryFormModal({
         onClick={onClose}></div>
 
       {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div id="category-form-modal-container" className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200">
           <h2 className="text-lg font-semibold text-neutral-900">
@@ -759,7 +785,14 @@ export default function CategoryFormModal({
             </label>
           </div>
 
-          {/* Subscription Settings */}
+          {/* Subscription Settings — main (top-level) categories only; a subcategory follows its main category */}
+          {formData.parentId ? (
+            <div className="mb-4 p-4 border border-neutral-200 rounded-lg bg-neutral-50">
+              <p className="text-sm text-neutral-500">
+                Subscriptions are set on the main category, not on subcategories. This subcategory follows whatever its main category requires.
+              </p>
+            </div>
+          ) : (
           <div className="mb-4 p-4 border border-neutral-200 rounded-lg">
             <div className="flex items-center justify-between gap-4">
               <div>
@@ -871,6 +904,7 @@ export default function CategoryFormModal({
               </div>
             )}
           </div>
+          )}
 
           {/* Advanced Fields (Collapsible) */}
           <div className="mb-4">

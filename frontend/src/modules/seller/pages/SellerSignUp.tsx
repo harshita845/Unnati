@@ -5,6 +5,7 @@ import OTPInput from '../../../components/OTPInput';
 import GoogleMapsAutocomplete from '../../../components/GoogleMapsAutocomplete';
 import { useAuth } from '../../../context/AuthContext';
 import { getHeaderCategoriesPublic, HeaderCategory } from '../../../services/api/headerCategoryService';
+import { formatINR } from '../../../services/api/subscriptionService';
 import { useEffect } from 'react';
 import { removeAuthToken } from '../../../services/api/config';
 import { requestNotificationPermission } from '../../../services/pushNotificationService';
@@ -344,6 +345,11 @@ export default function SellerSignUp() {
                               className="h-4 w-4 text-[var(--primary-dark)] border-neutral-300 rounded focus:ring-[var(--primary-color)]"
                             />
                             <span>{cat.name}</span>
+                            {cat.subscriptionRequired && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-medium whitespace-nowrap">
+                                Plan required
+                              </span>
+                            )}
                           </label>
                         );
                       })}
@@ -352,6 +358,21 @@ export default function SellerSignUp() {
                   {formData.categories.length === 0 && categories.length > 0 && (
                     <p className="text-xs text-red-600 mt-1">Select at least one category</p>
                   )}
+                  {(() => {
+                    const selectedPaid = categories.filter(
+                      (cat) => cat.subscriptionRequired && formData.categories.includes(cat.name)
+                    );
+                    if (!selectedPaid.length) return null;
+                    return (
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                        {selectedPaid.map((c) => c.name).join(', ')} {selectedPaid.length === 1 ? 'needs' : 'need'} a paid subscription plan to sell
+                        {selectedPaid.some((c) => c.subscriptionFromPrice != null) && (
+                          <> (from {formatINR(Math.min(...selectedPaid.filter((c) => c.subscriptionFromPrice != null).map((c) => c.subscriptionFromPrice as number)))})</>
+                        )}
+                        . You can sign up now and subscribe anytime after your store is approved, from Subscriptions in your seller panel.
+                      </p>
+                    );
+                  })()}
                 </div>
 
                 <div>

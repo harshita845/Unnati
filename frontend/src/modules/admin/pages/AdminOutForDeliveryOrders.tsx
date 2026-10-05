@@ -40,16 +40,48 @@ export default function AdminOutForDeliveryOrders() {
           params.search = searchQuery;
         }
 
-        if (dateRange && dateRange.includes(' - ')) {
-          const [dateFrom, dateTo] = dateRange.split(' - ').map(d => {
-            const parts = d.trim().split('/');
+        // Parse date range or single date if provided
+        if (dateRange && dateRange.trim()) {
+          const parseSingleDate = (dStr: string) => {
+            const trimmed = dStr.trim();
+            if (!trimmed) return "";
+            if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+            const parts = trimmed.split(/[/.-]/);
             if (parts.length === 3) {
-              return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+              if (parts[0].length === 4) {
+                return `${parts[0]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`;
+              }
+              let year = parts[2];
+              if (year.length === 2 && year !== "20") {
+                year = "20" + year;
+              } else if (year.length !== 4) {
+                return "";
+              }
+              const p0 = parseInt(parts[0], 10);
+              const p1 = parseInt(parts[1], 10);
+              let day: string;
+              let month: string;
+              if (p1 > 12) {
+                month = parts[0].padStart(2, "0");
+                day = parts[1].padStart(2, "0");
+              } else {
+                day = parts[0].padStart(2, "0");
+                month = parts[1].padStart(2, "0");
+              }
+              return `${year}-${month}-${day}`;
             }
-            return d.trim();
-          });
-          params.dateFrom = dateFrom;
-          params.dateTo = dateTo;
+            return trimmed;
+          };
+
+          if (dateRange.includes(" - ")) {
+            const [d1, d2] = dateRange.split(" - ");
+            params.dateFrom = parseSingleDate(d1);
+            params.dateTo = parseSingleDate(d2 || d1);
+          } else {
+            const parsed = parseSingleDate(dateRange);
+            params.dateFrom = parsed;
+            params.dateTo = parsed;
+          }
         }
 
         const response = await getOrdersByStatus('Out for Delivery', params);
@@ -282,7 +314,7 @@ export default function AdminOutForDeliveryOrders() {
                       setCurrentPage(1);
                     }}
                     className="flex-1 sm:w-48 text-xs sm:text-sm text-neutral-600 bg-transparent focus:outline-none placeholder:text-neutral-400"
-                    placeholder="MM/DD/YYYY - MM/DD/YYYY"
+                    placeholder="DD/MM/YYYY or YYYY-MM-DD"
                   />
                   {dateRange && (
                     <button
@@ -412,7 +444,7 @@ export default function AdminOutForDeliveryOrders() {
                     setCurrentPage(1);
                   }}
                   className="flex-1 w-full sm:w-auto px-3 py-2 border border-neutral-300 rounded text-xs sm:text-sm text-neutral-900 bg-white focus:outline-none focus:ring-1 focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)]"
-                  placeholder="Search by Order ID, Customer, or Amount"
+                  placeholder="Search by Order ID, Customer, Amount, or Date (DD/MM/YYYY)"
                 />
               </div>
             </div>

@@ -196,16 +196,16 @@ export default function AdminDeliverySettings() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full bg-neutral-50">
+      <div className="flex items-center justify-center min-h-[400px] bg-neutral-50 rounded-xl">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--primary-color)]"></div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-neutral-50/70 relative">
+    <div className="flex flex-col min-h-full bg-neutral-50/70 relative">
       {/* Header */}
-      <div className="bg-white px-6 py-4 border-b border-neutral-200/80 z-20 flex-shrink-0">
+      <div className="bg-white px-6 py-4 border-b border-neutral-200/80 z-20 flex-shrink-0 rounded-t-xl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 max-w-5xl mx-auto">
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-neutral-900">Delivery Settings</h1>
@@ -218,7 +218,7 @@ export default function AdminDeliverySettings() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
+      <div className="flex-1 p-4 sm:p-6 md:p-8 pb-24">
         <div className="max-w-5xl mx-auto space-y-6">
           {sections.map((section) => (
             <div key={section.id} className="bg-white rounded-2xl shadow-sm border border-neutral-200/80 overflow-hidden transition-shadow hover:shadow-md">

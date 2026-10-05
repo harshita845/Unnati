@@ -884,7 +884,7 @@ export const getSellerCommissions = asyncHandler(
       ];
     }
 
-    const [commissions, total] = await Promise.all([
+    let [commissions, total] = await Promise.all([
       Commission.find(query)
         .populate("seller", "storeName sellerName")
         .populate("order", "orderNumber")
@@ -895,18 +895,56 @@ export const getSellerCommissions = asyncHandler(
       Commission.countDocuments(query),
     ]);
 
-    const formattedCommissions = commissions.map((c: any) => ({
-      id: c._id,
-      sellerName: c.seller?.storeName || c.seller?.sellerName || "N/A",
-      orderId: c.order?.orderNumber || "N/A",
-      orderItemId: c.orderItem?._id || "N/A",
-      productName: c.orderItem?.productName || "Product Deleted",
-      variation: c.orderItem?.variation || "N/A",
-      flag: c.status,
-      amount: c.commissionAmount,
-      remark: `Commission for Order ${c.order?.orderNumber || "N/A"}`,
-      date: c.createdAt,
-    }));
+    let formattedCommissions: any[] = [];
+
+    if (commissions.length > 0) {
+      formattedCommissions = commissions.map((c: any) => ({
+        id: c._id,
+        sellerName: c.seller?.storeName || c.seller?.sellerName || "N/A",
+        orderId: c.order?.orderNumber || "N/A",
+        orderItemId: c.orderItem?._id || "N/A",
+        productName: c.orderItem?.productName || "Product Deleted",
+        variation: c.orderItem?.variation || "N/A",
+        flag: c.status,
+        amount: c.commissionAmount,
+        remark: `Commission for Order ${c.order?.orderNumber || "N/A"}`,
+        date: c.createdAt,
+      }));
+    } else {
+      // Fallback: Fetch real order items directly from database OrderItem model
+      const itemQuery: any = {};
+      if (sellerId && sellerId !== "All Seller" && sellerId !== "undefined") {
+        itemQuery.seller = new mongoose.Types.ObjectId(sellerId as string);
+      }
+
+      const [orderItems, itemTotal] = await Promise.all([
+        OrderItem.find(itemQuery)
+          .populate("seller", "storeName sellerName")
+          .populate("order", "orderNumber status createdAt")
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(parseInt(limit as string)),
+        OrderItem.countDocuments(itemQuery),
+      ]);
+
+      total = itemTotal;
+      formattedCommissions = orderItems.map((item: any) => {
+        const orderStatus = item.order?.status;
+        const flag = orderStatus === "Delivered" ? "Paid" : orderStatus === "Cancelled" || orderStatus === "Rejected" ? "Cancelled" : "Pending";
+        return {
+          id: item._id,
+          sellerName: item.seller?.storeName || item.seller?.sellerName || "Direct Order Item",
+          orderId: item.order?.orderNumber || "N/A",
+          orderItemId: item._id,
+          productName: item.productName || "Order Item",
+          variation: item.variation || "Default",
+          flag: flag,
+          amount: item.total || (item.price * item.quantity) || 0,
+          remark: `Order fulfillment payout for ${item.order?.orderNumber || "order"}`,
+          date: item.createdAt || item.order?.createdAt || new Date(),
+        };
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -916,7 +954,7 @@ export const getSellerCommissions = asyncHandler(
         page: parseInt(page as string),
         limit: parseInt(limit as string),
         total,
-        pages: Math.ceil(total / parseInt(limit as string)),
+        pages: Math.ceil(total / parseInt(limit as string)) || 1,
       },
     });
   }

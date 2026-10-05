@@ -50,6 +50,9 @@ export default function AdminSellerLocation() {
           );
 
           setSellers(sellersWithLocation);
+          if (sellersWithLocation.length > 0) {
+            setSelectedSeller(sellersWithLocation[0]);
+          }
         } else {
           // No data available
           setSellers([]);
@@ -156,6 +159,20 @@ export default function AdminSellerLocation() {
                 longitude={parseFloat(selectedSeller.longitude)}
                 radiusKm={selectedSeller.serviceRadiusKm || 10}
                 storeName={selectedSeller.storeName}
+                selectedSellerId={selectedSeller._id}
+                allSellers={sellers
+                  .filter((s) => s.latitude && s.longitude)
+                  .map((s) => ({
+                    _id: s._id,
+                    storeName: s.storeName,
+                    latitude: parseFloat(s.latitude!),
+                    longitude: parseFloat(s.longitude!),
+                    serviceRadiusKm: s.serviceRadiusKm,
+                  }))}
+                onSelectSeller={(sellerItem) => {
+                  const found = sellers.find((s) => s._id === sellerItem._id);
+                  if (found) setSelectedSeller(found);
+                }}
               />
             ) : (
               <div className="flex flex-col items-center justify-center h-full bg-neutral-50 text-neutral-500">

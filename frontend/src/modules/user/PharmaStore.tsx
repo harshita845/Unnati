@@ -7,9 +7,11 @@ import { useEffect, useState } from 'react';
 import { getProducts } from '../../services/api/customerProductService';
 import WishlistButton from '../../components/WishlistButton';
 import { calculateProductPrice } from '../../utils/priceUtils';
+import { useLocation } from '../../hooks/useLocation';
 
 export default function PharmaStore() {
   const navigate = useNavigate();
+  const { location: deliveryLocation } = useLocation();
   const { cart, addToCart, updateQuantity } = useCart();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +60,7 @@ export default function PharmaStore() {
             <div className="flex-1 min-w-0 px-2">
               <div className="text-[10px] text-neutral-600 leading-tight">Delivering to▾</div>
               <div className="text-[10px] text-neutral-700 font-medium leading-tight line-clamp-1">
-                North Block, Central Secretariat, Delhi Division, New Delhi, Delhi, 110001, India
+                {deliveryLocation?.address || 'Set your delivery location'}
               </div>
             </div>
 

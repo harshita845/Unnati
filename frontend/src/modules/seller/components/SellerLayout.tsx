@@ -4,6 +4,7 @@ import SubscriptionBanner from './SubscriptionBanner';
 import SellerSidebar from './SellerSidebar';
 import { useSellerSocket, SellerNotification } from '../hooks/useSellerSocket';
 import SellerNotificationAlert from './SellerNotificationAlert';
+import { broadcastSellerOrderUpdate } from '../hooks/useSellerOrderUpdates';
 import { getStaffSession, normalizeStaffMember, setStaffSession, setStoredStaffList } from '../../../utils/staffSession';
 import { getStaff as apiGetStaff } from '../../../services/api/admin/adminStaffService';
 
@@ -33,7 +34,9 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
   }, []);
 
   const handleNotificationReceived = useCallback((notification: SellerNotification) => {
-    setActiveNotification(notification);
+    // Every change refreshes open order pages; only a new order needs the store's attention
+    broadcastSellerOrderUpdate(notification);
+    if (notification.type === 'NEW_ORDER') setActiveNotification(notification);
   }, []);
 
   useSellerSocket(handleNotificationReceived);

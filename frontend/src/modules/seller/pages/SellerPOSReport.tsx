@@ -354,12 +354,12 @@ const SellerPOSReport = () => {
         // --- Header ---
         doc.setFontSize(16);
         doc.setFont("helvetica", "bold");
-        doc.text("Ecommerce", 14, 20);
+        doc.text(posBillSettings?.shopName || "Unnati", 14, 20);
 
         doc.setFontSize(10);
         doc.setFont("helvetica", "normal");
-        const address = "Q7WM+92M, Q7WM+92M, , Indore Division,\nNagda, Madhya Pradesh, India - 454001\n7898111456";
-        doc.text(address, 14, 26);
+        const address = posBillSettings?.address || "";
+        if (address) doc.text(address, 14, 26);
 
         doc.line(14, 40, 196, 40);
 

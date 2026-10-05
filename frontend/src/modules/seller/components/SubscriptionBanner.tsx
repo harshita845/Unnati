@@ -46,7 +46,7 @@ export default function SubscriptionBanner() {
       }`}>
       <p className="text-sm font-medium flex-1">{alert.text}</p>
       <button
-        onClick={() => navigate("/seller/subscriptions")}
+        onClick={() => navigate("/seller/subscriptions#plans")}
         className={`px-4 py-1.5 rounded-lg text-sm font-semibold text-white ${alert.level === "danger" ? "bg-red-600" : "bg-amber-600"}`}>
         Renew now
       </button>

@@ -3,7 +3,6 @@ import mongoose from "mongoose";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Order from "../../../models/Order";
 import { notifySellersOfOrderUpdate } from "../../../services/sellerNotificationService";
-import Delivery from "../../../models/Delivery";
 import OrderItem from "../../../models/OrderItem";
 import Seller from "../../../models/Seller";
 import { generateDeliveryOtp, verifyDeliveryOtp } from "../../../services/deliveryOtpService";
@@ -12,9 +11,16 @@ import {
     TERMINAL_ORDER_STATUSES,
     markOrderDelivered,
 } from "../../../services/orderLifecycleService";
+import { PICKUP_READY_STATUSES, riderVisibleOrdersFilter, transitionOrderStatus } from "../../../services/orderFlowService";
+import { OrderPlacementError } from "../../../services/orderPlacementService";
+import { restoreOrderItemStock } from "../../../services/orderStockService";
+import Refund from "../../../models/Refund";
+import Customer from "../../../models/Customer";
+import { sendNotification } from "../../../services/notificationService";
 
 // Statuses a delivery partner may set directly; "Delivered" requires the customer's OTP
-const DELIVERY_PARTNER_STATUSES = ['Ready for pickup', 'Picked up', 'Out for Delivery'];
+// ("Ready for pickup" is set by the store once it has packed the order)
+const DELIVERY_PARTNER_STATUSES = ['Picked up', 'Out for Delivery'];
 
 /** Short code the store reads out / prints for pickup: last 6 characters of the order number. */
 export const pickupCodeFor = (orderNumber: string) => String(orderNumber || '').slice(-6);
@@ -80,6 +86,8 @@ export const getAllOrdersHistory = asyncHandler(async (req: Request, res: Respon
         customerPhone: order.customerPhone,
         status: order.status,
         address: `${order.deliveryAddress.address}, ${order.deliveryAddress.city}`,
+        latitude: order.deliveryAddress?.latitude,
+        longitude: order.deliveryAddress?.longitude,
         totalAmount: order.total,
         items: mapOrderItems(order.items),
         createdAt: order.createdAt,
@@ -109,34 +117,32 @@ export const getTodayOrders = asyncHandler(async (req: Request, res: Response) =
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
 
-    const deliveryPartner = deliveryId ? await Delivery.findById(deliveryId).select("city") : null;
-    const partnerCity = deliveryPartner?.city?.trim();
-
-    const orderQuery: any = {
-        status: { $ne: "Cancelled" },
+    // Which orders this rider may see at all: their own (any status — includes today's
+    // deliveries), or an unassigned order they were actually dispatched (by live GPS distance
+    // to the store, not a fixed registered city — a rider's real location can differ from it,
+    // e.g. travelling between Indore and Hyderabad).
+    const riderId = new mongoose.Types.ObjectId(String(deliveryId));
+    const visibility = {
         $or: [
-            { createdAt: { $gte: todayStart, $lte: todayEnd } }, // Created today
-            { updatedAt: { $gte: todayStart, $lte: todayEnd } }  // OR Updated today
-        ]
-    };
-
-    if (partnerCity && partnerCity !== 'Test City') {
-        orderQuery.$or = [
-            { deliveryBoy: deliveryId },
+            { deliveryBoy: riderId },
             {
                 $and: [
                     { $or: [{ deliveryBoy: null }, { deliveryBoy: { $exists: false } }] },
-                    { "deliveryAddress.city": new RegExp(`^${partnerCity}$`, "i") }
-                ]
-            }
-        ];
-    } else {
-        orderQuery.$or = [
-            { deliveryBoy: deliveryId },
-            { deliveryBoy: null },
-            { deliveryBoy: { $exists: false } }
-        ];
-    }
+                    { status: { $in: PICKUP_READY_STATUSES } },
+                    { 'dispatch.rejectedDeliveryBoys': { $ne: riderId } },
+                    { $or: [{ 'dispatch.notifiedDeliveryBoys.0': { $exists: false } }, { 'dispatch.notifiedDeliveryBoys': riderId }] },
+                ],
+            },
+        ],
+    };
+
+    const orderQuery: any = {
+        status: { $ne: "Cancelled" },
+        $and: [
+            visibility,
+            { $or: [{ createdAt: { $gte: todayStart, $lte: todayEnd } }, { updatedAt: { $gte: todayStart, $lte: todayEnd } }] },
+        ],
+    };
 
     const orders = await Order.find(orderQuery)
         .populate("items")
@@ -149,6 +155,8 @@ export const getTodayOrders = asyncHandler(async (req: Request, res: Response) =
         customerPhone: order.customerPhone,
         status: order.status,
         address: `${order.deliveryAddress?.address || ''}, ${order.deliveryAddress?.city || ''}`,
+        latitude: order.deliveryAddress?.latitude,
+        longitude: order.deliveryAddress?.longitude,
         items: mapOrderItems(order.items), // Real items
         totalAmount: order.total,
         estimatedDeliveryTime: order.estimatedDeliveryDate ? new Date(order.estimatedDeliveryDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
@@ -169,30 +177,13 @@ export const getTodayOrders = asyncHandler(async (req: Request, res: Response) =
 export const getPendingOrders = asyncHandler(async (req: Request, res: Response) => {
     const deliveryId = req.user?.userId;
 
-    const deliveryPartner = deliveryId ? await Delivery.findById(deliveryId).select("city") : null;
-    const partnerCity = deliveryPartner?.city?.trim();
-
-    const pendingQuery: any = {
-        status: { $in: ["Received", "Processed", "Ready for pickup", "Out for Delivery", "Picked Up", "Assigned", "In Transit"] }
-    };
-
-    if (partnerCity && partnerCity !== 'Test City') {
-        pendingQuery.$or = [
-            { deliveryBoy: deliveryId },
-            {
-                $and: [
-                    { $or: [{ deliveryBoy: null }, { deliveryBoy: { $exists: false } }] },
-                    { "deliveryAddress.city": new RegExp(`^${partnerCity}$`, "i") }
-                ]
-            }
-        ];
-    } else {
-        pendingQuery.$or = [
-            { deliveryBoy: deliveryId },
-            { deliveryBoy: null },
-            { deliveryBoy: { $exists: false } }
-        ];
-    }
+    // Unassigned offers: only ones this partner was offered (dispatch is by distance to the store)
+    // and has not declined. Orders dispatched while no partner was online are open to all.
+    const riderId = new mongoose.Types.ObjectId(String(deliveryId));
+    const pendingQuery: any = riderVisibleOrdersFilter(deliveryId, {
+        'dispatch.rejectedDeliveryBoys': { $ne: riderId },
+        $or: [{ 'dispatch.notifiedDeliveryBoys.0': { $exists: false } }, { 'dispatch.notifiedDeliveryBoys': riderId }],
+    });
 
     const orders = await Order.find(pendingQuery)
         .populate("items")
@@ -205,6 +196,8 @@ export const getPendingOrders = asyncHandler(async (req: Request, res: Response)
         customerPhone: order.customerPhone,
         status: order.status,
         address: `${order.deliveryAddress?.address || ''}, ${order.deliveryAddress?.city || ''}`,
+        latitude: order.deliveryAddress?.latitude,
+        longitude: order.deliveryAddress?.longitude,
         items: mapOrderItems(order.items), // Real items
         totalAmount: order.total,
         estimatedDeliveryTime: order.estimatedDeliveryDate ? new Date(order.estimatedDeliveryDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
@@ -230,12 +223,35 @@ export const getOrderDetails = asyncHandler(async (req: Request, res: Response) 
         return res.status(404).json({ success: false, message: "Order not found" });
     }
 
+    // A rider may only open their own order, or one they were offered once it's Ready for pickup —
+    // not any order by pasting its id (e.g. one the store hasn't even accepted yet).
+    const deliveryId = String(req.user?.userId || "");
+    const isMine = !!order.deliveryBoy && String(order.deliveryBoy) === deliveryId;
+    const notified: string[] = ((order as any).dispatch?.notifiedDeliveryBoys || []).map(String);
+    const rejected: string[] = ((order as any).dispatch?.rejectedDeliveryBoys || []).map(String);
+    const isOffer =
+        !order.deliveryBoy &&
+        PICKUP_READY_STATUSES.includes(order.status) &&
+        !rejected.includes(deliveryId) &&
+        (notified.length === 0 || notified.includes(deliveryId));
+    if (!isMine && !isOffer) {
+        return res.status(403).json({
+            success: false,
+            message: order.deliveryBoy
+                ? "This order is assigned to another delivery partner"
+                : "This order isn't available to you yet — the store hasn't finished packing it",
+        });
+    }
+
     const formattedOrder = {
         id: order._id,
         orderId: order.orderNumber,
         customerName: order.customerName,
         customerPhone: order.customerPhone,
         address: `${order.deliveryAddress?.address || ''}, ${order.deliveryAddress?.city || ''}`,
+        // The map needs real coordinates, not just the text address, to draw the route
+        latitude: order.deliveryAddress?.latitude,
+        longitude: order.deliveryAddress?.longitude,
         status: order.status,
         items: mapOrderItems(order.items), // Real populated items
         totalAmount: order.total,
@@ -266,11 +282,6 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
         return res.status(403).json({ success: false, message: "This order is assigned to another delivery partner" });
     }
 
-    // Auto-assign delivery partner if order is currently unassigned
-    if (!order.deliveryBoy && deliveryId) {
-        order.deliveryBoy = new mongoose.Types.ObjectId(deliveryId);
-    }
-
     if (status === 'Delivered') {
         return res.status(400).json({
             success: false,
@@ -290,40 +301,63 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
         return res.status(400).json({ success: false, message: "This order is still waiting for the customer's online payment" });
     }
 
-    // Collecting the package requires proving it is this order (barcode on the bill or pickup code)
-    if (status === 'Picked up' && order.status !== 'Picked up') {
-        const { pickupCode } = req.body;
-        if (!pickupCode) {
+    const extra: Record<string, unknown> = {};
+    if (!order.deliveryBoy && deliveryId) extra.deliveryBoy = new mongoose.Types.ObjectId(deliveryId);
+    let from: string[];
+
+    if (status === 'Picked up') {
+        if (order.status === 'Received' || order.status === 'Pending') {
             return res.status(400).json({
                 success: false,
-                message: "Verify the package first: scan the barcode on the bill or enter the order number / pickup code.",
+                message: "The store has not accepted this order yet. Wait for the store to accept and pack it.",
             });
         }
-        if (!matchesPickupCode(order, pickupCode)) {
+        if (order.status === 'Processed') {
             return res.status(400).json({
                 success: false,
-                message: `This package is not order #${order.orderNumber}. Check the order number on the bill and try again.`,
+                message: "The store is still packing this order. Wait for it to be marked ready for pickup.",
             });
         }
-        order.pickupVerifiedAt = new Date();
+        // Collecting the package requires proving it is this order (barcode on the bill or pickup code)
+        if (order.status !== 'Picked up') {
+            const { pickupCode } = req.body;
+            if (!pickupCode) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Verify the package first: scan the barcode on the bill or enter the order number / pickup code.",
+                });
+            }
+            if (!matchesPickupCode(order, pickupCode)) {
+                return res.status(400).json({
+                    success: false,
+                    message: `This package is not order #${order.orderNumber}. Check the order number on the bill and try again.`,
+                });
+            }
+        }
+        from = PICKUP_READY_STATUSES;
+        extra.deliveryBoyStatus = 'Picked Up';
+        extra.pickupVerifiedAt = new Date();
+    } else {
+        // Out for Delivery: only once the package has been collected
+        if (order.status !== 'Picked up' && order.status !== 'Out for Delivery') {
+            return res.status(400).json({ success: false, message: "Collect the package from the store (Picked up) first." });
+        }
+        from = ['Picked up'];
+        extra.deliveryBoyStatus = 'In Transit';
     }
 
-    // Save previous status before updating
     const previousStatus = order.status;
-
-    order.status = status;
-    if (status === 'Picked up' || status === 'Out for Delivery') {
-        order.deliveryBoyStatus = status === 'Picked up' ? 'Picked Up' : 'In Transit';
-    }
-
+    let updated: any;
     try {
-        await order.save();
-    } catch (saveErr: any) {
-        console.error("Error saving order status update:", saveErr);
-        return res.status(400).json({
-            success: false,
-            message: saveErr.message || "Failed to save order status update"
-        });
+        // Atomic and forward-only: a slower request or stale screen can never move the order back
+        ({ order: updated } = await transitionOrderStatus(id, from, status, extra, {
+            $or: [{ deliveryBoy: null }, { deliveryBoy: { $exists: false } }, { deliveryBoy: new mongoose.Types.ObjectId(deliveryId) }],
+        }));
+    } catch (err: any) {
+        if (err instanceof OrderPlacementError) {
+            return res.status(err.statusCode).json({ success: false, message: err.message });
+        }
+        throw err;
     }
 
     // Emit socket events for status changes
@@ -339,13 +373,13 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
 
         io.to(`order-${id}`).emit('order-status-updated', { orderId: id, status });
 
-        notifySellersOfOrderUpdate(io, order, 'STATUS_UPDATE');
+        notifySellersOfOrderUpdate(io, updated, 'STATUS_UPDATE');
     }
 
     return res.status(200).json({
         success: true,
         message: `Order status updated to ${status}`,
-        data: order
+        data: updated
     });
 });
 
@@ -369,6 +403,8 @@ export const getReturnOrders = asyncHandler(async (req: Request, res: Response) 
         customerPhone: order.customerPhone,
         status: order.status,
         address: `${order.deliveryAddress?.address || ''}, ${order.deliveryAddress?.city || ''}`,
+        latitude: order.deliveryAddress?.latitude,
+        longitude: order.deliveryAddress?.longitude,
         items: mapOrderItems(order.items),
         totalAmount: order.total,
         createdAt: order.createdAt,
@@ -622,19 +658,63 @@ export const updateReturnTaskStatus = asyncHandler(async (req: Request, res: Res
 
     await assignment.save();
 
-    // Update the Return request status as well
+    // Update the Return request status, and complete it: restore stock for the item that
+    // physically came back, and — for a Return (not a Replacement) — refund the customer.
+    // This used to just flip a status flag; nothing ever credited the customer or put the
+    // item back into sellable stock.
+    let refundIssued: number | null = null;
     if (assignment.returnRequest) {
         const rReq = await Return.findById(assignment.returnRequest);
         if (rReq) {
+            const alreadyCompleted = rReq.status === "Completed";
             if (status === "Picked Up") {
                 rReq.status = "Picked Up";
                 rReq.pickupCompleted = new Date();
             } else if (status === "Delivered") {
                 rReq.status = "Completed";
 
-                // If it was a return, mark order item as returned
-                if (rReq.requestType === "Return") {
-                    await OrderItem.findByIdAndUpdate(rReq.orderItem, { status: "Returned" });
+                if (!alreadyCompleted) {
+                    const orderItem: any = await OrderItem.findById(rReq.orderItem);
+                    if (orderItem) {
+                        // The item is physically back at the store either way — put it back into stock
+                        await restoreOrderItemStock({
+                            product: orderItem.product,
+                            variantId: orderItem.variantId,
+                            variation: orderItem.variation,
+                            quantity: rReq.quantity,
+                        });
+
+                        if (rReq.requestType === "Return") {
+                            orderItem.status = "Returned";
+                            await orderItem.save();
+
+                            // Refund the customer: the amount set at approval, or the item's own price
+                            const amount = rReq.refundAmount || Math.round((orderItem.unitPrice || 0) * rReq.quantity * 100) / 100;
+                            if (amount > 0) {
+                                const refund = await Refund.create({
+                                    order: rReq.order,
+                                    customer: rReq.customer,
+                                    amount,
+                                    reason: `Return: ${rReq.reason || "Item returned"}`,
+                                    status: "Completed",
+                                    processedAt: new Date(),
+                                });
+                                // walletAmount is a read-only virtual alias for creditBalance — update the real field
+                                await Customer.updateOne({ _id: rReq.customer }, { $inc: { creditBalance: amount } });
+                                rReq.refundAmount = amount;
+                                rReq.refundId = refund._id as any;
+                                refundIssued = amount;
+                                sendNotification(
+                                    "Customer",
+                                    String(rReq.customer),
+                                    "Refund credited",
+                                    `₹${amount} for your return has been credited to your Unnati wallet.`,
+                                    { type: "Payment", priority: "High" }
+                                ).catch((err) => console.error("Return refund notification failed:", err));
+                            }
+                        }
+                        // Replacement: the old item is restocked above; no refund (a new item is owed instead).
+                    }
                 }
             }
             await rReq.save();
@@ -644,6 +724,6 @@ export const updateReturnTaskStatus = asyncHandler(async (req: Request, res: Res
     return res.status(200).json({
         success: true,
         message: `Task status updated to ${status}`,
-        data: assignment
+        data: { ...assignment.toObject(), refundIssued },
     });
 });

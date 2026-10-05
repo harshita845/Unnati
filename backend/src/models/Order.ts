@@ -82,6 +82,8 @@ export interface IOrder extends Document {
   deliveredAt?: Date;
   // When the rider confirmed (scan / code) they collected the right package at the store
   pickupVerifiedAt?: Date;
+  // Per-store progress: every store in the order must accept (and pack) before a rider is sent
+  sellerProgress?: Array<{ seller: mongoose.Types.ObjectId; acceptedAt?: Date; readyAt?: Date }>;
 
   // Delivery OTP
   deliveryOtp?: string;
@@ -311,6 +313,14 @@ const OrderSchema = new Schema<IOrder>(
     pickupVerifiedAt: {
       type: Date,
     },
+    sellerProgress: [
+      {
+        _id: false,
+        seller: { type: Schema.Types.ObjectId, ref: "Seller", required: true },
+        acceptedAt: { type: Date },
+        readyAt: { type: Date },
+      },
+    ],
 
     // Delivery OTP
     deliveryOtp: {

@@ -82,22 +82,68 @@ const notifySeller = async (
 };
 
 // ----------------------------------------------------------------------------
-// Category rules (Super Admin decides per category)
+// Category rules (Super Admin decides per MAIN category only — a subcategory
+// always follows the main category it sits under, never its own setting)
 // ----------------------------------------------------------------------------
 
-/** Whether the category needs a plan, its grace period and its bill type (category value or global default). */
+/** Walk up `parentId` to the top-level (main) category. Subscriptions are only ever set there. */
+const resolveMainCategoryId = async (categoryId: unknown): Promise<string | null> => {
+  let id = idStr(categoryId);
+  if (!id || !mongoose.isValidObjectId(id)) return null;
+  for (let hops = 0; hops < 10; hops++) {
+    const cat: any = await Category.findById(id).select("parentId").lean();
+    if (!cat) return null;
+    if (!cat.parentId) return id;
+    id = idStr(cat.parentId);
+  }
+  return id; // defensive cap against a corrupted/cyclic parent chain
+};
+
+/** A main category plus every subcategory nested under it, for matching products against it. */
+export const expandCategoryWithDescendants = async (mainCategoryIds: unknown[]): Promise<mongoose.Types.ObjectId[]> => {
+  const roots = [...new Set(mainCategoryIds.map(idStr).filter((id) => mongoose.isValidObjectId(id)))];
+  if (!roots.length) return [];
+  const all: any[] = await Category.find({}).select("_id parentId").lean();
+  const childrenOf = new Map<string, string[]>();
+  for (const c of all) {
+    if (!c.parentId) continue;
+    const p = String(c.parentId);
+    if (!childrenOf.has(p)) childrenOf.set(p, []);
+    childrenOf.get(p)!.push(String(c._id));
+  }
+  const result = new Set<string>(roots);
+  const queue = [...roots];
+  while (queue.length) {
+    const id = queue.shift()!;
+    for (const child of childrenOf.get(id) || []) {
+      if (!result.has(child)) {
+        result.add(child);
+        queue.push(child);
+      }
+    }
+  }
+  return [...result].map((id) => new mongoose.Types.ObjectId(id));
+};
+
+/**
+ * Whether the category needs a plan, its grace period and its bill type (category value or
+ * global default). `categoryId` can be a main category or a subcategory under it — either way
+ * the rule is read from the main category.
+ */
 export const getCategoryRules = async (categoryId: unknown, settings?: ISubscriptionSettings) => {
   const s = settings || (await getSubscriptionSettings());
-  if (!categoryId || !mongoose.isValidObjectId(idStr(categoryId))) {
-    return { required: false, graceDays: s.graceDays, billType: (s.invoiceEnabled ? "gst" : "receipt") as "gst" | "receipt" };
-  }
-  const category: any = await Category.findById(idStr(categoryId))
+  const defaults = { required: false, graceDays: s.graceDays, billType: (s.invoiceEnabled ? "gst" : "receipt") as "gst" | "receipt", mainCategoryId: null as string | null };
+  const mainCategoryId = await resolveMainCategoryId(categoryId);
+  if (!mainCategoryId) return defaults;
+  const category: any = await Category.findById(mainCategoryId)
     .select("subscriptionEnabled subscriptionGraceDays subscriptionBillType")
     .lean();
+  if (!category) return defaults;
   return {
-    required: !!category?.subscriptionEnabled,
-    graceDays: typeof category?.subscriptionGraceDays === "number" ? category.subscriptionGraceDays : s.graceDays,
-    billType: (category?.subscriptionBillType || (s.invoiceEnabled ? "gst" : "receipt")) as "gst" | "receipt",
+    required: !!category.subscriptionEnabled,
+    graceDays: typeof category.subscriptionGraceDays === "number" ? category.subscriptionGraceDays : s.graceDays,
+    billType: (category.subscriptionBillType || (s.invoiceEnabled ? "gst" : "receipt")) as "gst" | "receipt",
+    mainCategoryId,
   };
 };
 
@@ -127,7 +173,8 @@ export const getCategoryAccess = async (sellerId: unknown, categoryId: unknown) 
     status: { $in: ["Active", "Expired"] },
     startDate: { $lte: now },
     endDate: { $gt: new Date(now.getTime() - rules.graceDays * DAY_MS) },
-    categories: toId(categoryId),
+    // Plans cover main categories; match on that, not on whatever sub/main id was passed in
+    categories: toId(rules.mainCategoryId!),
   }).sort({ endDate: -1 });
 
   if (!subscription) return { required: true, allowed: false as const, graceDays: rules.graceDays };
@@ -147,9 +194,10 @@ export const assertSellerCanListProduct = async (sellerId: unknown, categoryId: 
   }
   const maxProducts = access.subscription?.planSnapshot?.limits?.maxProducts;
   if (maxProducts) {
+    const matchIds = await expandCategoryWithDescendants(access.subscription!.categories);
     const count = await Product.countDocuments({
       seller: toId(sellerId),
-      category: { $in: access.subscription!.categories },
+      category: { $in: matchIds },
       ...(excludeProductId ? { _id: { $ne: toId(excludeProductId) } } : {}),
     });
     if (count >= maxProducts) {
@@ -184,12 +232,13 @@ export const getFeaturedSellerIds = async (): Promise<string[]> => {
 // Visibility of seller products when access lapses / returns
 // ----------------------------------------------------------------------------
 
-/** Hide or show the seller's products in these categories according to current access. */
+/** Hide or show the seller's products in these (main) categories, and their subcategories, according to current access. */
 export const syncSellerCategoryVisibility = async (sellerId: unknown, categoryIds: unknown[]) => {
   for (const categoryId of categoryIds) {
     const access = await getCategoryAccess(sellerId, categoryId);
+    const matchIds = await expandCategoryWithDescendants([categoryId]);
     await Product.updateMany(
-      { seller: toId(sellerId), category: toId(categoryId) },
+      { seller: toId(sellerId), category: { $in: matchIds.length ? matchIds : [toId(categoryId)] } },
       { $set: { subscriptionHidden: !access.allowed } }
     );
   }
@@ -232,8 +281,9 @@ export const onCategorySubscriptionChanged = async (
   options?: { trial?: { startDate: Date; endDate: Date } | null; adminId?: unknown }
 ) => {
   const catId = toId(categoryId);
+  const matchIds = await expandCategoryWithDescendants([catId]);
   if (!enabled) {
-    await Product.updateMany({ category: catId, subscriptionHidden: true }, { $set: { subscriptionHidden: false } });
+    await Product.updateMany({ category: { $in: matchIds }, subscriptionHidden: true }, { $set: { subscriptionHidden: false } });
     return { trialsGranted: 0, sellersAffected: 0 };
   }
 
@@ -245,7 +295,7 @@ export const onCategorySubscriptionChanged = async (
     trial = { startDate: now, endDate: computeEndDate(now, settings.trialDays, "day") };
   }
 
-  const sellerIds: any[] = await Product.distinct("seller", { category: catId });
+  const sellerIds: any[] = await Product.distinct("seller", { category: { $in: matchIds } });
   const category: any = await Category.findById(catId).select("name").lean();
   let trialsGranted = 0;
 
@@ -282,6 +332,11 @@ export const adminGrantTrial = async (adminId: unknown, sellerId: unknown, categ
   }
   const ids = (Array.isArray(categoryIds) ? categoryIds : []).filter((c) => mongoose.isValidObjectId(idStr(c)));
   if (!ids.length) throw new SubscriptionError(400, "Select at least one category");
+  // A trial covers main categories only — never a subcategory, which always follows its main category
+  const mainCount = await Category.countDocuments({ _id: { $in: ids }, parentId: null });
+  if (mainCount !== new Set(ids.map(idStr)).size) {
+    throw new SubscriptionError(400, "A trial can only be granted for main categories, not subcategories");
+  }
   const { startDate, endDate } = parseDateRange(start, end);
   const trial = await createTrial(sellerId, ids, startDate, endDate, { type: "Admin", id: adminId });
   await syncSellerCategoryVisibility(sellerId, ids);
@@ -620,11 +675,17 @@ export const getSellerSubscriptionOverview = async (sellerId: unknown) => {
   const [plans, history, requiredCategories, sellerCategoryIds] = await Promise.all([
     SubscriptionPlan.find({ isActive: true }).populate("categories", "name").sort({ sortOrder: 1, price: 1 }).lean(),
     SellerSubscription.find({ seller: sid, status: { $ne: "PendingPayment" } }).populate("categories", "name").sort({ createdAt: -1 }).limit(100).lean(),
-    Category.find({ subscriptionEnabled: true, status: "Active" }).select("name").lean(),
+    Category.find({ subscriptionEnabled: true, status: "Active", parentId: null }).select("name").lean(),
     Product.distinct("category", { seller: sid }),
   ]);
 
-  const sellerCats = new Set(sellerCategoryIds.map((c: any) => String(c)));
+  // Products can be filed directly under a main category or under one of its subcategories;
+  // either way the seller "sells in" the main category, so roll every product's category up to it.
+  const sellerCats = new Set<string>();
+  for (const catId of sellerCategoryIds) {
+    const mainId = await resolveMainCategoryId(catId);
+    if (mainId) sellerCats.add(mainId);
+  }
   const requiredIds = new Set((requiredCategories as any[]).map((c) => String(c._id)));
   // Every category the seller actually sells in, even ones that don't require a plan,
   // so a seller in any city always sees all of their own categories here.
@@ -676,7 +737,8 @@ export const getSellerSubscriptionOverview = async (sellerId: unknown) => {
     }
     let usage: { products: number; maxProducts: number | null } | null = null;
     if (sub) {
-      const count = await Product.countDocuments({ seller: sid, category: { $in: sub.categories } });
+      const matchIds = await expandCategoryWithDescendants(sub.categories);
+      const count = await Product.countDocuments({ seller: sid, category: { $in: matchIds } });
       usage = { products: count, maxProducts: sub.planSnapshot?.limits?.maxProducts ?? null };
     }
     categories.push({

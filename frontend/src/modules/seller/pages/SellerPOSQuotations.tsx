@@ -482,7 +482,7 @@ const SellerPOSQuotations: React.FC = () => {
 
     let shopName = 'Ecommerce Agri & Seeds';
     let shopAddress = 'Nagda, Madhya Pradesh, India - 454001';
-    let shopPhone = '7898111456';
+    let shopPhone = '';
     try {
       const rawSettings = localStorage.getItem('seller_bill_settings');
       if (rawSettings) {

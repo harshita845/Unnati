@@ -93,6 +93,9 @@ export default function SellerStockManagement() {
                     limit: rowsPerPage,
                 };
 
+                if (searchTerm && searchTerm.trim()) {
+                    params.search = searchTerm.trim();
+                }
                 if (categoryFilter !== 'All Category') {
                     params.category = categoryFilter;
                 }
@@ -155,7 +158,7 @@ export default function SellerStockManagement() {
         const intervalId = setInterval(fetchStockItems, 30000);
 
         return () => clearInterval(intervalId);
-    }, [currentPage, rowsPerPage, categoryFilter, statusFilter, user]);
+    }, [currentPage, rowsPerPage, categoryFilter, statusFilter, searchTerm, user]);
 
     // Handle stock update
     const handleStockUpdate = async (productId: string, variationId: string, newStock: number) => {
@@ -214,8 +217,12 @@ export default function SellerStockManagement() {
 
     // Filter items
     const filteredItems = stockItems.filter(item => {
-        const matchesSearch = (item.name || "").toLowerCase().includes((searchTerm || "").toLowerCase()) ||
-            (item.seller || "").toLowerCase().includes((searchTerm || "").toLowerCase());
+        const term = (searchTerm || "").trim().toLowerCase();
+        const matchesSearch = !term ||
+            (item.name || "").toLowerCase().includes(term) ||
+            (item.seller || "").toLowerCase().includes(term) ||
+            (item.category || "").toLowerCase().includes(term) ||
+            (item.variation || "").toLowerCase().includes(term);
         const matchesCategory = categoryFilter === 'All Category' || item.category === categoryFilter;
         const matchesStatus = statusFilter === 'All Products' ||
             (statusFilter === 'Published' && item.status === 'Published') ||

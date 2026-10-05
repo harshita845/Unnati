@@ -1,4 +1,5 @@
-import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
+import { useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -11,31 +12,57 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// Custom store icon
-const storeIcon = new L.DivIcon({
-  html: `<div style="font-size: 24px; text-align: center;">🏪</div>`,
-  className: 'store-marker',
-  iconSize: [30, 30],
-  iconAnchor: [15, 15]
+// Custom store icons
+const activeStoreIcon = new L.DivIcon({
+  html: `<div style="font-size: 28px; text-align: center; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">🏪</div>`,
+  className: 'store-marker-active',
+  iconSize: [36, 36],
+  iconAnchor: [18, 18]
 });
+
+const otherStoreIcon = new L.DivIcon({
+  html: `<div style="font-size: 22px; text-align: center; opacity: 0.75;">📍</div>`,
+  className: 'store-marker-other',
+  iconSize: [26, 26],
+  iconAnchor: [13, 13]
+});
+
+export interface SellerLocationItem {
+  _id: string;
+  storeName: string;
+  latitude: number;
+  longitude: number;
+  serviceRadiusKm?: number;
+}
 
 interface SellerServiceMapProps {
   latitude: number;
   longitude: number;
   radiusKm: number;
   storeName: string;
+  allSellers?: SellerLocationItem[];
+  selectedSellerId?: string;
+  onSelectSeller?: (seller: SellerLocationItem) => void;
+}
+
+function ChangeView({ center, zoom }: { center: [number, number]; zoom: number }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, zoom, { animate: true });
+  }, [center[0], center[1], zoom, map]);
+  return null;
 }
 
 export default function SellerServiceMap({
   latitude,
   longitude,
   radiusKm,
-  storeName
+  storeName,
+  allSellers = [],
+  selectedSellerId,
+  onSelectSeller,
 }: SellerServiceMapProps) {
-  // Center of the map
   const position: [number, number] = [latitude, longitude];
-
-  // Radius in meters for Leaflet Circle
   const radiusMeters = radiusKm * 1000;
 
   return (
@@ -46,26 +73,56 @@ export default function SellerServiceMap({
         style={{ height: '100%', width: '100%' }}
         className="z-0"
       >
+        <ChangeView center={position} zoom={12} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <Marker position={position} icon={storeIcon}>
+
+        {/* Selected Store Marker */}
+        <Marker position={position} icon={activeStoreIcon}>
           <Popup>
-            <div className="font-semibold">{storeName}</div>
-            <div className="text-xs text-neutral-600">Service Radius: {radiusKm} km</div>
+            <div className="font-semibold text-sm">{storeName}</div>
+            <div className="text-xs text-neutral-600 mt-0.5">Service Radius: {radiusKm} km</div>
           </Popup>
         </Marker>
+
+        {/* Service Radius Circle */}
         <Circle
           center={position}
           radius={radiusMeters}
           pathOptions={{
-            color: 'var(--primary-color)', // pink-600
-            fillColor: 'var(--primary-color)',
+            color: 'var(--primary-color, #e11d48)',
+            fillColor: 'var(--primary-color, #e11d48)',
             fillOpacity: 0.2,
             weight: 2
           }}
         />
+
+        {/* Other Stores Markers */}
+        {allSellers.map((seller) => {
+          if (seller._id === selectedSellerId || !seller.latitude || !seller.longitude) return null;
+          return (
+            <Marker
+              key={seller._id}
+              position={[seller.latitude, seller.longitude]}
+              icon={otherStoreIcon}
+              eventHandlers={{
+                click: () => onSelectSeller?.(seller),
+              }}
+            >
+              <Popup>
+                <div className="font-medium text-xs">{seller.storeName}</div>
+                <button
+                  onClick={() => onSelectSeller?.(seller)}
+                  className="mt-1 text-[11px] text-blue-600 underline font-semibold cursor-pointer"
+                >
+                  View Details & Service Area
+                </button>
+              </Popup>
+            </Marker>
+          );
+        })}
       </MapContainer>
     </div>
   );

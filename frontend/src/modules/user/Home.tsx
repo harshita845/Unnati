@@ -425,9 +425,12 @@ export default function Home() {
         }
 
         // Fetch home content for tab (categories, shops, sections)
-        const homeRes = await getHomeContent(activeTab, location?.latitude, location?.longitude, true, 5 * 60 * 1000, true);
+        const homeRes = await getHomeContent(activeTab, location?.latitude, location?.longitude, true, 5 * 60 * 1000, true, location?.city);
         if (homeRes.success && homeRes.data) {
-          setHomeData(homeRes.data);
+          setHomeData((prev: any) => ({
+            ...homeRes.data,
+            shops: (homeRes.data.shops && homeRes.data.shops.length > 0) ? homeRes.data.shops : (prev?.shops || [])
+          }));
         }
       } catch (e) {
         console.error("Failed to load tab data:", e);

@@ -8,6 +8,8 @@ export interface OrdersContextType {
   fetchOrderById: (id: string) => Promise<Order | undefined>;
   updateOrderStatus: (id: string, status: Order["status"]) => void;
   loading: boolean;
+  /** Re-fetch the customer's orders (e.g. after placing a new one) */
+  refreshOrders: () => Promise<void>;
 }
 
 export const OrdersContext = createContext<OrdersContextType | undefined>(undefined);

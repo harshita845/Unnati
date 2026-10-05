@@ -632,7 +632,7 @@ const menuSections: MenuSection[] = [
           },
           {
             label: "Seller Subscriptions",
-            path: "/admin/seller-subscriptions",
+            path: "/admin/subscriptions",
             icon: (
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="2" y="5" width="20" height="14" rx="2"></rect>
@@ -1616,6 +1616,7 @@ export default function AdminSidebar({ onClose }: AdminSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
+  const [collapsedMenus, setCollapsedMenus] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const staffSession = getStaffSession("admin");
   const isStaffMode = !!staffSession;
@@ -1673,24 +1674,39 @@ export default function AdminSidebar({ onClose }: AdminSidebarProps) {
   };
 
   const toggleMenu = (path: string) => {
-    setExpandedMenus((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(path)) {
-        newSet.delete(path);
-      } else {
-        newSet.add(path);
-      }
-      return newSet;
-    });
+    const menuItem = orderedMenuSections
+      .flatMap((section) => section.items)
+      .find((item) => item.path === path);
+    const currentlyExpanded =
+      !collapsedMenus.has(path) &&
+      (expandedMenus.has(path) ||
+        !!(menuItem?.submenuItems && isSubmenuActive(menuItem.submenuItems)));
+
+    if (currentlyExpanded) {
+      setCollapsedMenus((prev) => new Set(prev).add(path));
+      setExpandedMenus((prev) => {
+        const next = new Set(prev);
+        next.delete(path);
+        return next;
+      });
+    } else {
+      setCollapsedMenus((prev) => {
+        const next = new Set(prev);
+        next.delete(path);
+        return next;
+      });
+      setExpandedMenus((prev) => new Set(prev).add(path));
+    }
   };
 
   const isExpanded = (path: string) => {
+    if (collapsedMenus.has(path)) return false;
     const menuItem = orderedMenuSections
       .flatMap((section) => section.items)
       .find((item) => item.path === path);
     return (
       expandedMenus.has(path) ||
-      (menuItem?.submenuItems && isSubmenuActive(menuItem.submenuItems))
+      !!(menuItem?.submenuItems && isSubmenuActive(menuItem.submenuItems))
     );
   };
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import api from '../../../services/api/config';
+import { useNavigate } from 'react-router-dom';
 
 export interface AdminNotificationData {
   type: string;
@@ -35,9 +35,9 @@ interface AdminNotificationAlertProps {
   onActionComplete: () => void;
 }
 
-const AdminNotificationAlert: React.FC<AdminNotificationAlertProps> = ({ notification, onClose, onActionComplete }) => {
+const AdminNotificationAlert: React.FC<AdminNotificationAlertProps> = ({ notification, onClose }) => {
+  const navigate = useNavigate();
   const [volume, setVolume] = useState(0.8);
-  const [isProcessing, setIsProcessing] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -57,26 +57,6 @@ const AdminNotificationAlert: React.FC<AdminNotificationAlertProps> = ({ notific
 
   if (!notification) return null;
 
-  const handleStatusUpdate = async (newStatus: string) => {
-    if (isProcessing) return;
-    setIsProcessing(true);
-    try {
-      const response = await api.patch(`/admin/orders/${notification.orderId}/status`, {
-        status: newStatus,
-      });
-      if (response.data.success) {
-        onActionComplete();
-        onClose();
-      } else {
-        alert("Failed to update status");
-      }
-    } catch (err: any) {
-      console.error("Error updating status:", err);
-      alert(err.response?.data?.message || "Failed to update status");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black bg-opacity-60 backdrop-blur-sm">
@@ -185,21 +165,26 @@ const AdminNotificationAlert: React.FC<AdminNotificationAlertProps> = ({ notific
         </div>
 
         {/* Footer */}
-        <div className="p-6 bg-neutral-50 border-t border-neutral-200 flex gap-4">
-          <button
-            onClick={() => handleStatusUpdate('Rejected')}
-            disabled={isProcessing}
-            className="flex-1 py-3 rounded-xl font-bold text-red-600 bg-red-50 border border-red-200 shadow-sm transition-transform active:scale-95 hover:bg-red-100 disabled:opacity-50"
-          >
-            {isProcessing ? 'Processing...' : 'Reject Order'}
-          </button>
-          <button
-            onClick={() => handleStatusUpdate('Processed')}
-            disabled={isProcessing}
-            className="flex-1 py-3 rounded-xl font-bold text-white bg-green-600 shadow-lg transition-transform active:scale-95 hover:bg-green-700 disabled:opacity-50"
-          >
-            {isProcessing ? 'Processing...' : 'Accept Order'}
-          </button>
+        <div className="p-6 bg-neutral-50 border-t border-neutral-200 space-y-3">
+          {/* Accepting/rejecting is the store's decision; admin follows the order live */}
+          <p className="text-sm text-neutral-600 text-center">Waiting for the store to accept this order.</p>
+          <div className="flex gap-4">
+            <button
+              onClick={onClose}
+              className="flex-1 py-3 rounded-xl font-bold text-neutral-700 bg-white border border-neutral-300 hover:bg-neutral-100"
+            >
+              Close
+            </button>
+            <button
+              onClick={() => {
+                onClose();
+                navigate(`/admin/orders/${notification.orderId}`);
+              }}
+              className="flex-1 py-3 rounded-xl font-bold text-white bg-[var(--primary-dark)] hover:bg-[var(--primary-darker)]"
+            >
+              View Order
+            </button>
+          </div>
         </div>
       </div>
     </div>

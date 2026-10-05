@@ -211,13 +211,13 @@ const AdminPOSSupplierDetail = () => {
 
         const esc = (v: string) =>
           v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-        const shopTitle = esc(String(bs?.shopName || 'Ecommerce'));
+        const shopTitle = esc(String(bs?.shopName || 'Unnati'));
         const addrLines = String(
           bs?.address ||
-            'Q7WM+92M, Q7WM+92M, , Indore Division,\nNagda, Madhya Pradesh, India - 454001'
+            ''
         );
         const addrHtml = esc(addrLines).replace(/\n/g, '<br>');
-        const phoneLine = esc(String(bs?.phone || '7898111456'));
+        const phoneLine = esc(String(bs?.phone || ''));
         const fssaiBlk =
           bs?.fssai?.enabled && bs?.fssai?.text
             ? `FSSAI: ${esc(String(bs.fssai.text))}`

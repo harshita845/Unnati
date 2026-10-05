@@ -504,6 +504,7 @@ function App() {
                               <Route path="product-display-settings" element={<SellerProductDisplaySettings />} />
                               <Route path="bill-settings" element={<SellerBillSettings />} />
                               <Route path="barcode-settings" element={<SellerBarcodeSettings />} />
+                               <Route path="delivery-settings" element={<AdminDeliverySettings />} />
                               <Route path="inventory-reports/stock-summary" element={<SellerStockSummary />} />
                               <Route path="inventory-reports/stock-balance" element={<SellerStockBalanceSummary />} />
                               <Route path="inventory-reports/low-stock" element={<SellerLowStockSummary />} />
@@ -569,6 +570,7 @@ function App() {
                             <Route path="wallet" element={<AdminWallet />} />
                             <Route path="coupon" element={<AdminCoupon />} />
                             <Route path="seller-subscriptions" element={<AdminSellerSubscriptions />} />
+                            <Route path="subscriptions" element={<AdminSellerSubscriptions />} />
                             <Route path="return" element={<AdminReturnRequest />} />
                             <Route path="notification" element={<AdminNotification />} />
                             <Route path="orders" element={<AdminOrders />} />
@@ -668,6 +670,7 @@ function App() {
                             <Route path="/checkout/address" element={<CheckoutAddress />} />
                             <Route path="/product/:id" element={<ProductDetail />} />
                             <Route path="/invoice/:id" element={<Invoice />} />
+                            <Route path="/orders/:id/invoice" element={<Invoice />} />
                             <Route path="/cart" element={<Cart />} />
                             <Route path="/addresses" element={<Addresses />} />
                             <Route path="/store/:slug" element={<StorePage />} />

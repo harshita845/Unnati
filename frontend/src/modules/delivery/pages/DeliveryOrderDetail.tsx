@@ -115,21 +115,26 @@ export default function DeliveryOrderDetail() {
         setTimeout(() => setCopiedOrderId(false), 2000);
     };
 
-    const fetchOrder = async () => {
+    const fetchOrder = async (silent = false) => {
         if (!id) return;
         try {
-            setLoading(true);
+            if (!silent) setLoading(true);
             const data = await getOrderDetails(id);
             setOrder(data);
         } catch (err: any) {
-            setError(err.message || 'Failed to load order details');
+            if (!silent) setError(err.message || 'Failed to load order details');
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
 
     useEffect(() => {
         fetchOrder();
+        // Keep the status in step with the store and the customer (accepted, packed, cancelled, ...)
+        const timer = setInterval(() => {
+            if (document.visibilityState === 'visible') fetchOrder(true);
+        }, 10000);
+        return () => clearInterval(timer);
     }, [id]);
 
     // Fetch seller locations when order is assigned
@@ -172,9 +177,8 @@ export default function DeliveryOrderDetail() {
         // At the store: the backend checks the code belongs to this order before marking it picked up
         try {
             setLoading(true);
-            const updated = await updateOrderStatus(id, 'Picked up', { pickupCode: code });
-            if (updated?.data) setOrder(updated.data);
-            else await fetchOrder();
+            await updateOrderStatus(id, 'Picked up', { pickupCode: code });
+            await fetchOrder(true);
             alert(`Package verified for order #${order.orderId}. Marked as picked up.`);
         } catch (err: any) {
             alert(err.message || 'Could not verify this package. Please try again.');
@@ -446,12 +450,17 @@ export default function DeliveryOrderDetail() {
 
     const statusFlow: DeliveryOrderStatus[] = ['Pending', 'Ready for pickup', 'Picked up', 'Out for Delivery', 'Delivered'];
 
+    // Received / Pending: the store has not accepted yet, so there is nothing to collect.
+    // Processed: the store accepted and is packing; the rider can collect once they're there.
     const getNormalizedStatus = (status: string): DeliveryOrderStatus => {
-        if (['Processed', 'Received', 'Pending'].includes(status)) {
-            return 'Ready for pickup';
-        }
+        // Received/Pending (store hasn't accepted) and Processed (store is still packing) both
+        // mean "nothing for the rider to do yet" — riders aren't even offered the order until
+        // it reaches Ready for pickup, so none of those show as progress here.
+        if (['Received', 'Pending', 'Processed'].includes(status)) return 'Pending';
         return status as DeliveryOrderStatus;
     };
+    // Riders aren't offered an order until the store has finished packing it (Ready for pickup)
+    const waitingForStore = ['Received', 'Pending', 'Processed'].includes(order.status);
 
     const normalizedStatus = getNormalizedStatus(order.status);
     let currentStatusIndex = statusFlow.indexOf(normalizedStatus);
@@ -464,14 +473,8 @@ export default function DeliveryOrderDetail() {
         if (!id) return;
         try {
             setLoading(true); // Or use a separate loading state for the action
-            const updatedOrder = await updateOrderStatus(id, newStatus);
-            // Verify the update was successful and update local state
-            if (updatedOrder && updatedOrder.data) {
-                setOrder(updatedOrder.data);
-            } else {
-                // Fallback - re-fetch everything
-                await fetchOrder();
-            }
+            await updateOrderStatus(id, newStatus);
+            await fetchOrder(true);
         } catch (err: any) {
             alert(err.message || "Failed to update status");
         } finally {
@@ -527,35 +530,33 @@ export default function DeliveryOrderDetail() {
             )}
 
             {/* Google Maps View - Shared Component for Parity */}
-            {isMapVisible && (
+            {isMapVisible && (() => {
+                // 0/undefined means the address was never geocoded — never pass that to the map as a real point
+                const custLat = order.latitude || order.deliveryAddress?.latitude || 0;
+                const custLng = order.longitude || order.deliveryAddress?.longitude || 0;
+                const hasCustomerCoords = !!custLat && !!custLng;
+                const toCustomer = order.status === 'Picked up' || order.status === 'Out for Delivery';
+                const destination = toCustomer
+                    ? (hasCustomerCoords ? { lat: custLat, lng: custLng } : undefined)
+                    : sellerLocations.length > 0
+                        ? { lat: sellerLocations[sellerLocations.length - 1].latitude, lng: sellerLocations[sellerLocations.length - 1].longitude }
+                        : undefined;
+                return (
                 <GoogleMapsTracking
                     sellerLocations={sellerLocations.map(s => ({
                         lat: s.latitude,
                         lng: s.longitude,
                         name: s.storeName
                     }))}
-                    customerLocation={{
-                        lat: order.deliveryAddress?.latitude || order.address?.latitude || 0,
-                        lng: order.deliveryAddress?.longitude || order.address?.longitude || 0
-                    }}
+                    customerLocation={{ lat: custLat, lng: custLng }}
                     deliveryLocation={deliveryBoyLocation || undefined}
                     isTracking={!!deliveryBoyLocation}
-                    showRoute={!!deliveryBoyLocation && (
-                        order.status === 'Picked up' ||
-                        order.status === 'Out for Delivery' ||
+                    showRoute={!!deliveryBoyLocation && !!destination && (
+                        toCustomer ||
                         (sellerLocations.length > 0 && order.status !== 'Delivered')
                     )}
                     routeOrigin={deliveryBoyLocation || undefined}
-                    routeDestination={
-                        order.status === 'Picked up' || order.status === 'Out for Delivery'
-                            ? {
-                                lat: order.deliveryAddress?.latitude || order.address?.latitude || 0,
-                                lng: order.deliveryAddress?.longitude || order.address?.longitude || 0
-                            }
-                            : sellerLocations.length > 0
-                                ? { lat: sellerLocations[sellerLocations.length - 1].latitude, lng: sellerLocations[sellerLocations.length - 1].longitude }
-                                : undefined
-                    }
+                    routeDestination={destination}
                     routeWaypoints={
                         order.status === 'Picked up' || order.status === 'Out for Delivery'
                             ? []
@@ -573,7 +574,8 @@ export default function DeliveryOrderDetail() {
                     onRouteInfoUpdate={setRouteInfo}
                     lastUpdate={lastUpdate}
                 />
-            )}
+                );
+            })()}
 
             {/* Seller Locations Card (before picked up) */}
             {showSellerLocations && sellerLocations.length > 0 && (
@@ -615,32 +617,34 @@ export default function DeliveryOrderDetail() {
                         </div>
 
                         {/* Status Progress Bar */}
-                        <div className="relative">
-                            <div className="flex justify-between mb-2 relative z-10">
-                                {statusFlow.map((step, idx) => (
-                                    <div key={idx} className="flex flex-col items-center flex-1">
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all duration-300 ${idx <= currentStatusIndex
-                                            ? 'bg-[var(--primary-dark)] border-[var(--primary-dark)] text-white'
-                                            : 'bg-white border-neutral-200 text-neutral-300'
-                                            }`}>
-                                            {idx <= currentStatusIndex ? <Icons.CheckCircle size={14} /> : idx + 1}
+                        <div className="w-full overflow-x-auto pb-1 no-scrollbar">
+                            <div className="relative min-w-[300px]">
+                                <div className="flex justify-between mb-2 relative z-10">
+                                    {statusFlow.map((step, idx) => (
+                                        <div key={idx} className="flex flex-col items-center flex-1">
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all duration-300 ${idx <= currentStatusIndex
+                                                ? 'bg-[var(--primary-dark)] border-[var(--primary-dark)] text-white'
+                                                : 'bg-white border-neutral-200 text-neutral-300'
+                                                }`}>
+                                                {idx <= currentStatusIndex ? <Icons.CheckCircle size={14} /> : idx + 1}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
-                            {/* Connecting Line */}
-                            <div className="absolute top-4 left-0 w-full h-0.5 bg-neutral-100 -z-0">
-                                <div
-                                    className="h-full bg-[var(--primary-dark)] transition-all duration-500"
-                                    style={{ width: `${(currentStatusIndex / (statusFlow.length - 1)) * 100}%` }}
-                                ></div>
-                            </div>
-                            <div className="flex justify-between text-[10px] text-neutral-500 font-medium mt-2">
-                                {statusFlow.map((step, idx) => (
-                                    <span key={idx} className={`text-center flex-1 transition-colors ${idx === currentStatusIndex ? 'text-[var(--primary-dark)] font-bold' : ''}`}>
-                                        {step === 'Ready for pickup' ? 'Ready' : step}
-                                    </span>
-                                ))}
+                                    ))}
+                                </div>
+                                {/* Connecting Line */}
+                                <div className="absolute top-4 left-4 right-4 h-0.5 bg-neutral-100 -z-0">
+                                    <div
+                                        className="h-full bg-[var(--primary-dark)] transition-all duration-500"
+                                        style={{ width: `${(currentStatusIndex / (statusFlow.length - 1)) * 100}%` }}
+                                    ></div>
+                                </div>
+                                <div className="flex justify-between text-[9px] sm:text-[10px] text-neutral-500 font-medium mt-2">
+                                    {statusFlow.map((step, idx) => (
+                                        <span key={idx} className={`text-center flex-1 px-0.5 min-w-0 leading-tight transition-colors ${idx === currentStatusIndex ? 'text-[var(--primary-dark)] font-bold' : ''}`}>
+                                            {step === 'Ready for pickup' ? 'Ready' : step}
+                                        </span>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -818,7 +822,12 @@ export default function DeliveryOrderDetail() {
 
             {/* Floating Glassmorphic Action Button Dock - Order Taken button or status update */}
             {/* "Delivered" is only reachable through the OTP section above */}
-            {nextStatus && nextStatus !== 'Delivered' && order.status !== 'Picked up' && !showOtpInput && (
+            {waitingForStore && (
+                <div className="fixed bottom-24 left-6 right-6 z-30 py-4 px-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-semibold text-center shadow-lg">
+                    {order.status === 'Processed' ? 'Store is packing this order' : 'Waiting for the store to accept this order'}
+                </div>
+            )}
+            {!waitingForStore && nextStatus && nextStatus !== 'Delivered' && order.status !== 'Picked up' && !showOtpInput && (
                 <div className="fixed bottom-24 left-6 right-6 z-30 flex gap-3">
                     {/* Scan Button (Visible when Out for Delivery or Ready for Pickup / Processed) */}
                    {(order.status === 'Out for Delivery' || order.status === 'Ready for pickup' || order.status === 'Processed') && (

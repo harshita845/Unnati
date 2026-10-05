@@ -2,7 +2,8 @@ import mongoose, { Document, Schema } from "mongoose";
 
 export interface IRefund extends Document {
   order: mongoose.Types.ObjectId;
-  payment: mongoose.Types.ObjectId;
+  /** Optional — orders here don't keep a separate Payment ledger record */
+  payment?: mongoose.Types.ObjectId;
   customer: mongoose.Types.ObjectId;
 
   // Refund Info
@@ -33,7 +34,6 @@ const RefundSchema = new Schema<IRefund>(
     payment: {
       type: Schema.Types.ObjectId,
       ref: "Payment",
-      required: [true, "Payment is required"],
     },
     customer: {
       type: Schema.Types.ObjectId,

@@ -8,6 +8,8 @@ import Delivery from "../../../models/Delivery";
 import DeliveryAssignment from "../../../models/DeliveryAssignment";
 import { cancelOrderAndRestoreStock, markOrderDelivered } from "../../../services/orderLifecycleService";
 import { OrderPlacementError } from "../../../services/orderPlacementService";
+import { ORDER_STAGE, recordAllStoresProgress, transitionOrderStatus } from "../../../services/orderFlowService";
+import { notifyDeliveryBoysOfNewOrder } from "../../../services/orderNotificationService";
 import Return from "../../../models/Return";
 import { notifySellersOfOrderUpdate } from "../../../services/sellerNotificationService";
 import Product from "../../../models/Product";
@@ -33,6 +35,97 @@ import {
 } from "../../../services/phonepeService";
 import { completePosOnlinePayment } from "../../pos/completePosOnlinePayment";
 
+function tryParseSearchDate(searchStr: string): { start: Date; end: Date } | null {
+  const trimmed = searchStr.trim();
+  if (!trimmed) return null;
+
+  // Format 1: YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD
+  if (/^\d{4}[/.-]\d{1,2}[/.-]\d{1,2}$/.test(trimmed)) {
+    const parts = trimmed.split(/[/.-]/);
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    const start = new Date(year, month, day, 0, 0, 0, 0);
+    const end = new Date(year, month, day, 23, 59, 59, 999);
+    if (!isNaN(start.getTime())) return { start, end };
+  }
+
+  // Format 2: DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY (or D/M/YY or M/D/YY)
+  if (/^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$/.test(trimmed)) {
+    const parts = trimmed.split(/[/.-]/);
+    let year = parseInt(parts[2], 10);
+    if (year < 100) year += 2000;
+    const p0 = parseInt(parts[0], 10);
+    const p1 = parseInt(parts[1], 10);
+    let day: number;
+    let month: number;
+    if (p1 > 12) {
+      month = p0 - 1;
+      day = p1;
+    } else {
+      day = p0;
+      month = p1 - 1;
+    }
+    const start = new Date(year, month, day, 0, 0, 0, 0);
+    const end = new Date(year, month, day, 23, 59, 59, 999);
+    if (!isNaN(start.getTime())) return { start, end };
+  }
+
+  // Format 3: DD/MM or DD-MM (current year)
+  if (/^\d{1,2}[/.-]\d{1,2}$/.test(trimmed)) {
+    const parts = trimmed.split(/[/.-]/);
+    const year = new Date().getFullYear();
+    const p0 = parseInt(parts[0], 10);
+    const p1 = parseInt(parts[1], 10);
+    let day: number;
+    let month: number;
+    if (p1 > 12) {
+      month = p0 - 1;
+      day = p1;
+    } else {
+      day = p0;
+      month = p1 - 1;
+    }
+    const start = new Date(year, month, day, 0, 0, 0, 0);
+    const end = new Date(year, month, day, 23, 59, 59, 999);
+    if (!isNaN(start.getTime())) return { start, end };
+  }
+
+  return null;
+}
+
+function buildSearchCondition(searchStr: string) {
+  const trimmed = searchStr.trim();
+  if (!trimmed) return null;
+
+  const searchOrs: any[] = [
+    { orderNumber: { $regex: trimmed, $options: "i" } },
+    { customerName: { $regex: trimmed, $options: "i" } },
+    { customerEmail: { $regex: trimmed, $options: "i" } },
+    { customerPhone: { $regex: trimmed, $options: "i" } },
+    { paymentMethod: { $regex: trimmed, $options: "i" } },
+    { paymentStatus: { $regex: trimmed, $options: "i" } },
+  ];
+
+  const numericVal = parseFloat(trimmed);
+  if (!isNaN(numericVal) && !trimmed.includes("/") && !trimmed.includes("-")) {
+    searchOrs.push({ total: numericVal });
+    searchOrs.push({ subtotal: numericVal });
+  }
+
+  const dateParsed = tryParseSearchDate(trimmed);
+  if (dateParsed) {
+    const dateFilter = {
+      $gte: dateParsed.start,
+      $lte: dateParsed.end,
+    };
+    searchOrs.push({ createdAt: dateFilter });
+    searchOrs.push({ orderDate: dateFilter });
+  }
+
+  return { $or: searchOrs };
+}
+
 /**
  * Get all orders with filters
  */
@@ -49,23 +142,32 @@ export const getAllOrders = asyncHandler(
       search,
     } = req.query;
 
-    const query: any = {};
+    const conditions: any[] = [];
 
-    if (status) query.status = status;
-    if (paymentStatus) query.paymentStatus = paymentStatus;
+    if (status) conditions.push({ status });
+    if (paymentStatus) conditions.push({ paymentStatus });
     if (dateFrom || dateTo) {
-      query.orderDate = {};
-      if (dateFrom) query.orderDate.$gte = new Date(dateFrom as string);
-      if (dateTo) query.orderDate.$lte = new Date(dateTo as string);
+      const dateFilter: any = {};
+      if (dateFrom) {
+        const start = new Date(dateFrom as string);
+        start.setHours(0, 0, 0, 0);
+        dateFilter.$gte = start;
+      }
+      if (dateTo) {
+        const end = new Date(dateTo as string);
+        end.setHours(23, 59, 59, 999);
+        dateFilter.$lte = end;
+      }
+      conditions.push({
+        $or: [{ createdAt: dateFilter }, { orderDate: dateFilter }]
+      });
     }
     if (search) {
-      query.$or = [
-        { orderNumber: { $regex: search as string, $options: "i" } },
-        { customerName: { $regex: search as string, $options: "i" } },
-        { customerEmail: { $regex: search as string, $options: "i" } },
-        { customerPhone: { $regex: search as string, $options: "i" } },
-      ];
+      const searchCond = buildSearchCondition(search as string);
+      if (searchCond) conditions.push(searchCond);
     }
+
+    const query: any = conditions.length > 0 ? { $and: conditions } : {};
 
     // If seller filter, need to check order items
     if (seller) {
@@ -134,15 +236,10 @@ export const getOnlineOrders = asyncHandler(
     }
 
     if (search) {
-      const searchRegex = { $regex: search as string, $options: "i" };
-      query.$or = [
-        { orderNumber: searchRegex },
-        { customerName: searchRegex },
-        { customerEmail: searchRegex },
-        { customerPhone: searchRegex },
-        { paymentMethod: searchRegex },
-        { paymentStatus: searchRegex }
-      ];
+      const searchCond = buildSearchCondition(search as string);
+      if (searchCond) {
+        query.$and.push(searchCond);
+      }
     }
 
     const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
@@ -253,23 +350,54 @@ export const getOrderById = asyncHandler(
   async (req: Request, res: Response) => {
     const { id } = req.params;
 
-    const order = await Order.findById(id)
-      .populate("customer", "name email phone")
-      .populate("deliveryBoy", "name mobile email")
-      .populate({
-        path: "items",
-        populate: [
-          {
-            path: "product",
-            select: "productName mainImage price compareAtPrice wholesalePrice variations",
-          },
-          {
-            path: "seller",
-            select: "sellerName storeName",
-          },
+    let order: any = null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      order = await Order.findById(id)
+        .populate("customer", "name email phone")
+        .populate("deliveryBoy", "name mobile email")
+        .populate({
+          path: "items",
+          populate: [
+            {
+              path: "product",
+              select: "productName mainImage price compareAtPrice wholesalePrice variations",
+            },
+            {
+              path: "seller",
+              select: "sellerName storeName",
+            },
+          ],
+        })
+        .populate("cancelledBy", "firstName lastName");
+    }
+
+    if (!order) {
+      const cleanId = id.startsWith("#") ? id.slice(1) : id;
+      order = await Order.findOne({
+        $or: [
+          { orderNumber: id },
+          { orderNumber: cleanId },
+          { orderNumber: `ORD${cleanId}` },
+          { orderNumber: `#${cleanId}` },
         ],
       })
-      .populate("cancelledBy", "firstName lastName");
+        .populate("customer", "name email phone")
+        .populate("deliveryBoy", "name mobile email")
+        .populate({
+          path: "items",
+          populate: [
+            {
+              path: "product",
+              select: "productName mainImage price compareAtPrice wholesalePrice variations",
+            },
+            {
+              path: "seller",
+              select: "sellerName storeName",
+            },
+          ],
+        })
+        .populate("cancelledBy", "firstName lastName");
+    }
 
     if (!order) {
       return res.status(404).json({
@@ -294,6 +422,22 @@ export const updateOrderStatus = asyncHandler(
     const { id } = req.params;
     const { status, adminNotes } = req.body;
 
+    let targetOrderId = id;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      const cleanId = id.startsWith("#") ? id.slice(1) : id;
+      const foundOrder = await Order.findOne({
+        $or: [
+          { orderNumber: id },
+          { orderNumber: cleanId },
+          { orderNumber: `ORD${cleanId}` },
+          { orderNumber: `#${cleanId}` },
+        ],
+      }).select("_id");
+      if (foundOrder) {
+        targetOrderId = foundOrder._id.toString();
+      }
+    }
+
     const validStatuses = [
       "Received",
       "Pending",
@@ -313,12 +457,23 @@ export const updateOrderStatus = asyncHandler(
       });
     }
 
-    // Delivered / Cancelled / Rejected go through the shared lifecycle so stock and money stay correct
+    // Delivered / Cancelled / Rejected go through the shared lifecycle so stock and money stay correct.
+    // Other changes only move forward, atomically, so a picked-up order can never be sent back.
+    let dispatchNow = false;
     try {
+      if (ORDER_STAGE[status] !== undefined && status !== "Delivered") {
+        const from = Object.keys(ORDER_STAGE).filter((s) => ORDER_STAGE[s] < ORDER_STAGE[status]);
+        const { changed } = await transitionOrderStatus(targetOrderId, from, status);
+        // Acting on the stores' behalf: record it per store so their pages agree with the order
+        if (changed && status === "Processed") await recordAllStoresProgress(targetOrderId, "accepted");
+        if (changed && status === "Ready for pickup") await recordAllStoresProgress(targetOrderId, "ready");
+        // Admin marked it ready on behalf of the store(s): only now are riders offered it
+        dispatchNow = changed && status === "Ready for pickup";
+      }
       if (status === "Delivered") {
-        await markOrderDelivered(id);
+        await markOrderDelivered(targetOrderId);
       } else if (status === "Cancelled" || status === "Rejected") {
-        await cancelOrderAndRestoreStock(id, {
+        await cancelOrderAndRestoreStock(targetOrderId, {
           finalStatus: status,
           reason: adminNotes || `${status} by admin`,
           cancelledBy: req.user?.userId,
@@ -332,7 +487,13 @@ export const updateOrderStatus = asyncHandler(
     }
 
     const updateData: any = {};
-    if (!["Delivered", "Cancelled", "Rejected"].includes(status)) updateData.status = status;
+    if (!["Delivered", "Cancelled", "Rejected"].includes(status) && ORDER_STAGE[status] === undefined) {
+      // Returned: only from a delivered order
+      const moved = await Order.updateOne({ _id: id, status: "Delivered" }, { $set: { status } });
+      if (!moved.modifiedCount) {
+        return res.status(400).json({ success: false, message: `Only a delivered order can be marked ${status}` });
+      }
+    }
     if (adminNotes) updateData.adminNotes = adminNotes;
 
     const order = await Order.findByIdAndUpdate(id, updateData, {
@@ -350,11 +511,17 @@ export const updateOrderStatus = asyncHandler(
       });
     }
 
-    // Trigger notification if status is "Processed" (Confirmed) or if paymentStatus changed to "Paid"
-    if (status === "Processed" || order.paymentStatus === "Paid") {
+    // Trigger notification if status is "Processed" (Confirmed), "Ready for pickup" (dispatches
+    // to riders), or if paymentStatus changed to "Paid"
+    if (status === "Processed" || status === "Ready for pickup" || order.paymentStatus === "Paid") {
       const io: SocketIOServer = req.app.get("io");
       if (io) {
         notifySellersOfOrderUpdate(io, order, "STATUS_UPDATE");
+        if (dispatchNow) {
+          notifyDeliveryBoysOfNewOrder(io, order.toObject()).catch((err: any) =>
+            console.error("Error dispatching admin-accepted order to riders:", err)
+          );
+        }
       }
     }
 
@@ -813,6 +980,21 @@ export const assignDeliveryBoy = asyncHandler(
       return res.status(404).json({
         success: false,
         message: "Order not found",
+      });
+    }
+
+    // A rider can only be assigned once every store has finished packing (Ready for pickup).
+    // Assigning earlier used to leave the order stuck: the rider would show up with the order
+    // in their app but could never mark it "Picked up", because the order's own status never
+    // advanced past "Processed" (it still needed another store to accept/pack, or the seller
+    // to mark it ready) — the assignment and the real state silently fell out of sync.
+    if ((ORDER_STAGE[order.status] ?? -1) < ORDER_STAGE["Ready for pickup"]) {
+      return res.status(400).json({
+        success: false,
+        message:
+          order.status === "Processed"
+            ? "This order isn't ready for pickup yet — the store (or one of several stores on this order) hasn't finished packing it."
+            : `A delivery partner can only be assigned once the order is Ready for pickup (it is currently ${order.status}).`,
       });
     }
 

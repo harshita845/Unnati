@@ -773,12 +773,30 @@ export default function SellerProductList() {
           product.stock !== "Unlimited" &&
           typeof product.stock === "number" &&
           product.stock === 0);
+      const term = (searchTerm || "").trim().toLowerCase();
       const matchesSearch =
-        (product.name || "").toLowerCase().includes((searchTerm || "").toLowerCase()) ||
-        (product.sku || "").toLowerCase().includes((searchTerm || "").toLowerCase()) ||
+        !term ||
+        (product.name || "").toLowerCase().includes(term) ||
+        (product.sku || "").toLowerCase().includes(term) ||
+        (product.category || "").toLowerCase().includes(term) ||
+        (product.subCategory || "").toLowerCase().includes(term) ||
+        (product.subSubCategory || "").toLowerCase().includes(term) ||
+        (product.brand || "").toLowerCase().includes(term) ||
+        (product.description || "").toLowerCase().includes(term) ||
+        (product.hsnCode || "").toLowerCase().includes(term) ||
+        (product.rackNumber || "").toLowerCase().includes(term) ||
+        (product.storageLocation || "").toLowerCase().includes(term) ||
+        (product.storageCity || "").toLowerCase().includes(term) ||
+        (product.storageWarehouse || "").toLowerCase().includes(term) ||
+        (product.storageRoom || "").toLowerCase().includes(term) ||
+        (product.unit || "").toLowerCase().includes(term) ||
+        (product.variation || "").toLowerCase().includes(term) ||
+        (product.sizeName || "").toLowerCase().includes(term) ||
+        (product.colorName || "").toLowerCase().includes(term) ||
+        (product.attributeName || "").toLowerCase().includes(term) ||
         (Array.isArray(product.barcode)
-          ? product.barcode.some((b: string) => String(b).toLowerCase().includes(searchTerm.toLowerCase()))
-          : (product.barcode && String(product.barcode).toLowerCase().includes(searchTerm.toLowerCase())));
+          ? product.barcode.some((b: string) => String(b).toLowerCase().includes(term))
+          : (product.barcode && String(product.barcode).toLowerCase().includes(term)));
 
       return (
         matchesCategory &&

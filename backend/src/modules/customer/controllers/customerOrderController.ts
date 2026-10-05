@@ -3,7 +3,6 @@ import Order from "../../../models/Order";
 import OrderItem from "../../../models/OrderItem";
 import Return from "../../../models/Return";
 import mongoose from "mongoose";
-import { notifyDeliveryBoysOfNewOrder } from "../../../services/orderNotificationService";
 import { notifySellersOfOrderUpdate } from "../../../services/sellerNotificationService";
 import { notifyAdminsOfNewOrder } from "../../../services/adminNotificationService";
 import { generateDeliveryOtp } from "../../../services/deliveryOtpService";
@@ -17,14 +16,14 @@ import {
   isValidRazorpaySignature,
 } from "../../../services/paymentGatewayService";
 
-// Notify delivery partners, sellers and admins about an order that is ready to fulfil
+// Tell the store(s) and admins about a new order. Delivery partners are offered it
+// only after every store has accepted (see seller updateOrderStatus).
 const notifyNewOrder = async (req: Request, orderId: unknown) => {
     try {
         const io: SocketIOServer = req.app.get("io") as SocketIOServer;
         if (!io) return;
         const savedOrder = await Order.findById(orderId).lean();
         if (!savedOrder) return;
-        await notifyDeliveryBoysOfNewOrder(io, savedOrder);
         await notifySellersOfOrderUpdate(io, savedOrder, 'NEW_ORDER');
         await notifyAdminsOfNewOrder(io, savedOrder);
     } catch (notificationError) {

@@ -213,16 +213,29 @@ export default function AdminOrderDetail() {
   const deliveryBoy = typeof order.deliveryBoy === 'object' ? order.deliveryBoy : null;
   const items = Array.isArray(order.items) ? order.items : [];
 
-  const statusOptions = [
-    'Received',
-    'Pending',
-    'Processed',
-    'Shipped',
-    'Out for Delivery',
-    'Delivered',
-    'Cancelled',
-    'Rejected',
-  ];
+  // Readable status for each internal order state (a new order is "Placed", not "Received")
+  const STATUS_LABEL: Record<string, string> = {
+    Pending: 'Awaiting payment',
+    Received: 'Placed — waiting for store',
+    Processed: 'Accepted — store packing',
+    'Ready for pickup': 'Ready for pickup',
+    'Picked up': 'Picked up by rider',
+    'Out for Delivery': 'Out for delivery',
+    Delivered: 'Delivered',
+    Cancelled: 'Cancelled',
+    Rejected: 'Rejected',
+    Returned: 'Returned',
+  };
+  const FLOW_STEPS = ['Placed', 'Accepted', 'Ready for pickup', 'Picked up', 'On the way', 'Delivered'];
+  const FLOW_INDEX: Record<string, number> = {
+    Received: 0, Processed: 1, 'Ready for pickup': 2, 'Picked up': 3, 'Out for Delivery': 4, Delivered: 5,
+  };
+  const orderAny = order as any;
+  const storeIds = Array.from(new Set(items.map((it: any) => String(it?.seller?._id || it?.seller || '')).filter(Boolean)));
+  const progress: any[] = Array.isArray(orderAny.sellerProgress) ? orderAny.sellerProgress : [];
+  const storesAccepted = progress.filter((p) => storeIds.includes(String(p.seller)) && p.acceptedAt).length;
+  const storesReady = progress.filter((p) => storeIds.includes(String(p.seller)) && p.readyAt).length;
+  const canCancel = ['Pending', 'Received', 'Processed', 'Ready for pickup'].includes(order.status);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -247,21 +260,43 @@ export default function AdminOrderDetail() {
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-lg font-semibold mb-4">Order Status</h2>
             <div className="mb-4">
-              <label className="block text-sm font-medium text-neutral-700 mb-2">
-                Current Status
-              </label>
-              <select
-                value={order.status}
-                onChange={(e) => handleStatusUpdate(e.target.value)}
-                disabled={updating}
-                className="w-full px-3 py-2 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]"
-              >
-                {statusOptions.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <span className="text-sm font-medium text-neutral-700">Current status</span>
+                <span className="px-3 py-1 rounded-full text-sm font-semibold bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]">
+                  {STATUS_LABEL[order.status] || order.status}
+                </span>
+              </div>
+              {FLOW_INDEX[order.status] !== undefined && (
+                <ol className="grid grid-cols-6 gap-1 text-center mb-4">
+                  {FLOW_STEPS.map((step, index) => {
+                    const done = index <= FLOW_INDEX[order.status];
+                    return (
+                      <li key={step} className="flex flex-col items-center gap-1">
+                        <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${done ? 'bg-[var(--primary-dark)] text-white' : 'bg-neutral-100 text-neutral-400 border border-neutral-200'}`}>
+                          {done ? '✓' : index + 1}
+                        </span>
+                        <span className={`text-[10px] sm:text-xs leading-tight ${done ? 'text-neutral-900 font-medium' : 'text-neutral-400'}`}>{step}</span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+              {storeIds.length > 0 && ['Received', 'Processed'].includes(order.status) && (
+                <p className="text-sm text-neutral-600 mb-3">
+                  Stores accepted: {storesAccepted}/{storeIds.length} · packed: {storesReady}/{storeIds.length}. The order moves on when every store has accepted and packed.
+                </p>
+              )}
+              {canCancel && (
+                <button
+                  onClick={() => {
+                    if (window.confirm('Cancel this order? Stock is released and the customer is informed.')) handleStatusUpdate('Cancelled');
+                  }}
+                  disabled={updating}
+                  className="px-4 py-2 text-sm font-semibold rounded-lg text-red-700 bg-white border border-red-300 hover:bg-red-50 disabled:opacity-50"
+                >
+                  Cancel order
+                </button>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>

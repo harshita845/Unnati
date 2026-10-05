@@ -1,15 +1,18 @@
 import { Request, Response } from "express";
 import Order from "../../../models/Order";
 import OrderItem from "../../../models/OrderItem";
+import Seller from "../../../models/Seller";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import { notifySellersOfOrderUpdate } from "../../../services/sellerNotificationService";
-import {
-  COD_PAYMENT_METHODS,
-  TERMINAL_ORDER_STATUSES,
-  cancelOrderAndRestoreStock,
-  markOrderDelivered,
-} from "../../../services/orderLifecycleService";
 import { OrderPlacementError } from "../../../services/orderPlacementService";
+import {
+  getSellerOrderProgress,
+  sellerAcceptOrder,
+  sellerCancelOrder,
+  sellerMarkReady,
+  sellerRejectOrder,
+} from "../../../services/orderFlowService";
+import { notifyDeliveryBoysOfNewOrder } from "../../../services/orderNotificationService";
 
 // Dates are shown in Indian time, DD/MM/YYYY (en-US formatting showed 2 Oct as "10/02")
 const formatDateIN = (date?: Date | null) =>
@@ -100,6 +103,7 @@ export const getOrders = asyncHandler(
     // Sort
     const sort: any = {};
     sort[sortBy as string] = sortOrder === "asc" ? 1 : -1;
+    if (sortBy !== "_id") sort._id = sortOrder === "asc" ? 1 : -1;
 
     // Get orders with populated customer and delivery info
     const orders = await Order.find(query)
@@ -148,10 +152,27 @@ export const getOrders = asyncHandler(
      const sellerId = (req as any).user.userId;
      const { id } = req.params;
 
-     // 1. Get order with populated data
-     const order = await Order.findById(id)
-       .populate("customer", "name email phone")
-       .populate("deliveryBoy", "name mobile email");
+     // 1. Get order with populated data (support both ObjectId and orderNumber string)
+     let order: any = null;
+     if (mongoose.Types.ObjectId.isValid(id)) {
+       order = await Order.findById(id)
+         .populate("customer", "name email phone")
+         .populate("deliveryBoy", "name mobile email");
+     }
+
+     if (!order) {
+       const cleanId = id.startsWith("#") ? id.slice(1) : id;
+       order = await Order.findOne({
+         $or: [
+           { orderNumber: id },
+           { orderNumber: cleanId },
+           { orderNumber: `ORD${cleanId}` },
+           { orderNumber: `#${cleanId}` },
+         ],
+       })
+         .populate("customer", "name email phone")
+         .populate("deliveryBoy", "name mobile email");
+     }
 
      if (!order) {
        return res.status(404).json({
@@ -160,11 +181,13 @@ export const getOrders = asyncHandler(
        });
      }
 
+     const orderMongoId = order._id;
+
      // 2. Access check: Either seller has items in it, OR it's their POS order
      const isTheirPOSOrder = order.adminNotes?.includes(`POS Order - Seller: ${sellerId}`);
 
      // Get this seller's specific items (important for online orders)
-     const sellerItems = await OrderItem.find({ order: id, seller: sellerId })
+     const sellerItems = await OrderItem.find({ order: orderMongoId, seller: sellerId })
        .populate("seller", "storeName")
        .populate("product");
 
@@ -179,7 +202,7 @@ export const getOrders = asyncHandler(
      // For online orders, return only items belonging to this seller.
      let orderItems;
      if (isTheirPOSOrder) {
-         orderItems = await OrderItem.find({ order: id })
+         orderItems = await OrderItem.find({ order: orderMongoId })
             .populate("seller", "storeName")
             .populate("product");
      } else {
@@ -280,6 +303,11 @@ export const getOrders = asyncHandler(
       paymentMethod: order.paymentMethod || 'N/A',
       paymentStatus: order.paymentStatus || 'Pending',
       deliveryAddress: order.deliveryAddress || {},
+      // This store's part of the flow (accept -> ready); other stores in the same order are counted
+      sellerProgress: isTheirPOSOrder ? null : await getSellerOrderProgress(order, sellerId),
+      // The invoice header shows the store's own details
+      store: await Seller.findById(sellerId).select("storeName sellerName mobile email address city taxName taxNumber fssaiLicNo logo").lean(),
+      pickupVerifiedAt: order.pickupVerifiedAt || null,
     };
 
     return res.status(200).json({
@@ -290,31 +318,21 @@ export const getOrders = asyncHandler(
   }
 );
 
-// Seller-facing labels -> Order.status values. "Accepted" means the seller confirmed and is packing.
-const SELLER_STATUS_MAP: Record<string, string> = {
-  'Accepted': 'Processed',
-  'Processed': 'Processed',
-  'Ready for pickup': 'Ready for pickup',
-  'On the way': 'Out for Delivery',
-  'Out For Delivery': 'Out for Delivery',
-  'Out for Delivery': 'Out for Delivery',
-  'Delivered': 'Delivered',
-  'Cancelled': 'Cancelled',
-};
-
-// Forward-only progression for non-terminal updates
-const STATUS_PROGRESS: Record<string, number> = {
-  'Received': 0,
-  'Pending': 0,
-  'Processed': 1,
-  'Ready for pickup': 2,
-  'Picked up': 3,
-  'Shipped': 3,
-  'Out for Delivery': 4,
+// Seller actions. Delivery itself (On the way / Delivered) belongs to the delivery partner,
+// who must collect the package with the pickup code and finish with the customer's OTP.
+const SELLER_ACTIONS: Record<string, "accept" | "ready" | "reject" | "cancel"> = {
+  'Accepted': 'accept',
+  'Accept': 'accept',
+  'Processed': 'accept',
+  'Ready for pickup': 'ready',
+  'Ready': 'ready',
+  'Rejected': 'reject',
+  'Reject': 'reject',
+  'Cancelled': 'cancel',
 };
 
 /**
- * Update order status (seller can update: Accepted, On the way, Delivered, Cancelled)
+ * Update order status from the store: Accept, Ready for pickup, Reject or Cancel.
  */
 export const updateOrderStatus = asyncHandler(
   async (req: Request, res: Response) => {
@@ -322,62 +340,29 @@ export const updateOrderStatus = asyncHandler(
     const { id } = req.params;
     const { status, reason } = req.body;
 
-    const targetStatus = SELLER_STATUS_MAP[status];
-    if (!targetStatus) {
+    const action = SELLER_ACTIONS[status];
+    if (!action) {
+      const riderOwned = ['On the way', 'Out for Delivery', 'Out For Delivery', 'Picked up', 'Delivered'].includes(status);
       return res.status(400).json({
         success: false,
-        message: `Invalid status. Seller can only update to: Accepted, On the way, Delivered, Cancelled`,
-      });
-    }
-
-    // Check if seller has items in this order
-    const hasItems = await OrderItem.exists({ order: id, seller: sellerId });
-    if (!hasItems) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found or access denied",
-      });
-    }
-
-    const order: any = await Order.findById(id);
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found",
-      });
-    }
-
-    if (TERMINAL_ORDER_STATUSES.includes(order.status)) {
-      return res.status(400).json({ success: false, message: `Order is already ${order.status}` });
-    }
-    if (order.status === 'Pending' && !COD_PAYMENT_METHODS.includes(order.paymentMethod) && order.paymentStatus !== 'Paid') {
-      return res.status(400).json({ success: false, message: "This order is still waiting for the customer's online payment" });
-    }
-    if (order.status === targetStatus) {
-      return res.status(400).json({
-        success: false,
-        message: `Order is already ${status}`,
+        message: riderOwned
+          ? "The delivery partner updates this after collecting the package with the pickup code."
+          : "Invalid status. A store can: Accept, mark Ready for pickup, Reject or Cancel.",
       });
     }
 
     let updatedOrder: any;
+    let dispatchNow = false;
+    let progress: any = null;
     try {
-      if (targetStatus === 'Delivered') {
-        updatedOrder = await markOrderDelivered(id);
-      } else if (targetStatus === 'Cancelled') {
-        updatedOrder = await cancelOrderAndRestoreStock(id, {
-          reason: reason || 'Cancelled by seller',
-          cancelledBy: sellerId,
-        });
+      if (action === 'accept') {
+        ({ order: updatedOrder, progress } = await sellerAcceptOrder(id, sellerId));
+      } else if (action === 'ready') {
+        ({ order: updatedOrder, dispatchNow, progress } = await sellerMarkReady(id, sellerId));
+      } else if (action === 'reject') {
+        updatedOrder = await sellerRejectOrder(id, sellerId, reason);
       } else {
-        if ((STATUS_PROGRESS[targetStatus] ?? 0) < (STATUS_PROGRESS[order.status] ?? 0)) {
-          return res.status(400).json({
-            success: false,
-            message: `Order is already ${order.status} and cannot be moved back to ${status}`,
-          });
-        }
-        order.status = targetStatus;
-        updatedOrder = await order.save();
+        updatedOrder = await sellerCancelOrder(id, sellerId, reason);
       }
     } catch (error: any) {
       if (error instanceof OrderPlacementError) {
@@ -389,15 +374,25 @@ export const updateOrderStatus = asyncHandler(
     const io = req.app.get("io");
     if (io) {
       io.to(`order-${id}`).emit('order-status-updated', { orderId: id, status: updatedOrder.status });
-      notifySellersOfOrderUpdate(io, updatedOrder, targetStatus === 'Cancelled' ? 'ORDER_CANCELLED' : 'STATUS_UPDATE');
+      notifySellersOfOrderUpdate(io, updatedOrder, action === 'cancel' || action === 'reject' ? 'ORDER_CANCELLED' : 'STATUS_UPDATE');
+      // Every store has packed and marked ready: only now are delivery partners offered the order
+      if (dispatchNow) {
+        notifyDeliveryBoysOfNewOrder(io, updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder).catch((err: any) =>
+          console.error('Error dispatching accepted order to riders:', err)
+        );
+      }
     }
 
     return res.status(200).json({
       success: true,
-      message: "Order status updated successfully",
+      message:
+        action === 'accept' && updatedOrder.status === 'Received'
+          ? "Accepted. Waiting for the other store(s) in this order to accept."
+          : "Order status updated successfully",
       data: {
         id: updatedOrder._id,
         status: updatedOrder.status,
+        sellerProgress: progress,
       },
     });
   }
@@ -472,6 +467,7 @@ export const getOnlineOrders = asyncHandler(
     // Sort
     const sort: any = {};
     sort[sortBy as string] = sortOrder === "asc" ? 1 : -1;
+    if (sortBy !== "_id") sort._id = sortOrder === "asc" ? 1 : -1;
 
     // Get orders
     const orders = await Order.find(query)
@@ -565,6 +561,7 @@ export const getSellerPOSOrders = asyncHandler(
     const sort: any = {};
     if (sortBy) {
         sort[sortBy as string] = sortOrder === "asc" ? 1 : -1;
+        if (sortBy !== "_id") sort._id = sortOrder === "asc" ? 1 : -1;
     } else {
         sort.orderDate = -1;
     }

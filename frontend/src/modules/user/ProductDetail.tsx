@@ -1056,7 +1056,7 @@ export default function ProductDetail() {
               <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 space-y-2.5 text-sm">
                 <div className="flex items-center gap-2 text-neutral-800">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="flex-shrink-0"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
-                  <span className="font-bold truncate">Deliver to: {location?.address || "Indore"}</span>
+                  <span className="font-bold truncate">Deliver to: {location?.address || "Set your delivery location"}</span>
                 </div>
                 <p className="text-neutral-500 leading-normal text-xs md:text-sm">Fastest delivery by today evening within 17-30 minutes.</p>
               </div>

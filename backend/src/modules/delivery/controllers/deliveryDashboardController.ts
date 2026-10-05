@@ -1,7 +1,9 @@
+import DeliveryAssignment from "../../../models/DeliveryAssignment";
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Delivery from "../../../models/Delivery";
 import Order from "../../../models/Order";
+import { RIDER_ACTIVE_STATUSES, riderVisibleOrdersFilter } from "../../../services/orderFlowService";
 import mongoose from "mongoose";
 
 /**
@@ -27,6 +29,12 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
 
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
+
+    const activeReturnTasksCount = await DeliveryAssignment.countDocuments({
+        deliveryBoy: deliveryId,
+        assignmentType: { $in: ["Return", "Replacement"] },
+        status: { $in: ["Assigned", "Accepted", "Picked Up", "In Transit"] }
+    });
 
     // 2. Fetch Orders Assigned to this Partner
     // We need:
@@ -54,7 +62,7 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
                 // Pending: Active statuses
                 pendingOrders: {
                     $sum: {
-                        $cond: [{ $in: ["$status", ["Received", "Processed", "Ready for pickup", "Out for Delivery", "Picked Up", "Assigned", "In Transit"]] }, 1, 0]
+                        $cond: [{ $in: ["$status", RIDER_ACTIVE_STATUSES] }, 1, 0]
                     }
                 },
                 // All Orders Today: Created today OR Updated today
@@ -135,14 +143,7 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
     const totalEarning = result.totalDeliveredCount * COMMISSION_PER_ORDER;
 
     // Fetch list of Pending Orders for the "Today's Pending Order" section
-    const pendingOrdersList = await Order.find({
-        $or: [
-            { deliveryBoy: deliveryId },
-            { deliveryBoy: null },
-            { deliveryBoy: { $exists: false } }
-        ],
-        status: { $in: ["Received", "Processed", "Ready for pickup", "Out for Delivery", "Picked Up", "Assigned", "In Transit"] }
-    })
+    const pendingOrdersList = await Order.find(riderVisibleOrdersFilter(deliveryId))
         .select("orderNumber customerName deliveryAddress status total estimatedDeliveryDate") // Select necessary fields
         .sort({ createdAt: -1 })
         .limit(5);
@@ -165,7 +166,7 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
             cashBalance: deliveryPartner.cashCollected, // This field stores total cash holding
             pendingOrders: result.pendingOrders,
             allOrders: result.allOrdersToday,
-            returnOrders: result.returnOrdersToday,
+            returnOrders: activeReturnTasksCount,
             returnItems: 0, // Need 'OrderItem' logic for this, keeping 0 for now
             todayEarning: todayEarning,
             totalEarning: totalEarning,

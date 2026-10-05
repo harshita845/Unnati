@@ -98,7 +98,9 @@ router.post("/staff", requireUserType("Admin", "Seller"), staffController.create
 router.put("/staff/:id", requireUserType("Admin", "Seller"), staffController.updateStaff);
 router.delete("/staff/:id", requireUserType("Admin", "Seller"), staffController.deleteStaff);
 
-// Order Edit (POS) - Accessible to both Admin and Seller
+// Order Details & Status - Accessible to both Admin and Seller
+router.get("/orders/:id", requireUserType("Admin", "Seller"), orderController.getOrderById);
+router.patch("/orders/:id/status", requireUserType("Admin", "Seller"), orderController.updateOrderStatus);
 router.patch("/orders/:id/items", requireUserType("Admin", "Seller"), orderController.updateOrderItems);
 
 router.use(requireUserType("Admin"));

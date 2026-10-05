@@ -518,23 +518,25 @@ export const getProductById = async (req: Request, res: Response) => {
       }
     }
 
-    // Check availability: the product's store must deliver to the user's location
-    if (
-      userLat !== null &&
-      userLng !== null &&
-      !isNaN(userLat) &&
-      !isNaN(userLng) &&
-      sellerId &&
-      seller?.location
-    ) {
+    // A different city's product must not be visible at all (same rule as getStoreProducts):
+    // not "shown but unavailable" — a shared link to it 404s, exactly like a store that doesn't
+    // deliver here. With no location at all there is no city to match against, so nothing is
+    // shown either (same as the product list) rather than guessing or defaulting to one city.
+    const userCity = req.query.city ? String(req.query.city).trim() : null;
+    let deliversHere = false;
+    if (userLat !== null && userLng !== null && !isNaN(userLat) && !isNaN(userLng) && sellerId) {
       const nearbySellerIds = await findSellersWithinRange(userLat, userLng);
-      isAvailableAtLocation = nearbySellerIds.some(
-        (id) => id.toString() === sellerId!.toString()
-      );
-    } else {
-      // If no location provided, allow viewing in browsing mode
-      isAvailableAtLocation = true;
+      deliversHere = nearbySellerIds.some((id) => id.toString() === sellerId!.toString());
+    } else if (userCity && seller?.city) {
+      deliversHere = new RegExp(`^${userCity}$`, "i").test(seller.city);
     }
+    if (!deliversHere) {
+      return res.status(404).json({
+        success: false,
+        message: "This product is not available at your location",
+      });
+    }
+    isAvailableAtLocation = true;
 
     // Find similar products (by category)
     // Filter by location

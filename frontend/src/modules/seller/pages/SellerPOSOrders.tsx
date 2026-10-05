@@ -2172,13 +2172,13 @@ const SellerPOSOrders = () => {
     const bs = readSellerPosBillSettings() as Record<string, any> | null;
     const esc = (v: string) =>
       v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    const shopTitle = esc(String(bs?.shopName || 'Ecommerce'));
+    const shopTitle = esc(String(bs?.shopName || 'Unnati'));
     const addrLines = String(
       bs?.address ||
-        'Q7WM+92M, Q7WM+92M, , Indore Division,\nNagda, Madhya Pradesh, India - 454001'
+        ''
     );
     const addrHtml = esc(addrLines).replace(/\n/g, '<br>');
-    const phoneLine = esc(String(bs?.phone || '7898111456'));
+    const phoneLine = esc(String(bs?.phone || ''));
     const fssaiBlk =
       bs?.fssai?.enabled && bs?.fssai?.text
         ? `FSSAI: ${esc(String(bs.fssai.text))}`
@@ -3163,15 +3163,15 @@ const SellerPOSOrders = () => {
       // --- Header (Image 4 Style) ---
       doc.setFontSize(22);
       doc.setFont("helvetica", "bold");
-      doc.text(billPdf?.shopName || "Ecommerce", 14, 20);
+      doc.text(billPdf?.shopName || "Unnati", 14, 20);
 
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
-      const qAddress = billPdf?.address || "Q7WM+92M, Q7WM+92M, , Indore Division,\nNagda, Madhya Pradesh, India - 454001";
+      const qAddress = billPdf?.address || "";
       const qLines = doc.splitTextToSize(qAddress, 180);
       doc.text(qLines, 14, 26);
       let qY = 26 + (qLines.length * 5);
-      doc.text(billPdf?.phone || "7898111456", 14, qY);
+      doc.text(billPdf?.phone || "", 14, qY);
       qY += 5;
       if (billPdf?.fssai?.enabled && billPdf?.fssai?.text) {
         doc.text(`FSSAI: ${billPdf.fssai.text}`, 14, qY);
@@ -3291,11 +3291,11 @@ const SellerPOSOrders = () => {
     // --- Header ---
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text(billPdf?.shopName || "Ecommerce", 14, 20);
+    doc.text(billPdf?.shopName || "Unnati", 14, 20);
 
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
-    let address = billPdf?.address || "Q7WM+92M, Q7WM+92M, , Indore Division,\nNagda, Madhya Pradesh, India - 454001\n7898111456";
+    let address = billPdf?.address || "";
 
     if (billPdf?.gst?.enabled && billPdf?.gst?.text) {
         address += `\nGST: ${billPdf.gst.text}`;

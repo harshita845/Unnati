@@ -211,9 +211,9 @@ const SellerPOSSupplierDetail = () => {
 
         const esc = (v: string) =>
           v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-        const shopTitle = esc(String(bs?.shopName || 'Ecommerce'));
-        const addrHtml = esc(String(bs?.address || 'Q7WM+92M, Indore Division, Nagda, MP - 454001')).replace(/\n/g, '<br>');
-        const phoneLine = esc(String(bs?.phone || '7898111456'));
+        const shopTitle = esc(String(bs?.shopName || 'Unnati'));
+        const addrHtml = esc(String(bs?.address || '')).replace(/\n/g, '<br>');
+        const phoneLine = esc(String(bs?.phone || ''));
         const fssaiBlk =
           bs?.fssai?.enabled && bs?.fssai?.text
             ? `FSSAI: ${esc(String(bs.fssai.text))}`

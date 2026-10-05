@@ -58,6 +58,11 @@ export default function SellerSubscriptions() {
 
   useEffect(() => {
     load();
+    if (window.location.hash === "#plans") {
+      setTimeout(() => {
+        document.getElementById("plans")?.scrollIntoView({ behavior: "smooth" });
+      }, 400);
+    }
   }, []);
 
   const pay = async (plan: SubscriptionPlan, method: "Online" | "Wallet") => {
@@ -234,7 +239,7 @@ export default function SellerSubscriptions() {
       </div>
 
       {/* Plans */}
-      <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
+      <div id="plans" className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
         <div className="bg-[var(--primary-dark)] text-white px-5 py-3"><h2 className="font-semibold">Plans</h2></div>
         {data.plans.length === 0 ? (
           <p className="p-5 text-sm text-neutral-500">No plans available right now.</p>

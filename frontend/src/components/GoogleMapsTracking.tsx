@@ -120,8 +120,8 @@ export default function GoogleMapsTracking({
     const validRouteOrigin = isValidLoc(routeOrigin) ? routeOrigin : null;
     const validRouteDest = isValidLoc(routeDestination) ? routeDestination : null;
 
-    // Fallback default coordinates (Indore / Palasia, India: 22.7196, 75.8577)
-    const defaultCenter = { lat: 22.7196, lng: 75.8577 };
+    // Only used for the first frame before any real location is known: centre of India, zoomed out by the map
+    const defaultCenter = { lat: 22.9734, lng: 78.6569 };
 
     // Center will be updated dynamically based on valid locations
     const center = validDelivery || (allSellers.length > 0 ? allSellers[0] : (validCustomer || defaultCenter));

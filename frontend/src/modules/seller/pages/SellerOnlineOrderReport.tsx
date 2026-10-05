@@ -246,24 +246,25 @@ const SellerOnlineOrderReport = () => {
 
   const handleCellEdit = async (id: string, field: keyof ReportOrder, value: any) => {
     const previousValue = (orders as ReportOrder[]).find((item: ReportOrder) => item._id === id)?.[field];
+    // Status changes are store actions (Accept / Ready / Reject / Cancel); show what the server saved
+    if (field === 'status') {
+      try {
+        const res = await updateOrderStatus(id, { status: value });
+        const saved = res?.data?.status || previousValue;
+        setOrders(prev => (prev as ReportOrder[]).map((item: ReportOrder) =>
+          item._id === id ? ({ ...item, status: saved } as ReportOrder) : item
+        ));
+        toast.success(res?.message || `Updated #${id.slice(-6)}`);
+      } catch (error: any) {
+        toast.error(error?.response?.data?.message || "Failed to update the order");
+      }
+      return;
+    }
     // Local Update
     setOrders(prev => (prev as ReportOrder[]).map((item: ReportOrder) =>
       item._id === id ? { ...item, [field]: value } : item
     ));
 
-    // If status is updated, sync with backend
-    if (field === 'status') {
-      try {
-        await updateOrderStatus(id, { status: value });
-        toast.success(`Updated #${id.slice(-6)} to ${value}`);
-      } catch (error: any) {
-        // Revert — the backend refused the change (e.g. order already delivered)
-        setOrders(prev => (prev as ReportOrder[]).map((item: ReportOrder) =>
-          item._id === id ? ({ ...item, [field]: previousValue } as ReportOrder) : item
-        ));
-        toast.error(error?.response?.data?.message || "Failed to sync status update");
-      }
-    }
   };
 
   const downloadExcel = () => {
@@ -675,11 +676,17 @@ const SellerOnlineOrderReport = () => {
                       <td className="px-4 py-4 min-w-[140px]">
                         {editMode ? (
                            <select
-                            value={item.status}
-                            onChange={(e) => handleCellEdit(item._id, 'status', e.target.value)}
+                            value=""
+                            onChange={(e) => e.target.value && handleCellEdit(item._id, 'status', e.target.value)}
                             className={`w-full px-2 py-1 text-[10px] font-black rounded-md border border-gray-200 outline-none focus:border-[var(--primary-color)] uppercase tracking-widest ${getStatusColor(item.status)}`}>
-                             {["Received", "Pending", "Processed", "Shipped", "Out for Delivery", "Delivered", "Cancelled"].map(s => (
-                               <option key={s} value={s}>{s}</option>
+                             <option value="" disabled>{item.status}</option>
+                             {[
+                               { value: "Accepted", label: "Accept" },
+                               { value: "Ready for pickup", label: "Ready for pickup" },
+                               { value: "Rejected", label: "Reject" },
+                               { value: "Cancelled", label: "Cancel" },
+                             ].map(a => (
+                               <option key={a.value} value={a.value}>{a.label}</option>
                              ))}
                            </select>
                         ) : (

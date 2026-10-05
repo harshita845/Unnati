@@ -3,6 +3,7 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Category from "../../../models/Category";
 import {
+  expandCategoryWithDescendants,
   onCategorySubscriptionChanged,
   parseDateRange,
   syncSellerCategoryVisibility,
@@ -24,7 +25,8 @@ import { toDetail, toListItem, toListItems } from "../../product/productReadMapp
 // ==================== Category Controllers ====================
 
 /**
- * Category subscription rules set by Super Admin:
+ * Category subscription rules set by Super Admin, on a MAIN (top-level) category only —
+ * a subcategory always follows whatever its main category requires, never its own setting:
  *  - subscriptionEnabled: sellers need a plan covering this category
  *  - subscriptionGraceDays: days products stay visible after a plan expires (0 = hide at once, null = default)
  *  - subscriptionBillType: "gst" (GST invoice, GST charged) or "receipt" (no GST); null = default
@@ -32,10 +34,14 @@ import { toDetail, toListItem, toListItems } from "../../product/productReadMapp
  */
 const resolveSubscriptionSettings = (
   body: any,
-  current?: { subscriptionEnabled?: boolean; subscriptionGraceDays?: number | null; subscriptionBillType?: string | null }
+  current?: { subscriptionEnabled?: boolean; subscriptionGraceDays?: number | null; subscriptionBillType?: string | null },
+  hasParent?: boolean
 ):
   | { subscriptionEnabled: boolean; allowedPlans: string[]; subscriptionGraceDays: number | null; subscriptionBillType: "gst" | "receipt" | null }
   | { error: string } => {
+  // A subcategory never carries its own subscription rule — whatever is submitted for it is ignored
+  if (hasParent) return { subscriptionEnabled: false, allowedPlans: [], subscriptionGraceDays: null, subscriptionBillType: null };
+
   const enabled = body.subscriptionEnabled !== undefined ? body.subscriptionEnabled : current?.subscriptionEnabled ?? false;
   if (typeof enabled !== "boolean") return { error: "subscriptionEnabled must be true or false" };
 
@@ -101,7 +107,7 @@ export const createCategory = asyncHandler(
       });
     }
 
-    const subscription = resolveSubscriptionSettings(req.body);
+    const subscription = resolveSubscriptionSettings(req.body, undefined, !!parentId);
     if ("error" in subscription) {
       return res.status(400).json({ success: false, message: subscription.error });
     }
@@ -345,6 +351,13 @@ export const updateCategory = asyncHandler(
           updateData.headerCategoryId = parent.headerCategoryId;
         }
       }
+
+      // Turning a main category into a subcategory: it no longer carries its own subscription
+      // rule (it now follows its new parent) — fall through to the subscription block below,
+      // which will switch it off and unhide its products.
+      if (updateData.parentId && category.subscriptionEnabled && updateData.subscriptionEnabled === undefined) {
+        updateData.subscriptionEnabled = false;
+      }
     }
 
     // Validate headerCategoryId if being updated
@@ -390,12 +403,14 @@ export const updateCategory = asyncHandler(
     if ("error" in existingSellerOption) {
       return res.status(400).json({ success: false, message: existingSellerOption.error });
     }
+    // Effective parent after this update (parentId may be changing in the same request)
+    const effectiveParentId = updateData.parentId !== undefined ? updateData.parentId : category.parentId;
     if (
       updateData.subscriptionEnabled !== undefined ||
       updateData.subscriptionGraceDays !== undefined ||
       updateData.subscriptionBillType !== undefined
     ) {
-      const subscription = resolveSubscriptionSettings(updateData, category as any);
+      const subscription = resolveSubscriptionSettings(updateData, category as any, !!effectiveParentId);
       if ("error" in subscription) {
         return res.status(400).json({ success: false, message: subscription.error });
       }
@@ -440,8 +455,10 @@ export const updateCategory = asyncHandler(
       updatedCategory?.subscriptionEnabled &&
       (updatedCategory as any).subscriptionGraceDays !== (category as any).subscriptionGraceDays
     ) {
-      // Grace period changed: re-check which sellers' products should be visible right now
-      const sellerIds: any[] = await Product.distinct("seller", { category: id });
+      // Grace period changed: re-check which sellers' products (in this main category and
+      // its subcategories) should be visible right now
+      const matchIds = await expandCategoryWithDescendants([id]);
+      const sellerIds: any[] = await Product.distinct("seller", { category: { $in: matchIds } });
       for (const sellerId of sellerIds) await syncSellerCategoryVisibility(sellerId, [id]);
     }
 
@@ -1093,15 +1110,59 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     query._id = { $in: [...new Set(duplicateIds)] };
   }
 
-  if (search) {
-    const searchFilter = [
-      { productName: { $regex: search as string, $options: "i" } },
-      { sku: { $regex: search as string, $options: "i" } },
-      { barcode: { $regex: search as string, $options: "i" } },
-      { "variations.barcode": { $regex: search as string, $options: "i" } },
-      { rackNumber: { $regex: search as string, $options: "i" } },
-      { hsnCode: { $regex: search as string, $options: "i" } },
+  if (search && (search as string).trim()) {
+    const searchRegex = new RegExp((search as string).trim(), "i");
+
+    const [matchingCategories, matchingSubCategories, matchingBrands, matchingSellers] = await Promise.all([
+      Category.find({ name: searchRegex }).select("_id").lean(),
+      SubCategory.find({ $or: [{ name: searchRegex }, { subcategoryName: searchRegex }] }).select("_id").lean(),
+      Brand.find({ name: searchRegex }).select("_id").lean(),
+      User.find({
+        $or: [
+          { storeName: searchRegex },
+          { sellerName: searchRegex },
+          { name: searchRegex },
+          { phone: searchRegex },
+          { email: searchRegex },
+        ],
+      }).select("_id").lean(),
+    ]);
+
+    const catIds = matchingCategories.map((c) => c._id);
+    const subCatIds = [
+      ...matchingCategories.map((c) => c._id),
+      ...matchingSubCategories.map((c) => c._id),
     ];
+    const brandIds = matchingBrands.map((b) => b._id);
+    const sellerIds = matchingSellers.map((s) => s._id);
+
+    const searchFilter: any[] = [
+      { productName: searchRegex },
+      { sku: searchRegex },
+      { itemCode: searchRegex },
+      { barcode: searchRegex },
+      { "variations.barcode": searchRegex },
+      { "variations.sku": searchRegex },
+      { "variations.title": searchRegex },
+      { "variations.name": searchRegex },
+      { "variations.value": searchRegex },
+      { "variations.variationType": searchRegex },
+      { rackNumber: searchRegex },
+      { hsnCode: searchRegex },
+      { smallDescription: searchRegex },
+      { description: searchRegex },
+      { subSubCategory: searchRegex },
+      { pack: searchRegex },
+      { "storageLocation.city": searchRegex },
+      { "storageLocation.warehouse": searchRegex },
+      { "storageLocation.room": searchRegex },
+      { "storageLocation.rackNumber": searchRegex },
+    ];
+
+    if (catIds.length > 0) searchFilter.push({ category: { $in: catIds } });
+    if (subCatIds.length > 0) searchFilter.push({ subcategory: { $in: subCatIds } });
+    if (brandIds.length > 0) searchFilter.push({ brand: { $in: brandIds } });
+    if (sellerIds.length > 0) searchFilter.push({ seller: { $in: sellerIds } });
 
     if (query._id) {
        query.$and = [
@@ -1124,14 +1185,10 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     query.status = status;
   }
 
-  // Unpublished products (admin UI badge "Inactive") are hidden by default
-  // because the seller is signalling they don't want the product live. The
-  // admin can still see them by explicitly filtering for `publish=false`
-  // (the "Unpublished" option in the Status dropdown on the stock screen).
+  // Filter publish status if explicitly passed (true or false).
+  // If undefined (e.g. "All Products"), do not restrict query.publish so both published and unpublished items show up.
   if (publish !== undefined) {
     query.publish = publish === "true";
-  } else {
-    query.publish = true;
   }
 
   const skip = (parseInt(page as string) - 1) * parseInt(limit as string);

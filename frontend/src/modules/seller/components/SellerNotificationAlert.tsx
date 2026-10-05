@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { SellerNotification } from '../hooks/useSellerSocket';
 
 interface SellerNotificationAlertProps {
@@ -7,6 +8,7 @@ interface SellerNotificationAlertProps {
 }
 
 const SellerNotificationAlert: React.FC<SellerNotificationAlertProps> = ({ notification, onClose }) => {
+  const navigate = useNavigate();
   const [volume, setVolume] = useState(0.8);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -135,12 +137,23 @@ const SellerNotificationAlert: React.FC<SellerNotificationAlertProps> = ({ notif
         </div>
 
         {/* Footer */}
-        <div className="p-6 bg-neutral-50 border-t border-neutral-200">
+        <div className="p-6 bg-neutral-50 border-t border-neutral-200 space-y-3">
+          {notification.type === 'NEW_ORDER' && (
+            <button
+              onClick={() => {
+                onClose();
+                navigate(`/seller/orders/${notification.orderId}`);
+              }}
+              className="w-full py-4 rounded-xl font-bold text-white shadow-lg transition-transform active:scale-95 bg-[var(--primary-dark)] hover:bg-[var(--primary-darker)]"
+            >
+              Open order to accept or reject
+            </button>
+          )}
           <button
             onClick={onClose}
-            className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-transform active:scale-95 ${notification.type === 'NEW_ORDER' ? 'bg-[var(--primary-dark)] hover:bg-[var(--primary-darker)]' : 'bg-[var(--primary-dark)] hover:bg-[var(--primary-darker)]'}`}
+            className="w-full py-3 rounded-xl font-semibold text-neutral-700 bg-white border border-neutral-300 hover:bg-neutral-100 transition-colors"
           >
-            Acknowledge & Dismiss
+            Dismiss
           </button>
         </div>
       </div>
