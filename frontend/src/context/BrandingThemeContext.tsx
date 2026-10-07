@@ -31,7 +31,7 @@ import {
   type CustomerThemeData,
 } from "../services/api/themeService";
 import { io as socketIO, Socket } from "socket.io-client";
-import { getSocketBaseURL } from "../services/api/config";
+import { getSocketBaseURL, isRealtimeAvailable } from "../services/api/config";
 
 // ─── Context Type ───
 interface BrandingThemeContextType {
@@ -127,6 +127,7 @@ export const BrandingThemeProvider: React.FC<{
 
   // ─── Socket.IO realtime theme sync ───
   useEffect(() => {
+    if (!isRealtimeAvailable()) return;
     try {
       const socketUrl = getSocketBaseURL();
       console.log("[BrandingTheme] Attempting socket connection to:", socketUrl);

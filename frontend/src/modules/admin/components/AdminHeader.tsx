@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import EcommerceStoresLogo from '@assets/unnati_logo.png';
 import { io, Socket } from 'socket.io-client';
-import { getSocketBaseURL } from '../../../services/api/config';
+import { getSocketBaseURL, isRealtimeAvailable } from '../../../services/api/config';
 import { getNotifications, Notification as AdminNotificationData } from '../../../services/api/admin/adminNotificationService';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'react-hot-toast';
@@ -74,6 +74,7 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
       return;
     }
 
+    if (!isRealtimeAvailable()) return;
     const socketUrl = getSocketBaseURL();
     const newSocket = io(socketUrl, {
       auth: { token },

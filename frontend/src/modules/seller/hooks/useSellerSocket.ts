@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../../../context/AuthContext';
-import { getSocketBaseURL } from '../../../services/api/config';
+import { getSocketBaseURL, isRealtimeAvailable } from '../../../services/api/config';
 
 export interface SellerNotification {
     type: 'NEW_ORDER' | 'STATUS_UPDATE';
@@ -46,6 +46,7 @@ export const useSellerSocket = (onNotificationReceived?: (notification: SellerNo
             return;
         }
 
+        if (!isRealtimeAvailable()) return;
         const socketUrl = getSocketBaseURL();
         const newSocket = io(socketUrl, {
             auth: { token },

@@ -8,7 +8,7 @@ import {
 } from '../../../services/api/admin/adminNotificationService';
 import { useConfirmation } from '../../../context/ConfirmationContext';
 import { io, Socket } from 'socket.io-client';
-import { getSocketBaseURL } from '../../../services/api/config';
+import { getSocketBaseURL, isRealtimeAvailable } from '../../../services/api/config';
 import { useAuth } from '../../../context/AuthContext';
 
 export default function AdminNotification() {
@@ -54,6 +54,7 @@ export default function AdminNotification() {
       return;
     }
 
+    if (!isRealtimeAvailable()) return;
     const socketUrl = getSocketBaseURL();
     const socket = io(socketUrl, {
       auth: { token },

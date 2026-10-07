@@ -100,6 +100,19 @@ export const getSocketBaseURL = (): string => {
   return normalizeBaseUrl(socketUrl || window.location.origin);
 };
 
+// Socket.IO needs a long-running server. A backend on Vercel serverless can't host it, so skip
+// connecting there (otherwise every page keeps polling and logging 404s).
+// Set VITE_ENABLE_SOCKETS=true to force it on, e.g. after moving the backend to Render.
+export const isRealtimeAvailable = (): boolean => {
+  if (import.meta.env.VITE_ENABLE_SOCKETS === 'true') return true;
+  if (import.meta.env.VITE_ENABLE_SOCKETS === 'false') return false;
+  try {
+    return !new URL(getSocketBaseURL(), window.location.origin).hostname.endsWith('.vercel.app');
+  } catch {
+    return true;
+  }
+};
+
 // Create axios instance
 const api: AxiosInstance = axios.create({
   baseURL: activeApiBaseUrl,

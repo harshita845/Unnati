@@ -301,12 +301,12 @@ export default function DeliveryOrderDetail() {
 
         const initializeSocket = async () => {
             try {
-                const [{ io }, { getSocketBaseURL, getAuthToken }] = await Promise.all([
+                const [{ io }, { getSocketBaseURL, getAuthToken, isRealtimeAvailable }] = await Promise.all([
                     import('socket.io-client'),
                     import('../../../services/api/config')
                 ]);
 
-                if (!isMounted) return;
+                if (!isMounted || !isRealtimeAvailable()) return;
 
                 const baseURL = getSocketBaseURL();
                 const token = getAuthToken();

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 // @ts-ignore - socket.io-client types may not be available
 import { io, Socket } from 'socket.io-client'
-import { getSocketBaseURL } from '../services/api/config'
+import { getSocketBaseURL, isRealtimeAvailable } from '../services/api/config'
 import { getCurrentModuleToken } from '../utils/moduleAuth'
 
 interface LocationUpdate {
@@ -56,6 +56,7 @@ export const useDeliveryTracking = (orderId: string | undefined) => {
             reconnectTimeoutRef.current = null
         }
 
+        if (!isRealtimeAvailable()) return
         const token = getCurrentModuleToken()
         const socket = io(getSocketBaseURL(), {
             auth: {

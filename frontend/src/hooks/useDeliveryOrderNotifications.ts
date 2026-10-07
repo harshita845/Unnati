@@ -3,7 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
 import { OrderNotificationData } from '../services/api/delivery/deliveryOrderNotificationService';
 import { acceptOrder, rejectOrder } from '../services/api/delivery/deliveryOrderNotificationService';
-import { getSocketBaseURL } from '../services/api/config';
+import { getSocketBaseURL, isRealtimeAvailable } from '../services/api/config';
 import { getCurrentModuleToken } from '../utils/moduleAuth';
 
 interface NotificationState {
@@ -40,6 +40,7 @@ export const useDeliveryOrderNotifications = () => {
             reconnectTimeoutRef.current = null;
         }
 
+        if (!isRealtimeAvailable()) return;
         const token = getCurrentModuleToken();
         const socket = io(getSocketBaseURL(), {
             auth: {
