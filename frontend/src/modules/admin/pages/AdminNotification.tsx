@@ -57,7 +57,8 @@ export default function AdminNotification() {
     const socketUrl = getSocketBaseURL();
     const socket = io(socketUrl, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
+      reconnectionAttempts: 3,
     });
 
     socket.on('connect', () => {

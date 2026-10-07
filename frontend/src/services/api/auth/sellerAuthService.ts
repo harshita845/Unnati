@@ -38,6 +38,8 @@ export interface RegisterData {
   latitude?: string;
   longitude?: string;
   serviceRadiusKm?: string | number;
+  /** Plan chosen on the signup page (required when every seller needs a plan) */
+  selectedPlanId?: string;
 }
 
 export interface RegisterResponse {

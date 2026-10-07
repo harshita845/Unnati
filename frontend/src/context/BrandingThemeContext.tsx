@@ -132,10 +132,10 @@ export const BrandingThemeProvider: React.FC<{
       console.log("[BrandingTheme] Attempting socket connection to:", socketUrl);
 
       const socket = socketIO(socketUrl, {
-        transports: ["websocket", "polling"],
+        transports: ["polling", "websocket"],
         reconnection: true,
         reconnectionDelay: 2000,
-        reconnectionAttempts: 5,
+        reconnectionAttempts: 3,
         timeout: 5000, // 5 second connection timeout
         // No auth needed for theme events (broadcast to all)
       });

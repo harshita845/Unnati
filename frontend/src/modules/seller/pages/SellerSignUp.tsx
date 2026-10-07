@@ -5,7 +5,8 @@ import OTPInput from '../../../components/OTPInput';
 import GoogleMapsAutocomplete from '../../../components/GoogleMapsAutocomplete';
 import { useAuth } from '../../../context/AuthContext';
 import { getHeaderCategoriesPublic, HeaderCategory } from '../../../services/api/headerCategoryService';
-import { formatINR } from '../../../services/api/subscriptionService';
+import { formatDuration, formatINR, getSignupPlans, SignupPlan } from '../../../services/api/subscriptionService';
+import { ALL_SELLER_MODULES } from '../../../constants/sellerModules';
 import { useEffect } from 'react';
 import { removeAuthToken } from '../../../services/api/config';
 import { requestNotificationPermission } from '../../../services/pushNotificationService';
@@ -41,6 +42,19 @@ export default function SellerSignUp() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [categories, setCategories] = useState<HeaderCategory[]>([]);
+  // Subscription plans shown before the account is created, so the seller knows the cost up front
+  const [plans, setPlans] = useState<SignupPlan[]>([]);
+  const [planRequired, setPlanRequired] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState('');
+
+  useEffect(() => {
+    getSignupPlans()
+      .then((res) => {
+        setPlans(res.data?.plans || []);
+        setPlanRequired(!!res.data?.required);
+      })
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     const fetchCats = async () => {
@@ -112,6 +126,11 @@ export default function SellerSignUp() {
       return;
     }
 
+    if (planRequired && !selectedPlanId) {
+      setError('Please choose a subscription plan. Every store needs an active plan to sell.');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
@@ -143,6 +162,7 @@ export default function SellerSignUp() {
         latitude: formData.latitude,
         longitude: formData.longitude,
         serviceRadiusKm: formData.serviceRadiusKm,
+        ...(selectedPlanId ? { selectedPlanId } : {}),
       });
 
       if (response.success) {
@@ -186,13 +206,14 @@ export default function SellerSignUp() {
           status: response.data.user.status,
           address: response.data.user.address,
           city: response.data.user.city,
-        });
+          accessibleModules: (response.data.user as any).accessibleModules,
+        } as any);
 
         // Request notification permission
         await requestNotificationPermission('seller', response.data.token);
 
-        // Navigate to seller dashboard
-        navigate('/seller', { replace: true });
+        // A plan was chosen: go straight to paying for it (the store stays locked until it's active)
+        navigate(selectedPlanId ? `/seller/subscriptions?plan=${selectedPlanId}` : '/seller', { replace: true });
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Invalid OTP. Please try again.');
@@ -358,22 +379,66 @@ export default function SellerSignUp() {
                   {formData.categories.length === 0 && categories.length > 0 && (
                     <p className="text-xs text-red-600 mt-1">Select at least one category</p>
                   )}
-                  {(() => {
-                    const selectedPaid = categories.filter(
-                      (cat) => cat.subscriptionRequired && formData.categories.includes(cat.name)
-                    );
-                    if (!selectedPaid.length) return null;
-                    return (
-                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
-                        {selectedPaid.map((c) => c.name).join(', ')} {selectedPaid.length === 1 ? 'needs' : 'need'} a paid subscription plan to sell
-                        {selectedPaid.some((c) => c.subscriptionFromPrice != null) && (
-                          <> (from {formatINR(Math.min(...selectedPaid.filter((c) => c.subscriptionFromPrice != null).map((c) => c.subscriptionFromPrice as number)))})</>
-                        )}
-                        . You can sign up now and subscribe anytime after your store is approved, from Subscriptions in your seller panel.
-                      </p>
-                    );
-                  })()}
                 </div>
+
+                {/* Subscription plan: shown before signing up so the seller knows the cost up front */}
+                {plans.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 mb-1">
+                      Subscription plan {planRequired && <span className="text-red-500">*</span>}
+                    </label>
+                    <p className="text-xs text-neutral-500 mb-2">
+                      {planRequired
+                        ? "Every store needs an active plan to sell. You'll pay right after creating your account; your store goes live once the plan is active and your account is approved."
+                        : "Optional now. Some categories need a plan to sell; you can also subscribe later from your seller panel."}
+                    </p>
+                    <div className="space-y-2">
+                      {plans.map((plan) => {
+                        const groups = Array.from(new Set(plan.categories.map((c) => c.headerCategory || c.name)));
+                        const matches = formData.categories.length > 0 && groups.some((g) => formData.categories.includes(g));
+                        const unlocked = ALL_SELLER_MODULES.filter((m) => !m.isEssential && plan.accessibleModules.includes(m.key)).map((m) => m.label);
+                        const selected = selectedPlanId === plan._id;
+                        return (
+                          <label
+                            key={plan._id}
+                            className={`block rounded-lg border p-3 cursor-pointer text-left ${selected ? 'border-[var(--primary-color)] ring-2 ring-[var(--primary-alpha-30)] bg-[var(--primary-alpha-10)]' : 'border-neutral-200'}`}>
+                            <div className="flex items-start gap-2">
+                              <input
+                                type="radio"
+                                name="selectedPlan"
+                                checked={selected}
+                                onChange={() => setSelectedPlanId(plan._id)}
+                                disabled={loading}
+                                className="mt-1"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-sm font-semibold text-neutral-900">{plan.name}</span>
+                                  {matches && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--primary-alpha-20)] text-[var(--primary-darker)] font-medium whitespace-nowrap">
+                                      Fits your categories
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-sm font-bold text-[var(--primary-dark)]">
+                                  {formatINR(plan.totalPrice)}
+                                  <span className="text-xs font-medium text-neutral-500"> / {formatDuration(plan.durationValue, plan.durationUnit)}</span>
+                                  {plan.gstPercent > 0 && <span className="text-[10px] font-normal text-neutral-500"> incl. {plan.gstPercent}% GST</span>}
+                                </p>
+                                {plan.description && <p className="text-xs text-neutral-600 mt-0.5">{plan.description}</p>}
+                                <p className="text-[11px] text-neutral-500 mt-1">Categories: {groups.join(', ') || '—'}</p>
+                                <p className="text-[11px] text-neutral-500">
+                                  {plan.limits?.maxProducts ? `Up to ${plan.limits.maxProducts} products` : 'Unlimited products'}
+                                  {unlocked.length ? ` · Includes: ${unlocked.join(', ')}` : ''}
+                                </p>
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-2">

@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { canStaffAccessPath, getStaffSession } from "../../../utils/staffSession";
+import { getModuleUserData } from "../../../utils/moduleAuth";
+import { isSellerModuleAllowed, SELLER_ACCESSIBILITY_UPDATED_EVENT } from "../../../constants/sellerModules";
 
 interface SubMenuItem {
   label: string;
@@ -467,8 +469,21 @@ export default function SellerSidebar({ onClose }: SellerSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
+  const [, setAccessibilityTick] = useState(0);
   const staffSession = getStaffSession("seller");
   const isStaffMode = !!staffSession;
+
+  useEffect(() => {
+    const handleAccessibilityUpdate = () => {
+      setAccessibilityTick((t) => t + 1);
+    };
+    window.addEventListener(SELLER_ACCESSIBILITY_UPDATED_EVENT, handleAccessibilityUpdate);
+    window.addEventListener("storage", handleAccessibilityUpdate);
+    return () => {
+      window.removeEventListener(SELLER_ACCESSIBILITY_UPDATED_EVENT, handleAccessibilityUpdate);
+      window.removeEventListener("storage", handleAccessibilityUpdate);
+    };
+  }, []);
 
   const filterVisibleSubItems = (items: SubMenuItem[]): SubMenuItem[] => {
     if (!isStaffMode) return items;
@@ -495,8 +510,16 @@ export default function SellerSidebar({ onClose }: SellerSidebarProps) {
     }, []);
   };
 
+  const user = getModuleUserData("seller");
+  const accessibleModules = Array.isArray(user?.accessibleModules) ? user.accessibleModules : null;
+
+  // Filter modules based on admin accessibility permissions for this seller
+  const sellerAllowedMenuItems = accessibleModules !== null
+    ? menuItems.filter((item) => isSellerModuleAllowed(item.label, accessibleModules))
+    : menuItems;
+
   const visibleMenuItems = isStaffMode
-    ? menuItems.reduce<MenuItem[]>((acc, item) => {
+    ? sellerAllowedMenuItems.reduce<MenuItem[]>((acc, item) => {
         const filteredSubmenu = item.submenuItems
           ? filterVisibleSubItems(item.submenuItems)
           : undefined;
@@ -516,7 +539,7 @@ export default function SellerSidebar({ onClose }: SellerSidebarProps) {
         });
         return acc;
       }, [])
-    : menuItems;
+    : sellerAllowedMenuItems;
 
   const isActive = (path: string) => {
     const [pathBase, pathQuery] = path.split("?");

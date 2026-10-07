@@ -55,6 +55,8 @@ export async function findSellersWithinRange(
     const sellers = await Seller.find({
       status: "Approved",
       location: { $exists: true, $ne: null },
+      // Store-wide plan rule: stores without an active plan are hidden from customers
+      subscriptionLocked: { $ne: true },
     }).select("_id location serviceRadiusKm email category storeName");
 
     // Keep sellers whose service radius covers the user

@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import Seller from "../../../models/Seller";
 import SellerLoginSession from "../../../models/SellerLoginSession";
+import SubscriptionPlan from "../../../models/SubscriptionPlan";
+import { getPublicPlans, getSellerPlanAccess, getSubscriptionSettings } from "../../../services/sellerSubscriptionService";
 import {
   sendOTP as sendOTPService,
   verifyOTP as verifyOTPService,
@@ -10,6 +12,16 @@ import { asyncHandler } from "../../../utils/asyncHandler";
 
 /** Max simultaneous seller login sessions (devices) allowed per account. */
 const MAX_SELLER_ACTIVE_DEVICES = 5;
+
+/** Plan-based access for the seller panel (plan only; no plan + rule on = Dashboard + Subscriptions). */
+async function getPanelAccess(sellerId: unknown) {
+  const access = await getSellerPlanAccess(sellerId, { fresh: true });
+  return {
+    accessibleModules: access.modules,
+    subscriptionRequired: access.required,
+    subscriptionLocked: access.locked,
+  };
+}
 
 /**
  * Send OTP to seller mobile number
@@ -156,6 +168,7 @@ export const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
 
   // Generate JWT token
   const token = generateToken(seller._id.toString(), "Seller");
+  const panelAccess = await getPanelAccess(seller._id);
 
   return res.status(200).json({
     success: true,
@@ -173,6 +186,7 @@ export const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
         logo: seller.logo,
         address: seller.address,
         city: seller.city,
+        ...panelAccess,
       },
     },
   });
@@ -232,6 +246,21 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
       success: false,
       message: "All required fields must be provided",
     });
+  }
+
+  // Store-wide plan rule: a new seller must choose a plan while signing up (they pay right after)
+  const subscriptionSettings = await getSubscriptionSettings();
+  const selectedPlanId = req.body.selectedPlanId ? String(req.body.selectedPlanId) : "";
+  let selectedPlan: any = null;
+  if (selectedPlanId) {
+    selectedPlan = /^[a-f0-9]{24}$/i.test(selectedPlanId)
+      ? await SubscriptionPlan.findOne({ _id: selectedPlanId, isActive: true }).select("_id")
+      : null;
+    if (!selectedPlan) {
+      return res.status(400).json({ success: false, message: "The selected plan is no longer available. Please choose another plan." });
+    }
+  } else if (subscriptionSettings.requirePlanForAllSellers) {
+    return res.status(400).json({ success: false, message: "Choose a subscription plan to continue. Every store needs an active plan to sell." });
   }
 
   if (!/^[0-9]{10}$/.test(mobile)) {
@@ -317,10 +346,14 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     commission: 0,
     balance: 0,
     categories: req.body.categories || [],
+    selectedPlan: selectedPlan?._id || null,
+    // Rule on: no plan yet, so the store starts locked until the chosen plan is paid
+    subscriptionLocked: !!subscriptionSettings.requirePlanForAllSellers,
   });
 
   // Generate token
   const token = generateToken(seller._id.toString(), "Seller");
+  const panelAccess = await getPanelAccess(seller._id);
 
   return res.status(201).json({
     success: true,
@@ -336,6 +369,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
         status: seller.status,
         address: seller.address,
         city: seller.city,
+        ...panelAccess,
       },
     },
   });
@@ -355,9 +389,11 @@ export const getProfile = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
+  const sellerObj: any = { ...seller.toObject(), ...(await getPanelAccess(seller._id)) };
+
   return res.status(200).json({
     success: true,
-    data: seller,
+    data: sellerObj,
   });
 });
 
@@ -421,4 +457,12 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
     message: "Profile updated successfully",
     data: seller,
   });
+});
+
+/**
+ * Active subscription plans for the seller signup page (public — no account yet),
+ * plus whether choosing one is required.
+ */
+export const getSignupPlans = asyncHandler(async (_req: Request, res: Response) => {
+  return res.status(200).json({ success: true, data: await getPublicPlans() });
 });

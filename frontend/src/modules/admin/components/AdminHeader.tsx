@@ -77,7 +77,8 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
     const socketUrl = getSocketBaseURL();
     const newSocket = io(socketUrl, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
+      reconnectionAttempts: 3,
     });
 
     socketRef.current = newSocket;

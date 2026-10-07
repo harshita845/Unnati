@@ -45,7 +45,7 @@ export const useDeliveryOrderNotifications = () => {
             auth: {
                 token,
             },
-            transports: ['websocket', 'polling'],
+            transports: ['polling', 'websocket'],
             reconnection: true,
             reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
             reconnectionDelay: INITIAL_RECONNECT_DELAY,

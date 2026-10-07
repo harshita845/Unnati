@@ -19,7 +19,12 @@ export default function SubscriptionBanner() {
         const soon = relevant.filter((c) => c.state === "ExpiringSoon");
         const names = (list: SellerCategoryStatus[]) => list.map((c) => c.name).join(", ");
         const days = (list: SellerCategoryStatus[]) => Math.min(...list.map((c) => c.daysLeft ?? 0));
-        if (hidden.length) {
+        const planAccess = res.data?.planAccess;
+        if (planAccess?.locked) {
+          setAlert({ level: "danger", text: "Your store isn't live: you need an active subscription plan. Until then customers can't see your store and most of your panel is locked." });
+        } else if (planAccess?.required && planAccess.inGrace) {
+          setAlert({ level: "danger", text: "Your subscription plan has ended. Renew now or your store will be hidden from customers." });
+        } else if (hidden.length) {
           setAlert({ level: "danger", text: `You need an active plan for ${names(hidden)}. Your products there are hidden from customers.` });
         } else if (grace.length) {
           const d = days(grace);

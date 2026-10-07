@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@react-google-maps/api": "^2.20.8",
+    "@types/jszip": "^3.4.0",
     "apexcharts": "^5.3.6",
     "axios": "^1.13.4",
     "clsx": "^2.1.0",
@@ -25,6 +26,7 @@
     "html5-qrcode": "^2.3.8",
     "jspdf": "^4.1.0",
     "jspdf-autotable": "^5.0.7",
+    "jszip": "^3.10.2",
     "leaflet": "^1.9.4",
     "lottie-react": "^2.4.1",
     "lucide-react": "^0.563.0",

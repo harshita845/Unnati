@@ -14,6 +14,8 @@ export interface ISubscriptionSettings extends Document {
   invoiceEnabled: boolean;
   invoicePrefix: string;
   invoiceCounter: number;
+  /** Every seller must have an active plan to sell (store hidden + panel locked without one) */
+  requirePlanForAllSellers: boolean;
   updatedBy?: mongoose.Types.ObjectId;
 }
 
@@ -35,6 +37,7 @@ const SubscriptionSettingsSchema = new Schema<ISubscriptionSettings>(
     invoiceEnabled: { type: Boolean, default: true },
     invoicePrefix: { type: String, default: "SUB", trim: true },
     invoiceCounter: { type: Number, default: 0 },
+    requirePlanForAllSellers: { type: Boolean, default: false },
     updatedBy: { type: Schema.Types.ObjectId, ref: "Admin" },
   },
   { timestamps: true }

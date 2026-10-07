@@ -9,7 +9,7 @@ import { useLocation } from '../../../hooks/useLocation';
 import { getCategories } from '../../../services/api/customerProductService';
 import { Category } from '../../../types/domain';
 import { getCachedHeaderCategoriesPublic, getHeaderCategoriesPublic } from '../../../services/api/headerCategoryService';
-import { getIconByName } from '../../../utils/iconLibrary';
+import { getIconByName, ICON_LIBRARY, IconDef } from '../../../utils/iconLibrary';
 import { useThemeContext } from '../../../context/ThemeContext';
 import { useAppContext } from '../../../context/AppContext';
 import { useAuth } from '../../../context/AuthContext';
@@ -25,75 +25,68 @@ interface HomeHeroProps {
 interface Tab {
   id: string;
   label: string;
+  theme?: string;
   icon: React.ReactNode;
 }
 
-const DUMMY_IMAGES: Record<string, string> = {
-  all: 'https://cdn-icons-png.flaticon.com/512/2331/2331970.png',
-  electronics: '/electronics.jpg',
-  clothing: '/shirt1.jpg',
-  fashion: '/shirt1.jpg',
-  women: '/women.jpg',
-  books: 'https://png.pngtree.com/png-vector/20240309/ourmid/pngtree-books-isolated-on-white-background-stack-of-colorful-books-png-image_11920803.png',
-  food: '/dairy.jpg',
-  grocery: '/dairy.jpg',
-  dairy: '/dairy.jpg',
-  cold: '/cold.jpg',
-  beverage: '/cold.jpg',
-  winter: '/cold.jpg',
-  home: '/bucket.jpg',
-  household: '/bucket.jpg',
-  cleaning: '/bucket.jpg',
-  bucket: '/bucket.jpg',
-  sports: '/sports.jpg',
-  fitness: '/sports.jpg',
-  beauty: '/personal.jpg',
-  personal: '/personal.jpg',
-  printer: 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=150&auto=format&fit=crop&q=80',
-  fallback: '/dairy.jpg'
+const getCategoryTabIcon = (c: any) => {
+  // 1. If explicit custom image exists and is non-empty, render image
+  if (c.image && typeof c.image === 'string' && c.image.trim()) {
+    return <img src={c.image} alt={c.name || 'Category'} className="w-full h-full object-contain rounded-md" />;
+  }
+
+  // 2. If explicit iconName is set, render SVG from iconLibrary
+  if (c.iconName && typeof c.iconName === 'string' && c.iconName.trim()) {
+    return (
+      <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">
+        {getIconByName(c.iconName)}
+      </div>
+    );
+  }
+
+  // 3. Fallback matching by slug/name in ICON_LIBRARY
+  const slug = (c.slug || c.id || c.name || '').toLowerCase();
+  const matched = ICON_LIBRARY.find(
+    (icon: IconDef) => icon.name === slug || icon.tags.some((tag: string) => slug.includes(tag))
+  );
+  if (matched) {
+    return (
+      <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">
+        {matched.svg}
+      </div>
+    );
+  }
+
+  // 4. Default fallback icon
+  return (
+    <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">
+      {getIconByName('grocery-basket')}
+    </div>
+  );
 };
 
 const ALL_TAB: Tab = {
   id: 'all',
   label: 'All',
+  theme: 'all',
   icon: (
-    <img src={DUMMY_IMAGES.all} alt="All" className="w-full h-full object-contain rounded-md" />
+    <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">
+      {getIconByName('home')}
+    </div>
   ),
 };
 
 const DEFAULT_HEADER_TABS: Tab[] = [
   ALL_TAB,
-  { id: 'grocery', label: 'Grocery', icon: <img src="/dairy.jpg" alt="Grocery" className="w-full h-full object-contain rounded-md" /> },
-  { id: 'winter', label: 'Winter', icon: <img src="/cold.jpg" alt="Winter" className="w-full h-full object-contain rounded-md" /> },
-  { id: 'fashion', label: 'Fashion', icon: <img src="/shirt1.jpg" alt="Fashion" className="w-full h-full object-contain rounded-md" /> },
-  { id: 'women', label: 'Women', icon: <img src="/women.jpg" alt="Women" className="w-full h-full object-contain rounded-md" /> },
-  { id: 'beauty', label: 'Beauty', icon: <img src="/personal.jpg" alt="Beauty" className="w-full h-full object-contain rounded-md" /> },
-  { id: 'household', label: 'Household', icon: <img src="/bucket.jpg" alt="Household" className="w-full h-full object-contain rounded-md" /> },
-  { id: 'electronics', label: 'Electronics', icon: <img src="/electronics.jpg" alt="Electronics" className="w-full h-full object-contain rounded-md" /> },
-  { id: 'sports', label: 'Sports', icon: <img src="/sports.jpg" alt="Sports" className="w-full h-full object-contain rounded-md" /> }
+  { id: 'grocery', label: 'Grocery', theme: 'grocery', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">{getIconByName('grocery-basket')}</div> },
+  { id: 'winter', label: 'Winter', theme: 'winter', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">{getIconByName('winter')}</div> },
+  { id: 'fashion', label: 'Fashion', theme: 'fashion', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">{getIconByName('fashion')}</div> },
+  { id: 'women', label: 'Women', theme: 'fashion', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">{getIconByName('womens-wear')}</div> },
+  { id: 'beauty', label: 'Beauty', theme: 'beauty', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">{getIconByName('beauty')}</div> },
+  { id: 'household', label: 'Household', theme: 'home', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">{getIconByName('home')}</div> },
+  { id: 'electronics', label: 'Electronics', theme: 'electronics', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">{getIconByName('electronics')}</div> },
+  { id: 'sports', label: 'Sports', theme: 'sports', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">{getIconByName('sports')}</div> }
 ];
-
-const getCategoryTabIcon = (c: any) => {
-  const slug = (c.slug || c.id || c.name || '').toLowerCase();
-  if (slug.includes('all')) return <img src={DUMMY_IMAGES.all} alt={c.name} className="w-full h-full object-contain rounded-md" />;
-  if (slug.includes('women') || slug.includes('lady') || slug.includes('ladies') || slug.includes('female') || slug.includes('wedding')) return <img src="/women.jpg" alt={c.name} className="w-full h-full object-contain rounded-md" />;
-  if (slug.includes('shirt') || slug.includes('cloth') || slug.includes('fashion') || slug.includes('men')) return <img src="/shirt1.jpg" alt={c.name} className="w-full h-full object-contain rounded-md" />;
-  if (slug.includes('cold') || slug.includes('bev') || slug.includes('drink') || slug.includes('winter')) return <img src="/cold.jpg" alt={c.name} className="w-full h-full object-contain rounded-md" />;
-  if (slug.includes('dairy') || slug.includes('grocer') || slug.includes('food') || slug.includes('milk') || slug.includes('egg')) return <img src="/dairy.jpg" alt={c.name} className="w-full h-full object-contain rounded-md" />;
-  if (slug.includes('person') || slug.includes('beaut') || slug.includes('hygiene') || slug.includes('care')) return <img src="/personal.jpg" alt={c.name} className="w-full h-full object-contain rounded-md" />;
-  if (slug.includes('bucket') || slug.includes('home') || slug.includes('clean') || slug.includes('house')) return <img src="/bucket.jpg" alt={c.name} className="w-full h-full object-contain rounded-md" />;
-  if (slug.includes('electron') || slug.includes('gadget') || slug.includes('tech')) return <img src="/electronics.jpg" alt={c.name} className="w-full h-full object-contain rounded-md" />;
-  if (slug.includes('sport') || slug.includes('fit') || slug.includes('gym')) return <img src="/sports.jpg" alt={c.name} className="w-full h-full object-contain rounded-md" />;
-  if (slug.includes('printer') || slug.includes('paper') || slug.includes('stationery') || slug.includes('office')) return <img src={DUMMY_IMAGES.printer} alt={c.name} className="w-full h-full object-contain rounded-md" />;
-
-  // If explicit custom image exists and doesn't match above categories, use it
-  if (c.image) {
-    return <img src={c.image} alt={c.name} className="w-full h-full object-contain rounded-md" />;
-  }
-
-  if (slug.includes('book')) return <img src={DUMMY_IMAGES.books} alt={c.name} className="w-full h-full object-contain rounded-md" />;
-  return <img src="/dairy.jpg" alt={c.name} className="w-full h-full object-contain rounded-md" />;
-};
 
 interface LanguageDropdownProps {
   language: string;
@@ -223,9 +216,9 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
   });
 
   useEffect(() => {
-    const fetchHeaderCategories = async () => {
+    const fetchHeaderCategories = async (force = false) => {
       try {
-        const cats = await getHeaderCategoriesPublic(true);
+        const cats = await getHeaderCategoriesPublic(true, force);
         if (cats && cats.length > 0) {
           setHeaderCategories(cats);
           const mapped = cats.map(c => ({
@@ -252,7 +245,15 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
         console.error('Failed to fetch header categories', error);
       }
     };
-    fetchHeaderCategories();
+    fetchHeaderCategories(true);
+
+    const handleUpdate = () => fetchHeaderCategories(true);
+    window.addEventListener('focus', handleUpdate);
+    window.addEventListener('header_categories_updated', handleUpdate);
+    return () => {
+      window.removeEventListener('focus', handleUpdate);
+      window.removeEventListener('header_categories_updated', handleUpdate);
+    };
   }, []);
 
   const { themeKey: currentThemeKey } = useThemeContext();
@@ -538,24 +539,34 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
           >
             {tabs.map((tab) => {
               const isActive = activeTab === tab.id;
+              const themeObj = tab.theme ? getTheme(tab.theme) : null;
+              const activeColor = tab.theme?.startsWith('#') 
+                ? tab.theme 
+                : (themeObj?.primary?.[0] || '#163F2E');
+
               return (
                 <button
                   key={tab.id}
                   ref={(el) => { if (el) tabRefs.current.set(tab.id, el); else tabRefs.current.delete(tab.id); }}
                   onClick={() => handleTabClick(tab.id)}
+                  style={isActive && tab.theme?.startsWith('#') ? { borderColor: activeColor } : undefined}
                   className={`flex-shrink-0 flex flex-col items-center justify-between w-[68px] h-[78px] md:w-[96px] md:h-[104px] p-1 md:p-2 rounded-xl transition-all duration-200 group border cursor-pointer ${
                     isActive
-                      ? 'border-[#163F2E] md:border-[#34d399] bg-[#e6f7f2] shadow-sm'
-                      : 'border-neutral-200 bg-white hover:border-neutral-300 shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
+                      ? 'border-[#163F2E] md:border-[#34d399] bg-[#e6f7f2] shadow-sm text-[#059669]'
+                      : 'border-neutral-200 bg-white hover:border-neutral-300 shadow-[0_1px_2px_rgba(0,0,0,0.03)] text-neutral-600 hover:text-neutral-900'
                   }`}
                   type="button"
                 >
                   <div className="w-full flex-1 flex items-center justify-center overflow-hidden p-0">
-                    <div className="w-[48px] h-[48px] md:w-[68px] md:h-[68px] flex items-center justify-center flex-shrink-0 [&>svg]:w-full [&>svg]:h-full [&>img]:w-full [&>img]:h-full [&>img]:object-contain transition-transform duration-200 group-hover:scale-105">
+                    <div 
+                      style={isActive && tab.theme?.startsWith('#') ? { color: activeColor } : undefined}
+                      className="w-[48px] h-[48px] md:w-[68px] md:h-[68px] flex items-center justify-center flex-shrink-0 [&>svg]:w-full [&>svg]:h-full [&>img]:w-full [&>img]:h-full [&>img]:object-contain transition-transform duration-200 group-hover:scale-105"
+                    >
                       {tab.icon}
                     </div>
                   </div>
                   <span
+                    style={isActive && tab.theme?.startsWith('#') ? { color: activeColor } : undefined}
                     className={`text-[9.5px] md:text-[12.5px] leading-tight text-center font-sans truncate w-full px-0.5 ${
                       isActive ? 'font-bold text-[#059669]' : 'font-medium text-neutral-600 group-hover:text-neutral-900'
                     }`}

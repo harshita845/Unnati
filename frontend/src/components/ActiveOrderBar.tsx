@@ -35,10 +35,13 @@ export default function ActiveOrderBar() {
   }, [isAuthenticated]);
 
   if (!isAuthenticated) return null;
+  const IS_RECENT_MS = 24 * 60 * 60 * 1000; // 24 hours
+
   const active = (orders as any[])
     .filter((o) => {
       const status = o.status || o.orderStatus || '';
-      return !isDone(status) && !(status.toLowerCase() === 'pending' && o.paymentStatus !== 'Paid');
+      const isOldOrder = o.createdAt ? (Date.now() - new Date(o.createdAt).getTime() > IS_RECENT_MS) : false;
+      return !isDone(status) && !(status.toLowerCase() === 'pending' && o.paymentStatus !== 'Paid') && !isOldOrder;
     })
     .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
   if (!active.length) return null;

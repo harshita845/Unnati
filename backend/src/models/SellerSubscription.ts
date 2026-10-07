@@ -18,6 +18,7 @@ export interface ISellerSubscription extends Document {
     durationUnit: string;
     features: string[];
     limits: { maxProducts?: number | null; commissionPercent?: number | null; featuredStore: boolean };
+    accessibleModules?: string[];
   };
   categories: mongoose.Types.ObjectId[];
   isTrial: boolean;
@@ -64,6 +65,7 @@ const SellerSubscriptionSchema = new Schema<ISellerSubscription>(
         commissionPercent: { type: Number, default: null },
         featuredStore: { type: Boolean, default: false },
       },
+      accessibleModules: { type: [String], default: undefined },
     },
     categories: [{ type: Schema.Types.ObjectId, ref: "Category" }],
     isTrial: { type: Boolean, default: false },

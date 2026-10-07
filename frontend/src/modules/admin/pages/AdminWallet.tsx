@@ -298,53 +298,67 @@ export default function AdminWallet() {
                   )}
                 </thead>
                 <tbody className="bg-white divide-y divide-neutral-200">
-                  {activeTab === 'transaction' && transactions.map(tr => (
-                    <tr key={tr._id} className="hover:bg-neutral-50 transition-colors">
-                      <td className="px-6 py-4 text-sm">{new Date(tr.createdAt).toLocaleDateString()}</td>
-                      <td className="px-6 py-4 text-sm font-medium">{tr.sellerId?.storeName || 'System'}</td>
-                      <td className={`px-6 py-4 text-sm font-bold ${tr.type === 'Credit' ? 'text-[var(--primary-dark)]' : 'text-red-600'}`}>
-                        {tr.type === 'Credit' ? '+' : '-'} ₹{tr.amount}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${tr.status === 'Completed' ? 'bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]' : 'bg-yellow-100 text-yellow-700'}`}>
-                          {tr.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                  {activeTab === 'withdraw' && withdrawRequests.map(req => (
-                    <tr key={req._id} className="hover:bg-neutral-50 transition-colors">
-                      <td className="px-6 py-4 text-sm">{new Date(req.createdAt).toLocaleDateString()}</td>
-                      <td className="px-6 py-4 text-sm font-medium">{req.sellerId?.storeName}</td>
-                      <td className="px-6 py-4 text-sm font-bold">₹{req.amount}</td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${req.status === 'Completed' || req.status === 'Approved' ? 'bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]' : req.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
-                          {req.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        {req.status === 'Pending' && (
-                          <div className="flex gap-2">
-                            <button onClick={() => handleApproveWithdraw(req._id)} disabled={processing} className="text-[var(--primary-dark)] font-bold hover:underline">Approve</button>
-                            <button onClick={() => handleRejectWithdraw(req._id)} disabled={processing} className="text-red-600 font-bold hover:underline">Reject</button>
-                          </div>
-                        )}
-                        {req.status === 'Approved' && (
-                          <button onClick={() => handleCompleteWithdraw(req._id)} disabled={processing} className="text-[var(--primary-dark)] font-bold hover:underline">Mark Paid</button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {activeTab === 'balance' && sellerBalances.map(bal => (
-                    <tr key={bal.userId} className="hover:bg-neutral-50 transition-colors">
+                  {activeTab === 'transaction' && transactions.map((tr, idx) => {
+                    const rawDate = tr.date || tr.createdAt || tr.created_at;
+                    const parsedDate = rawDate ? new Date(rawDate) : null;
+                    const displayDate = parsedDate && !isNaN(parsedDate.getTime()) ? parsedDate.toLocaleDateString() : 'N/A';
+                    const displaySeller = tr.sellerName || tr.sellerId?.storeName || tr.sellerId?.sellerName || tr.storeName || 'System';
+
+                    return (
+                      <tr key={tr._id || tr.id || `tr-${idx}`} className="hover:bg-neutral-50 transition-colors">
+                        <td className="px-6 py-4 text-sm">{displayDate}</td>
+                        <td className="px-6 py-4 text-sm font-medium">{displaySeller}</td>
+                        <td className={`px-6 py-4 text-sm font-bold ${tr.type === 'Credit' ? 'text-[var(--primary-dark)]' : 'text-red-600'}`}>
+                          {tr.type === 'Credit' ? '+' : '-'} ₹{tr.amount}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${tr.status === 'Completed' ? 'bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]' : 'bg-yellow-100 text-yellow-700'}`}>
+                            {tr.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {activeTab === 'withdraw' && withdrawRequests.map((req, idx) => {
+                    const rawDate = req.createdAt || req.date;
+                    const parsedDate = rawDate ? new Date(rawDate) : null;
+                    const displayDate = parsedDate && !isNaN(parsedDate.getTime()) ? parsedDate.toLocaleDateString() : 'N/A';
+                    const displaySeller = req.sellerId?.storeName || req.sellerId?.sellerName || req.sellerName || 'N/A';
+
+                    return (
+                      <tr key={req._id || req.id || `req-${idx}`} className="hover:bg-neutral-50 transition-colors">
+                        <td className="px-6 py-4 text-sm">{displayDate}</td>
+                        <td className="px-6 py-4 text-sm font-medium">{displaySeller}</td>
+                        <td className="px-6 py-4 text-sm font-bold">₹{req.amount}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${req.status === 'Completed' || req.status === 'Approved' ? 'bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]' : req.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+                            {req.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          {req.status === 'Pending' && (
+                            <div className="flex gap-2">
+                              <button onClick={() => handleApproveWithdraw(req._id)} disabled={processing} className="text-[var(--primary-dark)] font-bold hover:underline">Approve</button>
+                              <button onClick={() => handleRejectWithdraw(req._id)} disabled={processing} className="text-red-600 font-bold hover:underline">Reject</button>
+                            </div>
+                          )}
+                          {req.status === 'Approved' && (
+                            <button onClick={() => handleCompleteWithdraw(req._id)} disabled={processing} className="text-[var(--primary-dark)] font-bold hover:underline">Mark Paid</button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {activeTab === 'balance' && sellerBalances.map((bal, idx) => (
+                    <tr key={bal.userId || bal._id || `bal-${idx}`} className="hover:bg-neutral-50 transition-colors">
                       <td className="px-6 py-4 text-sm font-medium">{bal.userName}</td>
                       <td className="px-6 py-4 text-sm font-bold text-[var(--primary-dark)]">₹{bal.currentBalance.toLocaleString()}</td>
                       <td className="px-6 py-4 text-sm">₹{bal.totalEarnings.toLocaleString()}</td>
                       <td className="px-6 py-4 text-sm">₹{bal.totalWithdrawn.toLocaleString()}</td>
                     </tr>
                   ))}
-                  {activeTab === 'earning' && adminEarnings.map(ea => (
-                    <tr key={ea._id} className="hover:bg-neutral-50 transition-colors">
+                  {activeTab === 'earning' && adminEarnings.map((ea, idx) => (
+                    <tr key={ea._id || ea.id || `ea-${idx}`} className="hover:bg-neutral-50 transition-colors">
                       <td className="px-6 py-4 text-sm">{ea.date}</td>
                       <td className="px-6 py-4 text-sm font-medium text-[var(--primary-dark)]">{ea.source}</td>
                       <td className="px-6 py-4 text-sm text-neutral-500">{ea.description}</td>

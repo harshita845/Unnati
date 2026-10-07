@@ -8,6 +8,7 @@ import WalletTransaction from "../models/WalletTransaction";
 import SubscriptionPlan from "../models/SubscriptionPlan";
 import SellerSubscription, { ISellerSubscription } from "../models/SellerSubscription";
 import SubscriptionSettings, { ISubscriptionSettings } from "../models/SubscriptionSettings";
+import { ALL_SELLER_MODULE_KEYS, ESSENTIAL_SELLER_MODULE_KEYS } from "../constants/sellerModules";
 import { createRazorpayOrder, isValidRazorpaySignature } from "./paymentGatewayService";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -187,6 +188,9 @@ export const getCategoryAccess = async (sellerId: unknown, categoryId: unknown) 
  * Throws when the category needs a plan the seller doesn't have, or the plan's product limit is reached.
  */
 export const assertSellerCanListProduct = async (sellerId: unknown, categoryId: unknown, excludeProductId?: unknown) => {
+  if ((await getSellerPlanAccess(sellerId)).locked) {
+    throw new SubscriptionError(403, "Your store needs an active subscription plan before you can add products. Go to Subscriptions to activate one.");
+  }
   const access = await getCategoryAccess(sellerId, categoryId);
   if (!access.required) return;
   if (!access.allowed) {
@@ -229,17 +233,134 @@ export const getFeaturedSellerIds = async (): Promise<string[]> => {
 };
 
 // ----------------------------------------------------------------------------
+// Store-wide rule: every seller needs an active plan (Super Admin switch)
+// ----------------------------------------------------------------------------
+
+const ESSENTIAL_MODULES: string[] = [...ESSENTIAL_SELLER_MODULE_KEYS];
+
+export interface SellerPlanAccess {
+  /** The store-wide rule is on (and this isn't the admin's own store) */
+  required: boolean;
+  /** An active plan or trial right now, or one still inside the grace period */
+  hasPlan: boolean;
+  inGrace: boolean;
+  /** required && !hasPlan: store hidden from customers, panel limited to Dashboard + Subscriptions */
+  locked: boolean;
+  /** Seller-panel modules the seller may use — exactly what their plan(s) include */
+  modules: string[];
+  endDate: Date | null;
+}
+
+const accessCache = new Map<string, { at: number; value: SellerPlanAccess }>();
+const ACCESS_CACHE_MS = 30 * 1000;
+export const clearSellerPlanAccessCache = (sellerId?: unknown) =>
+  sellerId === undefined ? accessCache.clear() : accessCache.delete(idStr(sellerId));
+
+/**
+ * What the seller's plan gives them. Access comes from the plan only (set when Super Admin
+ * creates or edits it). With the store-wide rule on, no plan = Dashboard + Subscriptions only.
+ */
+export const getSellerPlanAccess = async (sellerId: unknown, opts: { fresh?: boolean } = {}): Promise<SellerPlanAccess> => {
+  const key = idStr(sellerId);
+  const cached = accessCache.get(key);
+  if (!opts.fresh && cached && Date.now() - cached.at < ACCESS_CACHE_MS) return cached.value;
+
+  const settings = await getSubscriptionSettings();
+  const now = new Date();
+  const graceDays = settings.graceDays || 0;
+  const valid = mongoose.isValidObjectId(key);
+  const [seller, subs]: [any, any[]] = valid
+    ? await Promise.all([
+        Seller.findById(key).select("category").lean(),
+        SellerSubscription.find({
+          seller: toId(key),
+          status: { $in: ["Active", "Expired"] },
+          startDate: { $lte: now },
+          endDate: { $gt: new Date(now.getTime() - graceDays * DAY_MS) },
+        })
+          .select("planSnapshot endDate")
+          .lean(),
+      ])
+    : [null, []];
+
+  // The admin's own store is run by Super Admin and never needs a plan
+  const required = !!settings.requirePlanForAllSellers && seller?.category !== "Admin";
+  const hasPlan = subs.length > 0;
+  const endDate = hasPlan ? new Date(Math.max(...subs.map((sub) => new Date(sub.endDate).getTime()))) : null;
+
+  let modules: string[];
+  if (!required) {
+    // Rule off: plans don't restrict the panel
+    modules = [...ALL_SELLER_MODULE_KEYS];
+  } else if (hasPlan) {
+    const allowed = new Set<string>(ESSENTIAL_MODULES);
+    for (const sub of subs) {
+      const planModules = sub.planSnapshot?.accessibleModules;
+      // Plans saved before modules existed unlock everything
+      (Array.isArray(planModules) && planModules.length ? planModules : ALL_SELLER_MODULE_KEYS).forEach((k: string) => allowed.add(k));
+    }
+    modules = ALL_SELLER_MODULE_KEYS.filter((k) => allowed.has(k));
+  } else {
+    modules = [...ESSENTIAL_MODULES];
+  }
+
+  const value: SellerPlanAccess = {
+    required,
+    hasPlan,
+    inGrace: hasPlan && !!endDate && endDate <= now,
+    locked: required && !hasPlan,
+    modules,
+    endDate,
+  };
+  accessCache.set(key, { at: Date.now(), value });
+  return value;
+};
+
+/** Is a product hidden from customers? Store locked, or its category needs a plan the seller lacks. */
+export const isProductHiddenForSeller = async (sellerId: unknown, categoryId: unknown) => {
+  if ((await getSellerPlanAccess(sellerId)).locked) return true;
+  return !(await getCategoryAccess(sellerId, categoryId)).allowed;
+};
+
+/** Recompute the seller's store lock flag. */
+export const refreshSellerLock = async (sellerId: unknown) => {
+  const access = await getSellerPlanAccess(sellerId, { fresh: true });
+  const res = await Seller.updateOne({ _id: toId(sellerId), subscriptionLocked: { $ne: access.locked } }, { $set: { subscriptionLocked: access.locked } });
+  return { access, changed: res.modifiedCount > 0 };
+};
+
+/** Recompute everything a seller's plans control: the store lock and every product's visibility. */
+export const syncSellerVisibility = async (sellerId: unknown) => {
+  const { access } = await refreshSellerLock(sellerId);
+  const sid = toId(sellerId);
+  if (access.locked) {
+    await Product.updateMany({ seller: sid, subscriptionHidden: { $ne: true } }, { $set: { subscriptionHidden: true } });
+    return access;
+  }
+  const categoryIds: any[] = await Product.distinct("category", { seller: sid });
+  const hiddenCategories: any[] = [];
+  for (const categoryId of categoryIds) {
+    if (!(await getCategoryAccess(sid, categoryId)).allowed) hiddenCategories.push(categoryId);
+  }
+  await Product.updateMany({ seller: sid, category: { $in: hiddenCategories } }, { $set: { subscriptionHidden: true } });
+  await Product.updateMany({ seller: sid, category: { $nin: hiddenCategories }, subscriptionHidden: true }, { $set: { subscriptionHidden: false } });
+  return access;
+};
+
+// ----------------------------------------------------------------------------
 // Visibility of seller products when access lapses / returns
 // ----------------------------------------------------------------------------
 
 /** Hide or show the seller's products in these (main) categories, and their subcategories, according to current access. */
 export const syncSellerCategoryVisibility = async (sellerId: unknown, categoryIds: unknown[]) => {
+  // A locked store stays hidden whatever its categories allow
+  const { locked } = await getSellerPlanAccess(sellerId);
   for (const categoryId of categoryIds) {
     const access = await getCategoryAccess(sellerId, categoryId);
     const matchIds = await expandCategoryWithDescendants([categoryId]);
     await Product.updateMany(
       { seller: toId(sellerId), category: { $in: matchIds.length ? matchIds : [toId(categoryId)] } },
-      { $set: { subscriptionHidden: !access.allowed } }
+      { $set: { subscriptionHidden: locked || !access.allowed } }
     );
   }
 };
@@ -255,7 +376,15 @@ const createTrial = async (
   return SellerSubscription.create({
     seller: toId(sellerId),
     plan: null,
-    planSnapshot: { name: "Free Trial", price: 0, durationValue: days, durationUnit: "day", features: [], limits: { featuredStore: false } },
+    planSnapshot: {
+      name: "Free Trial",
+      price: 0,
+      durationValue: days,
+      durationUnit: "day",
+      features: [],
+      limits: { featuredStore: false },
+      accessibleModules: ALL_SELLER_MODULE_KEYS,
+    },
     categories: categoryIds.map(toId),
     isTrial: true,
     status: "Active",
@@ -283,7 +412,11 @@ export const onCategorySubscriptionChanged = async (
   const catId = toId(categoryId);
   const matchIds = await expandCategoryWithDescendants([catId]);
   if (!enabled) {
-    await Product.updateMany({ category: { $in: matchIds }, subscriptionHidden: true }, { $set: { subscriptionHidden: false } });
+    const lockedSellers = await Seller.distinct("_id", { subscriptionLocked: true });
+    await Product.updateMany(
+      { category: { $in: matchIds }, subscriptionHidden: true, seller: { $nin: lockedSellers } },
+      { $set: { subscriptionHidden: false } }
+    );
     return { trialsGranted: 0, sellersAffected: 0 };
   }
 
@@ -339,9 +472,91 @@ export const adminGrantTrial = async (adminId: unknown, sellerId: unknown, categ
   }
   const { startDate, endDate } = parseDateRange(start, end);
   const trial = await createTrial(sellerId, ids, startDate, endDate, { type: "Admin", id: adminId });
-  await syncSellerCategoryVisibility(sellerId, ids);
+  await syncSellerVisibility(sellerId);
   await notifySeller(sellerId, "Free trial granted", `You have a free trial from ${fmtDate(startDate)} to ${fmtDate(endDate)}.`, "Success");
   return trial;
+};
+
+/**
+ * Super Admin switched "every seller needs a plan" on or off.
+ * On, existing sellers without a plan get either:
+ *   - trial: { startDate, endDate } -> a free trial for those dates (covers every subscription category too)
+ *   - trial: null                   -> nothing: their store is hidden until they buy a plan
+ * Off: every store is unlocked again (category rules still apply).
+ */
+export const onStoreWidePlanRuleChanged = async (
+  enabled: boolean,
+  options: { trial?: { startDate: Date; endDate: Date } | null; adminId?: unknown } = {}
+) => {
+  clearSellerPlanAccessCache();
+  const sellers: any[] = await Seller.find({}).select("_id category").lean();
+  let trialsGranted = 0;
+  let mustBuy = 0;
+
+  if (enabled) {
+    const subscriptionCategories = (await Category.find({ subscriptionEnabled: true, parentId: null }).select("_id").lean()).map((c: any) => c._id);
+    for (const seller of sellers) {
+      if (seller.category === "Admin") continue;
+      const access = await getSellerPlanAccess(seller._id, { fresh: true });
+      if (access.hasPlan) continue;
+      if (options.trial) {
+        await createTrial(seller._id, subscriptionCategories, options.trial.startDate, options.trial.endDate, {
+          type: options.adminId ? "Admin" : "System",
+          id: options.adminId,
+        });
+        trialsGranted++;
+        await notifySeller(
+          seller._id,
+          "Free trial started",
+          `Every store now needs a subscription plan. You have a free trial from ${fmtDate(options.trial.startDate)} to ${fmtDate(options.trial.endDate)}. Choose a plan before it ends to keep your store live.`,
+          "Info",
+          "High"
+        );
+      } else {
+        mustBuy++;
+        await notifySeller(
+          seller._id,
+          "Subscription required",
+          "Every store now needs a subscription plan. Your store is hidden from customers until you buy one.",
+          "Warning",
+          "Urgent"
+        );
+      }
+    }
+  }
+
+  clearSellerPlanAccessCache();
+  for (const seller of sellers) await syncSellerVisibility(seller._id);
+  return { trialsGranted, mustBuy, sellers: sellers.length };
+};
+
+/** Active plans as shown to someone signing up as a seller (before they have an account). */
+export const getPublicPlans = async () => {
+  const settings = await getSubscriptionSettings();
+  const plans: any[] = await SubscriptionPlan.find({ isActive: true })
+    .populate({ path: "categories", select: "name headerCategoryId", populate: { path: "headerCategoryId", select: "name" } })
+    .sort({ sortOrder: 1, price: 1 })
+    .lean();
+  const result = [];
+  for (const plan of plans) {
+    const billType = await billTypeFor(plan.categories, settings);
+    const gstPercent = billType === "gst" ? settings.gstPercent || 0 : 0;
+    result.push({
+      _id: plan._id,
+      name: plan.name,
+      description: plan.description,
+      price: plan.price,
+      gstPercent,
+      totalPrice: round2(plan.price * (1 + gstPercent / 100)),
+      durationValue: plan.durationValue,
+      durationUnit: plan.durationUnit,
+      features: plan.features || [],
+      limits: plan.limits,
+      accessibleModules: Array.isArray(plan.accessibleModules) && plan.accessibleModules.length ? plan.accessibleModules : ALL_SELLER_MODULE_KEYS,
+      categories: (plan.categories || []).map((c: any) => ({ _id: c._id, name: c.name, headerCategory: c.headerCategoryId?.name || null })),
+    });
+  }
+  return { required: !!settings.requirePlanForAllSellers, plans: result };
 };
 
 // ----------------------------------------------------------------------------
@@ -380,6 +595,7 @@ const buildPendingSubscription = async (sellerId: unknown, planId: unknown) => {
           commissionPercent: plan.limits?.commissionPercent ?? null,
           featuredStore: !!plan.limits?.featuredStore,
         },
+        accessibleModules: plan.accessibleModules || ALL_SELLER_MODULE_KEYS,
       },
       categories: plan.categories,
       status: "PendingPayment",
@@ -438,7 +654,7 @@ const activateSubscription = async (
   );
   if (!updated) throw new SubscriptionError(409, "This subscription was already processed");
 
-  await syncSellerCategoryVisibility(updated.seller, updated.categories);
+  await syncSellerVisibility(updated.seller);
   await notifySeller(
     updated.seller,
     latest ? "Subscription renewed" : "Subscription active",
@@ -534,7 +750,7 @@ export const adminUpdateDates = async (subscriptionId: unknown, start: unknown, 
   subscription.productsHiddenAt = undefined;
   subscription.expiredNotifiedAt = undefined;
   await subscription.save();
-  await syncSellerCategoryVisibility(subscription.seller, subscription.categories);
+  await syncSellerVisibility(subscription.seller);
   await notifySeller(subscription.seller, "Subscription dates updated", `Your plan "${subscription.planSnapshot.name}" now runs from ${fmtDate(startDate)} to ${fmtDate(endDate)}.`, "Info");
   return subscription;
 };
@@ -552,7 +768,7 @@ export const adminExtendSubscription = async (subscriptionId: unknown, days: num
   subscription.productsHiddenAt = undefined;
   subscription.expiredNotifiedAt = undefined;
   await subscription.save();
-  await syncSellerCategoryVisibility(subscription.seller, subscription.categories);
+  await syncSellerVisibility(subscription.seller);
   await notifySeller(subscription.seller, "Subscription extended", `Your plan "${subscription.planSnapshot.name}" was extended by ${days} days.`, "Success");
   return subscription;
 };
@@ -565,7 +781,7 @@ export const adminCancelSubscription = async (subscriptionId: unknown, reason?: 
     { new: true }
   );
   if (!subscription) throw new SubscriptionError(404, "Subscription not found or already cancelled");
-  await syncSellerCategoryVisibility(subscription.seller, subscription.categories);
+  await syncSellerVisibility(subscription.seller);
   await notifySeller(subscription.seller, "Subscription cancelled", `Your plan "${subscription.planSnapshot.name}" was cancelled. ${reason || ""}`.trim(), "Warning", "High");
   return subscription;
 };
@@ -635,7 +851,7 @@ export const runSubscriptionJob = async (now = new Date()) => {
   // 3. Grace over (per category): hide products unless another plan covers the category
   const lapsed = await SellerSubscription.find({ status: "Expired", productsHiddenAt: { $exists: false } });
   for (const sub of lapsed) {
-    await syncSellerCategoryVisibility(sub.seller, sub.categories);
+    await syncSellerVisibility(sub.seller);
     const graces = await Promise.all(sub.categories.map(async (c) => (await getCategoryRules(c, settings)).graceDays));
     const maxGrace = graces.length ? Math.max(...graces) : settings.graceDays;
     if (sub.endDate && sub.endDate.getTime() + maxGrace * DAY_MS <= now.getTime()) {
@@ -650,9 +866,29 @@ export const runSubscriptionJob = async (now = new Date()) => {
     status: "Active",
     startDate: { $lte: now, $gt: new Date(now.getTime() - 2 * 60 * 60 * 1000) },
   });
-  for (const sub of starting) await syncSellerCategoryVisibility(sub.seller, sub.categories);
+  for (const sub of starting) await syncSellerVisibility(sub.seller);
 
-  // 5. Abandoned online payments (older than 1 day) are cleared
+  // 5. Store-wide rule: lock stores whose last plan has lapsed (after the grace period), unlock renewed ones
+  if (settings.requirePlanForAllSellers) {
+    const sellers: any[] = await Seller.find({ category: { $ne: "Admin" } }).select("_id").lean();
+    for (const seller of sellers) {
+      const { access, changed } = await refreshSellerLock(seller._id);
+      if (!changed) continue;
+      await syncSellerVisibility(seller._id);
+      if (access.locked) {
+        await notifySeller(
+          seller._id,
+          "Store hidden: no active plan",
+          "Your subscription has ended, so your store is hidden from customers and most of your panel is locked. Buy a plan to go live again.",
+          "Warning",
+          "Urgent"
+        );
+        stats.hidden++;
+      }
+    }
+  }
+
+  // 6. Abandoned online payments (older than 1 day) are cleared
   const cleared = await SellerSubscription.updateMany(
     { status: "PendingPayment", createdAt: { $lte: new Date(now.getTime() - DAY_MS) } },
     { $set: { status: "Cancelled", cancelledAt: now, cancelReason: "Payment not completed" } }
@@ -764,12 +1000,18 @@ export const getSellerSubscriptionOverview = async (sellerId: unknown) => {
     plansWithBilling.push({ ...plan, billType, gstPercent, totalPrice: round2(plan.price * (1 + gstPercent / 100)) });
   }
 
+  const planAccess = await getSellerPlanAccess(sid, { fresh: true });
+  const sellerDoc: any = await Seller.findById(sid).select("selectedPlan").lean();
+
   return {
     settings: {
       graceDays: settings.graceDays,
       paymentMethods: settings.paymentMethods,
       gstPercent: settings.gstPercent,
     },
+    // Store-wide rule status for this seller (locked = store hidden until a plan is active)
+    planAccess,
+    selectedPlanId: sellerDoc?.selectedPlan ? String(sellerDoc.selectedPlan) : null,
     categories,
     plans: plansWithBilling,
     history,

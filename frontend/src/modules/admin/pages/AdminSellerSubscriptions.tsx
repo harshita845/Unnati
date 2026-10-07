@@ -25,6 +25,11 @@ import {
   updateSubscriptionDates,
   updateSubscriptionSettings,
 } from "../../../services/api/subscriptionService";
+import {
+  ALL_SELLER_MODULES,
+  ALL_SELLER_MODULE_KEYS,
+  SellerModuleDefinition,
+} from "../../../constants/sellerModules";
 
 type Tab = "plans" | "subscriptions" | "settings";
 
@@ -37,6 +42,7 @@ const emptyPlan: PlanInput = {
   categories: [],
   features: [""],
   limits: { maxProducts: null, commissionPercent: null, featuredStore: false },
+  accessibleModules: ALL_SELLER_MODULE_KEYS,
   isActive: true,
   sortOrder: 0,
 };
@@ -98,6 +104,13 @@ export default function AdminSellerSubscriptions() {
 
   // settings
   const [settings, setSettings] = useState<SubscriptionSettings | null>(null);
+  // Store-wide rule as currently saved, and what existing sellers get when it's switched on
+  const [ruleSaved, setRuleSaved] = useState(false);
+  const [ruleExisting, setRuleExisting] = useState<{ mode: "trial" | "buy"; start: string; end: string }>({
+    mode: "trial",
+    start: toDateInput(new Date()),
+    end: toDateInput(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
+  });
   const [reminderText, setReminderText] = useState("");
 
   const rootCategories = useMemo(() => categories.filter((c: any) => !c.parentId), [categories]);
@@ -146,6 +159,7 @@ export default function AdminSellerSubscriptions() {
     try {
       const res = await getSubscriptionSettings();
       setSettings(res.data);
+      setRuleSaved(!!res.data?.requirePlanForAllSellers);
       setReminderText((res.data?.reminderDays || []).join(", "));
     } catch (err) {
       showToast(errorMessage(err, "Failed to load settings"), "error");
@@ -163,6 +177,24 @@ export default function AdminSellerSubscriptions() {
     if (tab === "subscriptions") loadSubscriptions();
   }, [tab, statusFilter, expiringOnly]);
 
+  // Group modules by category for the Plan accessibility selector
+  const groupedPlanModules = useMemo(() => {
+    const groups: Record<string, SellerModuleDefinition[]> = {
+      Overview: [],
+      "Sales & POS": [],
+      "Catalog & Inventory": [],
+      Reports: [],
+      Finance: [],
+      Settings: [],
+    };
+    ALL_SELLER_MODULES.forEach((mod) => {
+      const grp = mod.group || "Settings";
+      if (!groups[grp]) groups[grp] = [];
+      groups[grp].push(mod);
+    });
+    return groups;
+  }, []);
+
   // ---------------- Plans ----------------
   const planToInput = (plan: SubscriptionPlan, overrides: Partial<PlanInput> = {}): PlanInput => ({
     name: plan.name,
@@ -177,12 +209,17 @@ export default function AdminSellerSubscriptions() {
       commissionPercent: plan.limits?.commissionPercent ?? null,
       featuredStore: !!plan.limits?.featuredStore,
     },
+    accessibleModules:
+      plan.accessibleModules && plan.accessibleModules.length > 0
+        ? plan.accessibleModules
+        : ALL_SELLER_MODULE_KEYS,
     isActive: plan.isActive,
     sortOrder: plan.sortOrder || 0,
     ...overrides,
   });
 
-  const openNewPlan = () => setEditing({ data: { ...emptyPlan, features: [""] } });
+  const openNewPlan = () =>
+    setEditing({ data: { ...emptyPlan, features: [""], accessibleModules: ALL_SELLER_MODULE_KEYS } });
   const openEditPlan = (plan: SubscriptionPlan) =>
     setEditing({ id: plan._id, data: planToInput(plan, { features: plan.features.length ? plan.features : [""] }) });
 
@@ -191,7 +228,14 @@ export default function AdminSellerSubscriptions() {
 
   const savePlan = async () => {
     if (!editing) return;
-    const data = { ...editing.data, features: editing.data.features.map((f) => f.trim()).filter(Boolean) };
+    const modulesWithEssentials = Array.from(
+      new Set([...(editing.data.accessibleModules || ALL_SELLER_MODULE_KEYS), "dashboard", "subscriptions"])
+    );
+    const data = {
+      ...editing.data,
+      accessibleModules: modulesWithEssentials,
+      features: editing.data.features.map((f) => f.trim()).filter(Boolean),
+    };
     if (!data.name.trim()) return showToast("Plan name is required", "error");
     if (!data.categories.length) return showToast("Select at least one category", "error");
     setSaving(true);
@@ -317,11 +361,27 @@ export default function AdminSellerSubscriptions() {
       .split(",")
       .map((v) => Number(v.trim()))
       .filter((v) => Number.isFinite(v) && v > 0);
+    const turningOn = !!settings.requirePlanForAllSellers && !ruleSaved;
+    const turningOff = !settings.requirePlanForAllSellers && ruleSaved;
+    if (turningOn && ruleExisting.mode === "buy" && !window.confirm("Every seller without a plan will be hidden from customers right now until they buy one. Continue?")) return;
+    if (turningOff && !window.confirm("Turn off the plan requirement? Every store goes live again, with or without a plan.")) return;
     try {
-      const res = await updateSubscriptionSettings({ ...settings, reminderDays });
+      const res = await updateSubscriptionSettings({
+        ...settings,
+        reminderDays,
+        ...(turningOn
+          ? {
+              existingSellers:
+                ruleExisting.mode === "trial"
+                  ? { mode: "trial" as const, trialStartDate: dateInputToISO(ruleExisting.start, "start")!, trialEndDate: dateInputToISO(ruleExisting.end, "end")! }
+                  : { mode: "buy" as const },
+            }
+          : {}),
+      });
       setSettings(res.data);
+      setRuleSaved(!!res.data?.requirePlanForAllSellers);
       setReminderText((res.data?.reminderDays || []).join(", "));
-      showToast("Settings saved", "success");
+      showToast(res.message || "Settings saved", "success");
     } catch (err) {
       showToast(errorMessage(err, "Failed to save settings"), "error");
     }
@@ -402,7 +462,13 @@ export default function AdminSellerSubscriptions() {
                     {plan.limits?.featuredStore && <li>• Featured store</li>}
                     {plan.features.map((f, i) => <li key={i}>• {f}</li>)}
                   </ul>
-                  <p className="text-xs text-neutral-500 mt-3">Active subscribers: {plan.activeSubscribers || 0}</p>
+                  <div className="mt-3 flex items-center justify-between text-xs text-neutral-600 bg-neutral-50 px-2.5 py-1.5 rounded-lg border border-neutral-200">
+                    <span className="font-medium text-neutral-700">Seller Accessibility</span>
+                    <span className="font-semibold text-[var(--primary-dark)]">
+                      {plan.accessibleModules?.length ?? ALL_SELLER_MODULE_KEYS.length} / {ALL_SELLER_MODULE_KEYS.length} Modules
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-500 mt-2">Active subscribers: {plan.activeSubscribers || 0}</p>
                   <div className="flex gap-2 mt-3">
                     <button onClick={() => openEditPlan(plan)} className="px-3 py-1.5 text-sm rounded-lg border border-neutral-300 hover:bg-neutral-50">Edit</button>
                     <button onClick={() => togglePlanActive(plan)} className="px-3 py-1.5 text-sm rounded-lg border border-neutral-300 hover:bg-neutral-50">
@@ -504,6 +570,54 @@ export default function AdminSellerSubscriptions() {
       {/* ===================== SETTINGS ===================== */}
       {tab === "settings" && settings && (
         <div className="bg-white rounded-lg shadow-sm border border-neutral-200 p-5 space-y-5 max-w-3xl">
+          {/* Store-wide rule: no plan, no selling */}
+          <div className={`rounded-xl border-2 p-4 space-y-3 ${settings.requirePlanForAllSellers ? "border-[var(--primary-color)] bg-[var(--primary-alpha-10)]" : "border-neutral-200"}`}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-bold text-neutral-900">Every seller needs an active plan</p>
+                <p className="text-xs text-neutral-600 mt-1">
+                  When on: new sellers must choose a plan while signing up and can't be approved until it's paid. A seller without an active plan
+                  (after the grace period) has their store hidden from customers and only sees Dashboard + Subscriptions. What each seller can use in
+                  their panel comes from the modules ticked on their plan.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={!!settings.requirePlanForAllSellers}
+                onClick={() => setSettings({ ...settings, requirePlanForAllSellers: !settings.requirePlanForAllSellers })}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full transition-colors ${settings.requirePlanForAllSellers ? "bg-[var(--primary-color)]" : "bg-neutral-300"}`}>
+                <span className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${settings.requirePlanForAllSellers ? "translate-x-5" : ""}`} />
+              </button>
+            </div>
+            {settings.requirePlanForAllSellers && !ruleSaved && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
+                <p className="text-xs font-semibold text-amber-900">Existing sellers who don't have a plan yet:</p>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="radio" checked={ruleExisting.mode === "trial"} onChange={() => setRuleExisting({ ...ruleExisting, mode: "trial" })} />
+                  Give them a free trial
+                </label>
+                {ruleExisting.mode === "trial" && (
+                  <div className="grid grid-cols-2 gap-2 pl-6">
+                    <div>
+                      <label className="block text-xs text-neutral-600 mb-1">Start date</label>
+                      <input type="date" className={inputClass} value={ruleExisting.start} onChange={(e) => setRuleExisting({ ...ruleExisting, start: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-neutral-600 mb-1">End date</label>
+                      <input type="date" className={inputClass} value={ruleExisting.end} onChange={(e) => setRuleExisting({ ...ruleExisting, end: e.target.value })} />
+                    </div>
+                  </div>
+                )}
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="radio" checked={ruleExisting.mode === "buy"} onChange={() => setRuleExisting({ ...ruleExisting, mode: "buy" })} />
+                  They must buy a plan now (their store is hidden until they do)
+                </label>
+                <p className="text-xs text-neutral-500">Click "Save settings" below to apply.</p>
+              </div>
+            )}
+          </div>
+
           <p className="text-sm text-neutral-500">
             Grace period and bill type below are defaults. Each category can have its own in Category settings.
           </p>
@@ -574,12 +688,15 @@ export default function AdminSellerSubscriptions() {
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => !saving && setEditing(null)} />
-          <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-neutral-200 flex justify-between items-center">
-              <h2 className="text-lg font-semibold">{editing.id ? "Edit Plan" : "Create Plan"}</h2>
-              <button onClick={() => setEditing(null)} className="text-neutral-400 hover:text-neutral-600" disabled={saving}>✕</button>
+          <div className="relative bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[92vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-neutral-200 flex justify-between items-center bg-white shrink-0">
+              <div>
+                <h2 className="text-lg font-bold text-neutral-900">{editing.id ? "Edit Plan" : "Create Plan"}</h2>
+                <p className="text-xs text-neutral-500">Configure plan pricing, category access, limits, and seller module permissions.</p>
+              </div>
+              <button onClick={() => setEditing(null)} className="text-neutral-400 hover:text-neutral-600 text-lg font-bold" disabled={saving}>✕</button>
             </div>
-            <div className="px-6 py-4 space-y-4">
+            <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
               <div>
                 <label className={labelClass}>Plan name *</label>
                 <input className={inputClass} value={editing.data.name} onChange={(e) => setPlanField({ name: e.target.value })} placeholder="e.g. Grocery Monthly" />
@@ -675,6 +792,7 @@ export default function AdminSellerSubscriptions() {
                   categories marked "required" (turned on in Category settings); GST is added only for categories that bill with a GST invoice.
                 </p>
               </div>
+
               <div className="border border-neutral-200 rounded-lg p-3 space-y-3">
                 <p className="text-sm font-medium text-neutral-700">Limits (enforced by the app)</p>
                 <div className="grid grid-cols-2 gap-3">
@@ -697,6 +815,126 @@ export default function AdminSellerSubscriptions() {
                   Featured store (shown first in Shop by Store)
                 </label>
               </div>
+
+              {/* ================= SELLER ACCESSIBILITY (MODULE PERMISSIONS FOR THIS PLAN) ================= */}
+              <div className="border-2 border-[var(--primary-color)]/30 rounded-xl p-4 bg-[var(--primary-alpha-10)]/15 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-neutral-200">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <label className="text-sm font-bold text-neutral-900 flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded-md bg-[var(--primary-dark)] text-white flex items-center justify-center text-xs">🔒</span>
+                        Seller Accessibility (Modules unlocked by this Plan)
+                      </label>
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]">
+                        {(editing.data.accessibleModules || ALL_SELLER_MODULE_KEYS).length} / {ALL_SELLER_MODULES.length} Selected
+                      </span>
+                    </div>
+                    <p className="text-xs text-neutral-500 mt-0.5">
+                      Sellers subscribed to this plan will be granted access to the checked modules in the Seller App.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPlanField({ accessibleModules: ALL_SELLER_MODULE_KEYS })}
+                      className="text-xs font-bold text-[var(--primary-dark)] hover:underline px-2.5 py-1.5 rounded-lg bg-white border border-neutral-200 shadow-xs"
+                    >
+                      Select All ({ALL_SELLER_MODULES.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPlanField({ accessibleModules: ["dashboard", "subscriptions"] })}
+                      className="text-xs font-bold text-neutral-600 hover:underline px-2.5 py-1.5 rounded-lg bg-white border border-neutral-200 shadow-xs"
+                    >
+                      Deselect Optional
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
+                  {Object.entries(groupedPlanModules).map(([groupName, groupMods]) => {
+                    const currentSelected = editing.data.accessibleModules || ALL_SELLER_MODULE_KEYS;
+                    const allGroupSelected = groupMods.every((m) => currentSelected.includes(m.key));
+
+                    return (
+                      <div key={groupName} className="bg-white rounded-lg border border-neutral-200 p-3 shadow-xs">
+                        <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-neutral-100">
+                          <span className="text-xs font-bold uppercase tracking-wider text-neutral-600">{groupName}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (allGroupSelected) {
+                                setPlanField({
+                                  accessibleModules: Array.from(
+                                    new Set([
+                                      ...currentSelected.filter((k) => !groupMods.some((m) => m.key === k)),
+                                      "dashboard",
+                                      "subscriptions",
+                                    ])
+                                  ),
+                                });
+                              } else {
+                                const keysToAdd = groupMods.map((m) => m.key);
+                                setPlanField({
+                                  accessibleModules: Array.from(new Set([...currentSelected, ...keysToAdd])),
+                                });
+                              }
+                            }}
+                            className="text-[11px] font-semibold text-[var(--primary-color)] hover:underline"
+                          >
+                            {allGroupSelected ? "Deselect" : "Select Group"}
+                          </button>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          {groupMods.map((mod) => {
+                            const isEssential = mod.isEssential || mod.key === "dashboard" || mod.key === "subscriptions";
+                            const isChecked = isEssential || currentSelected.includes(mod.key);
+                            return (
+                              <label
+                                key={mod.key}
+                                className={`flex items-center gap-2 p-1.5 rounded-md border text-xs transition-all select-none ${
+                                  isEssential
+                                    ? "bg-emerald-50 border-emerald-400 text-neutral-900 font-semibold cursor-default"
+                                    : isChecked
+                                    ? "bg-emerald-50/70 border-emerald-400 text-neutral-900 font-medium shadow-xs cursor-pointer"
+                                    : "bg-white border-neutral-200 text-neutral-500 hover:bg-neutral-50 opacity-70 cursor-pointer"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  disabled={isEssential}
+                                  onChange={(e) => {
+                                    if (isEssential) return;
+                                    const next = e.target.checked
+                                      ? [...currentSelected, mod.key]
+                                      : currentSelected.filter((k) => k !== mod.key);
+                                    setPlanField({ accessibleModules: next });
+                                  }}
+                                  className="h-3.5 w-3.5 rounded border-neutral-300 text-[var(--primary-color)] focus:ring-[var(--primary-color)] disabled:opacity-60 cursor-pointer"
+                                />
+                                <span className="flex-1 truncate font-semibold" title={mod.description}>
+                                  {mod.label}
+                                </span>
+                                {isEssential ? (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-200/80 text-emerald-900 font-bold">
+                                    Essential
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-neutral-400 font-mono hidden sm:inline">{mod.key}</span>
+                                )}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div>
                 <label className={labelClass}>Features shown to sellers</label>
                 {editing.data.features.map((feature, i) => (
@@ -716,9 +954,9 @@ export default function AdminSellerSubscriptions() {
                 Active (sellers can buy this plan)
               </label>
             </div>
-            <div className="px-6 py-4 border-t border-neutral-200 flex justify-end gap-3">
-              <button onClick={() => setEditing(null)} disabled={saving} className="px-4 py-2 text-sm border border-neutral-300 rounded-lg">Cancel</button>
-              <button onClick={savePlan} disabled={saving} className="px-4 py-2 text-sm bg-[var(--primary-dark)] text-white rounded-lg font-semibold">
+            <div className="px-6 py-4 border-t border-neutral-200 flex justify-end gap-3 bg-neutral-50 shrink-0">
+              <button onClick={() => setEditing(null)} disabled={saving} className="px-4 py-2 text-sm border border-neutral-300 rounded-lg bg-white font-medium hover:bg-neutral-50">Cancel</button>
+              <button onClick={savePlan} disabled={saving} className="px-5 py-2 text-sm bg-[var(--primary-dark)] hover:bg-[var(--primary-darker)] text-white rounded-lg font-semibold shadow-sm disabled:opacity-50">
                 {saving ? "Saving..." : editing.id ? "Update Plan" : "Create Plan"}
               </button>
             </div>

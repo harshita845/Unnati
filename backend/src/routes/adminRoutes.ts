@@ -98,6 +98,13 @@ router.post("/staff", requireUserType("Admin", "Seller"), staffController.create
 router.put("/staff/:id", requireUserType("Admin", "Seller"), staffController.updateStaff);
 router.delete("/staff/:id", requireUserType("Admin", "Seller"), staffController.deleteStaff);
 
+// ==================== Order Specific Routes (must precede /orders/:id) ====================
+router.get("/orders/pos-report", requireUserType("Admin", "Seller"), orderController.getPOSOrders);
+router.get("/orders/online", requireUserType("Admin", "Seller"), orderController.getOnlineOrders);
+router.get("/orders/export/csv", requireUserType("Admin", "Seller"), orderController.exportOrders);
+router.get("/orders/status/:status", requireUserType("Admin", "Seller"), orderController.getOrdersByStatus);
+router.get("/orders", requireUserType("Admin", "Seller"), orderController.getAllOrders);
+
 // Order Details & Status - Accessible to both Admin and Seller
 router.get("/orders/:id", requireUserType("Admin", "Seller"), orderController.getOrderById);
 router.patch("/orders/:id/status", requireUserType("Admin", "Seller"), orderController.updateOrderStatus);
@@ -211,17 +218,9 @@ router.get("/pos/purchase-entries", adminPOSPurchaseEntryController.getAdminPurc
 router.post("/pos/purchase-entries", adminPOSPurchaseEntryController.upsertAdminPurchaseEntry);
 router.delete("/pos/purchase-entries/:entryId", adminPOSPurchaseEntryController.deleteAdminPurchaseEntry);
 
-// ==================== Order Routes ====================
-router.get("/orders/pos-report", orderController.getPOSOrders);
-router.get("/orders/online", orderController.getOnlineOrders);
-router.get("/orders", orderController.getAllOrders);
-router.get("/orders/status/:status", orderController.getOrdersByStatus);
-router.get("/orders/:id", orderController.getOrderById);
+// ==================== Remaining Order Mutation Routes ====================
 router.delete("/orders/:id", deleteOrderController.deleteOrder);
-router.patch("/orders/:id/status", orderController.updateOrderStatus);
-// router.patch("/orders/:id/items", orderController.updateOrderItems); // Moved up to allow Sellers
 router.patch("/orders/:id/assign-delivery", orderController.assignDeliveryBoy);
-router.get("/orders/export/csv", orderController.exportOrders);
 
 // ==================== POS Credit Routes ====================
 import * as creditController from "../modules/admin/controllers/adminCreditController";

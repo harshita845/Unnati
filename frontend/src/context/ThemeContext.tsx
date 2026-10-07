@@ -16,9 +16,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const [activeCategory, setActiveCategory] = useState('all');
     const [headerCategories, setHeaderCategories] = useState<any[]>(() => getCachedHeaderCategoriesPublic() || []);
 
-    const fetchHeaderCategories = async () => {
+    const fetchHeaderCategories = async (force = false) => {
         try {
-            const cats = await getHeaderCategoriesPublic();
+            const cats = await getHeaderCategoriesPublic(true, force);
             if (cats) {
                 setHeaderCategories(cats);
             }
@@ -28,13 +28,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     };
 
     useEffect(() => {
-        if (!getCachedHeaderCategoriesPublic()) {
-            fetchHeaderCategories();
-        }
+        fetchHeaderCategories(true);
 
-        // Refresh when tab gets focus (Real-time update from Admin changes)
-        window.addEventListener('focus', fetchHeaderCategories);
-        return () => window.removeEventListener('focus', fetchHeaderCategories);
+        const handleUpdate = () => fetchHeaderCategories(true);
+        window.addEventListener('focus', handleUpdate);
+        window.addEventListener('header_categories_updated', handleUpdate);
+        return () => {
+            window.removeEventListener('focus', handleUpdate);
+            window.removeEventListener('header_categories_updated', handleUpdate);
+        };
     }, []);
 
     const slugToThemeMap = useMemo(() => {

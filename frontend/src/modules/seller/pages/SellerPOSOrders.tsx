@@ -4278,16 +4278,14 @@ const SellerPOSOrders = () => {
                   {/* Cart Items List Wrapper */}
                   <div className="flex-1 min-h-0 overflow-hidden w-full flex flex-col">
                       {/* Location Filter Dropdown Bar */}
-                      {cart.length > 0 && (
-                        <div className="px-4 py-2 bg-gray-50/80 border-b border-gray-200">
-                          <LocationFilterDropdown
-                            items={cart}
-                            filterState={locationFilter}
-                            onChange={setLocationFilter}
-                            compact={true}
-                          />
-                        </div>
-                      )}
+                      <div className="px-4 py-2 bg-gray-50/80 border-b border-gray-200">
+                        <LocationFilterDropdown
+                          items={products.length > 0 ? products : cart}
+                          filterState={locationFilter}
+                          onChange={setLocationFilter}
+                          compact={true}
+                        />
+                      </div>
 
                       {/* Desktop Header Row (Outside scroll container to stay fixed) */}
                       <div className="hidden lg:grid gap-2 text-xs font-bold text-gray-400 pb-2 border-b border-gray-100 mx-4 px-2 mt-4 z-10" style={{ gridTemplateColumns: '35px 40px 50px 1fr 1fr 1fr 1fr 1.6fr 1fr 1fr 1.2fr 1.2fr 2.2fr 0.8fr' }}>

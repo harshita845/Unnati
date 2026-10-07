@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ALL_SELLER_MODULES, SELLER_PLAN_CHANGED_EVENT } from "../../../constants/sellerModules";
 import jsPDF from "jspdf";
 import { useToast } from "../../../context/ToastContext";
 import {
@@ -45,10 +46,21 @@ export default function SellerSubscriptions() {
   const [buying, setBuying] = useState<SubscriptionPlan | null>(null);
   const [processing, setProcessing] = useState(false);
 
+  // Plan chosen at signup (?plan=<id> or saved on the account) opens ready to pay, once
+  const autoOpened = useRef(false);
+  const planChanged = () => window.dispatchEvent(new CustomEvent(SELLER_PLAN_CHANGED_EVENT));
+
   const load = async () => {
     try {
       const res = await getMySubscriptions();
       setData(res.data);
+      if (!autoOpened.current) {
+        autoOpened.current = true;
+        const wanted = new URLSearchParams(window.location.search).get("plan") || res.data?.selectedPlanId;
+        const alreadyHasPlan = res.data?.planAccess?.hasPlan;
+        const plan = wanted && !alreadyHasPlan ? res.data?.plans?.find((p) => p._id === wanted) : null;
+        if (plan) setBuying(plan);
+      }
     } catch (err) {
       showToast(errorMessage(err, "Failed to load subscriptions"), "error");
     } finally {
@@ -75,6 +87,7 @@ export default function SellerSubscriptions() {
         setBuying(null);
         setProcessing(false);
         await load();
+        planChanged();
         return;
       }
       const ok = await loadScript("https://checkout.razorpay.com/v1/checkout.js");
@@ -96,6 +109,7 @@ export default function SellerSubscriptions() {
             showToast(`Payment successful. "${plan.name}" is active.`, "success");
             setBuying(null);
             await load();
+            planChanged();
           } catch (err) {
             showToast(errorMessage(err, "Payment could not be verified"), "error");
           } finally {
@@ -185,10 +199,26 @@ export default function SellerSubscriptions() {
       <div className="bg-white rounded-lg shadow-sm border border-neutral-200 p-5">
         <h1 className="text-2xl font-bold text-neutral-900">Subscriptions</h1>
         <p className="text-sm text-neutral-500 mt-1">
-          Some categories need an active plan to sell. If a plan expires, your products in that category are hidden from customers until you renew
-          (some categories give a few days of grace first). Your products are never deleted.
+          {data.planAccess?.required
+            ? "Every store needs an active plan to sell. Your plan decides which parts of this panel you can use. If it expires, your store is hidden from customers until you renew (after the grace period). Your products are never deleted."
+            : "Some categories need an active plan to sell. If a plan expires, your products in that category are hidden from customers until you renew (some categories give a few days of grace first). Your products are never deleted."}
         </p>
       </div>
+
+      {data.planAccess?.locked && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4">
+          <p className="font-semibold text-red-800">Your store isn't live yet</p>
+          <p className="text-sm text-red-700 mt-1">
+            You don't have an active subscription plan, so customers can't see your store and only Dashboard and Subscriptions are open.
+            Choose a plan below and pay to unlock your panel{data.selectedPlanId ? " (the plan you picked at signup is highlighted)" : ""}.
+          </p>
+        </div>
+      )}
+      {data.planAccess?.required && data.planAccess.inGrace && (
+        <div className="rounded-lg border border-orange-200 bg-orange-50 px-5 py-4 text-sm text-orange-800">
+          Your plan has ended and you're in the grace period. Renew now or your store will be hidden.
+        </div>
+      )}
 
       {/* Category status */}
       <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
@@ -251,7 +281,14 @@ export default function SellerSubscriptions() {
                 (c) => plan.categories.some((pc: any) => String(pc._id || pc) === c.categoryId) && c.planName === plan.name && c.state !== "Expired"
               );
               return (
-                <div key={plan._id} className="border border-neutral-200 rounded-xl p-4 flex flex-col">
+                <div
+                  key={plan._id}
+                  className={`border rounded-xl p-4 flex flex-col ${data.selectedPlanId === plan._id ? "border-[var(--primary-color)] ring-2 ring-[var(--primary-alpha-30)]" : "border-neutral-200"}`}>
+                  {data.selectedPlanId === plan._id && (
+                    <span className="self-start text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--primary-alpha-20)] text-[var(--primary-darker)] mb-2">
+                      Chosen at signup
+                    </span>
+                  )}
                   <h3 className="font-semibold text-neutral-900">{plan.name}</h3>
                   <p className="text-xl font-bold text-[var(--primary-dark)] mt-1">
                     {formatINR(plan.price)}
@@ -270,6 +307,14 @@ export default function SellerSubscriptions() {
                     {plan.limits?.featuredStore && <li>✓ Featured store in Shop by Store</li>}
                     {plan.features.map((f, i) => <li key={i}>✓ {f}</li>)}
                   </ul>
+                  {data.planAccess?.required && (
+                    <p className="text-xs text-neutral-500 mt-3">
+                      Unlocks:{" "}
+                      {ALL_SELLER_MODULES.filter((m) => !m.isEssential && (!plan.accessibleModules?.length || plan.accessibleModules.includes(m.key)))
+                        .map((m) => m.label)
+                        .join(", ") || "Dashboard and Subscriptions only"}
+                    </p>
+                  )}
                   <button
                     onClick={() => setBuying(plan)}
                     className="mt-4 w-full py-2 rounded-lg bg-[var(--primary-dark)] text-white text-sm font-semibold hover:bg-[var(--primary-darker)]">

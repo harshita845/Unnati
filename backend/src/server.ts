@@ -225,4 +225,4 @@ if (!isServerless) {
 
 export default app;
 
-// Trigger dev server restart for storage locations reload - v3.
+// Trigger dev server restart for storage locations reload - v4.

@@ -17,6 +17,9 @@ router.post("/logout", authenticate, sellerAuthController.logout);
 // Register route
 router.post("/register", sellerAuthController.register);
 
+// Subscription plans shown on the signup page (public)
+router.get("/plans", sellerAuthController.getSignupPlans);
+
 // Profile routes (protected)
 router.get("/profile", authenticate, sellerAuthController.getProfile);
 router.put("/profile", authenticate, sellerAuthController.updateProfile);

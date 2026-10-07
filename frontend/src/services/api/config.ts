@@ -51,9 +51,14 @@ const buildApiBaseCandidates = (): string[] => {
 
 const API_BASE_CANDIDATES = buildApiBaseCandidates();
 let activeApiBaseIndex = 0;
-let activeApiBaseUrl = API_BASE_CANDIDATES[activeApiBaseIndex] || "/api/v1";
+let activeApiBaseUrl = API_BASE_CANDIDATES[activeApiBaseIndex] || "http://localhost:5001/api/v1";
 
 const advanceApiBaseCandidate = (): string | null => {
+  // In DEV mode, if VITE_API_BASE_URL is explicitly set, do not permanently corrupt the global base URL for all future requests
+  if (import.meta.env.DEV && import.meta.env.VITE_API_BASE_URL) {
+    console.warn("⚠️ API request failed in DEV mode. Keeping primary API_BASE_URL:", activeApiBaseUrl);
+    return null;
+  }
   if (activeApiBaseIndex >= API_BASE_CANDIDATES.length - 1) {
     return null;
   }

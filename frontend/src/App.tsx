@@ -578,6 +578,7 @@ function App() {
                              <Route path="customers/abandoned-carts" element={<AdminAbandonedCarts />} />
                             <Route path="collect-cash" element={<AdminCashCollection />} />
                             <Route path="payment-list" element={<AdminPaymentList />} />
+                            <Route path="payment-methods" element={<AdminPaymentList />} />
                             <Route path="sms-gateway" element={<AdminSmsGateway />} />
                             <Route path="system-user" element={<AdminSystemUser />} />
                             <Route path="customer-app-policy" element={<AdminCustomerAppPolicy />} />

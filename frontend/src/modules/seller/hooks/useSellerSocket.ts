@@ -49,7 +49,8 @@ export const useSellerSocket = (onNotificationReceived?: (notification: SellerNo
         const socketUrl = getSocketBaseURL();
         const newSocket = io(socketUrl, {
             auth: { token },
-            transports: ['websocket', 'polling'],
+            transports: ['polling', 'websocket'],
+            reconnectionAttempts: 3,
         });
 
         newSocket.on('connect', () => {

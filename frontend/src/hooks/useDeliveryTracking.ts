@@ -61,7 +61,7 @@ export const useDeliveryTracking = (orderId: string | undefined) => {
             auth: {
                 token,
             },
-            transports: ['websocket', 'polling'],
+            transports: ['polling', 'websocket'],
             reconnection: true,
             reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
             reconnectionDelay: INITIAL_RECONNECT_DELAY,

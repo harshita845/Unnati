@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { getSellerPlanAccess } from "../../../services/sellerSubscriptionService";
 import Seller from "../../../models/Seller";
 import { asyncHandler } from "../../../utils/asyncHandler";
 
@@ -74,6 +75,18 @@ export const updateSellerStatus = asyncHandler(
       });
     }
 
+    // Store-wide plan rule: a seller can't go live (be approved) without an active plan
+    if (status === "Approved") {
+      const access = await getSellerPlanAccess(id, { fresh: true });
+      if (access.locked) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "This seller has no active subscription plan. Ask them to pay for their plan, or activate one for them (Seller Subscriptions → Activate plan), before approving.",
+        });
+      }
+    }
+
     const seller = await Seller.findByIdAndUpdate(
       id,
       { status },
@@ -105,6 +118,20 @@ export const updateSeller = asyncHandler(
 
     // Remove password from update data if present
     delete updateData.password;
+    // Managed by the subscription system only
+    delete updateData.subscriptionLocked;
+    delete updateData.selectedPlan;
+
+    if (updateData.status === "Approved") {
+      const access = await getSellerPlanAccess(id, { fresh: true });
+      if (access.locked) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "This seller has no active subscription plan. Ask them to pay for their plan, or activate one for them (Seller Subscriptions → Activate plan), before approving.",
+        });
+      }
+    }
 
     // Handle location update (convert lat/lng to GeoJSON)
     if (updateData.latitude && updateData.longitude) {

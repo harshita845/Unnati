@@ -19,6 +19,7 @@ import { useAuth } from "../../../context/AuthContext";
 import { useAppContext } from "../../../context/AppContext";
 import AdminStockBulkEdit from "./AdminStockBulkEdit";
 import AdminStockBulkImport from "./AdminStockBulkImport";
+import BulkBarcodeModal from "../components/BulkBarcodeModal";
 import { getAppSettings } from "../../../services/api/admin/adminSettingsService";
 import VariationDropdown from "../../../components/VariationDropdown";
 import QRScannerModal from "../../../components/QRScannerModal";
@@ -147,6 +148,7 @@ export default function AdminStockManagement() {
   const [error, setError] = useState<string | null>(null);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showBulkBarcodeModal, setShowBulkBarcodeModal] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [savingChanges, setSavingChanges] = useState(false);
@@ -1275,11 +1277,11 @@ export default function AdminStockManagement() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
-      {/* Page Content */}
-      <div className="flex-1 p-6">
-        {/* Main Panel */}
-        <div className="bg-white rounded-lg shadow-sm border border-neutral-200">
+    <div className="space-y-6">
+      {/* Main Panel */}
+      <div className="bg-white rounded-lg shadow-sm border border-neutral-200">
+        {/* Sticky Header & Filter/Controls Section */}
+        <div className="sticky -top-4 md:-top-6 z-30 bg-white rounded-t-lg shadow-sm border-b border-neutral-200">
           {/* Header */}
           <div className="bg-[var(--primary-color)] text-white px-6 py-4 rounded-t-lg flex justify-between items-center">
             <h2 className="text-lg font-semibold">View Stock Management</h2>
@@ -1295,7 +1297,7 @@ export default function AdminStockManagement() {
           </div>
 
           {/* Filters and Controls */}
-          <div className="p-4 border-b border-neutral-200">
+          <div className="p-4 bg-white">
             {/* Filters Row */}
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
               <div>
@@ -1479,7 +1481,7 @@ export default function AdminStockManagement() {
               <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
                 <button
                   onClick={() => navigate("/admin/product/add")}
-                  className="bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white px-3 py-2 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors">
+                  className="bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white px-3 h-[36px] whitespace-nowrap rounded text-xs font-medium flex items-center justify-center gap-1.5 transition-colors shrink-0">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="12" y1="5" x2="12" y2="19"></line>
                     <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -1488,7 +1490,7 @@ export default function AdminStockManagement() {
                 </button>
                 <button
                   onClick={() => setShowBulkEdit(true)}
-                  className="bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white px-3 py-2 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors">
+                  className="bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white px-3 h-[36px] whitespace-nowrap rounded text-xs font-medium flex items-center justify-center gap-1.5 transition-colors shrink-0">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -1497,23 +1499,35 @@ export default function AdminStockManagement() {
                 </button>
                 <button
                   onClick={() => setShowBulkImport(true)}
-                  className="bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white px-3 py-2 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors"
+                  className="bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white px-3 h-[36px] whitespace-nowrap rounded text-xs font-medium flex items-center justify-center gap-1.5 transition-colors shrink-0"
                 >
                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                   Import
                 </button>
                 <button
                   onClick={handleExport}
-                  className="bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white px-3 py-2 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors">
+                  className="bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white px-3 h-[36px] whitespace-nowrap rounded text-xs font-medium flex items-center justify-center gap-1.5 transition-colors shrink-0">
                   Export
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="6 9 12 15 18 9"></polyline>
                   </svg>
                 </button>
                 <button
+                  onClick={() => setShowBulkBarcodeModal(true)}
+                  className="bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white px-3 h-[36px] whitespace-nowrap rounded text-xs font-medium flex items-center justify-center gap-1.5 transition-colors shrink-0"
+                  title="Download Bulk Barcodes in ZIP or PDF"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                  Bulk Barcode
+                </button>
+                <button
                   onClick={handleShareSelected}
                   disabled={selectedProductIdsForShare.size === 0}
-                  className={`px-3 py-2 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors ${
+                  className={`px-3 h-[36px] whitespace-nowrap rounded text-xs font-medium flex items-center justify-center gap-1.5 transition-colors shrink-0 ${
                     selectedProductIdsForShare.size === 0
                       ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
                       : "bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white"
@@ -1532,6 +1546,7 @@ export default function AdminStockManagement() {
               </div>
             </div>
           </div>
+        </div>
 
           {/* Table/Grid Toggle Rendering */}
           {loading ? (
@@ -2012,7 +2027,6 @@ export default function AdminStockManagement() {
             </div>
           </div>
         </div>
-      </div>
 
       {/* Footer */}
       <footer className="text-center py-4 text-sm text-neutral-600 border-t border-neutral-200 bg-white">
@@ -2363,6 +2377,14 @@ export default function AdminStockManagement() {
           </div>
         </div>
       )}
+
+      <BulkBarcodeModal
+        isOpen={showBulkBarcodeModal}
+        onClose={() => setShowBulkBarcodeModal(false)}
+        products={displayedProducts}
+        initialSelectedIds={selectedProductIdsForShare}
+        barcodeSettings={barcodeSettings}
+      />
     </div>
   );
 }

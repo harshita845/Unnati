@@ -13,7 +13,7 @@ import { toDetail } from "./productReadMapper";
 import {
   SubscriptionError,
   assertSellerCanListProduct,
-  getCategoryAccess,
+  isProductHiddenForSeller,
 } from "../../services/sellerSubscriptionService";
 
 async function resolveAdminSeller(sellerId?: string): Promise<string> {
@@ -249,7 +249,7 @@ export class ProductWriteService {
 
     const doc = buildMongooseDoc(normalized, sellerId);
     // Hidden from customers if the seller has no plan for this category (e.g. added by admin)
-    (doc as any).subscriptionHidden = !(await getCategoryAccess(sellerId, normalized.category)).allowed;
+    (doc as any).subscriptionHidden = await isProductHiddenForSeller(sellerId, normalized.category);
     const product = await Product.create(doc);
     return toDetail(product);
   }
@@ -345,7 +345,7 @@ export class ProductWriteService {
     delete doc.seller;
 
     Object.assign(existing, doc);
-    (existing as any).subscriptionHidden = !(await getCategoryAccess(sellerId, finalCategory)).allowed;
+    (existing as any).subscriptionHidden = await isProductHiddenForSeller(sellerId, finalCategory);
     if (doc.storageLocation) {
       const sl = doc.storageLocation as any;
       existing.storageLocation = {

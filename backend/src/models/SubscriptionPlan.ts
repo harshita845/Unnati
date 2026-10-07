@@ -20,6 +20,7 @@ export interface ISubscriptionPlan extends Document {
     commissionPercent?: number | null; // null/undefined = seller's normal commission
     featuredStore: boolean;
   };
+  accessibleModules?: string[];
   isActive: boolean;
   sortOrder: number;
   createdBy?: mongoose.Types.ObjectId;
@@ -54,6 +55,7 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       },
       featuredStore: { type: Boolean, default: false },
     },
+    accessibleModules: { type: [{ type: String, trim: true }], default: undefined },
     isActive: { type: Boolean, default: true },
     sortOrder: { type: Number, default: 0 },
     createdBy: { type: Schema.Types.ObjectId, ref: "Admin" },

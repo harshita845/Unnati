@@ -139,6 +139,24 @@ router.use("/customer", customerRoutes);
 // ... existing code ...
 
 
+// Seller-panel access comes from the seller's subscription plan: block API calls for modules
+// the plan doesn't include (Dashboard + Subscriptions are always available)
+import { requireSellerModule } from "../middleware/sellerModuleAccess";
+router.use("/seller/pos", requireSellerModule({ modules: ["pos"] }));
+router.use("/seller/orders", requireSellerModule({ modules: ["orders", "pos", "reports"] }));
+router.use("/orders", requireSellerModule({ modules: ["orders"], readModules: ["pos", "reports"] }));
+router.use("/returns", requireSellerModule({ modules: ["requests"] }));
+router.use("/seller/reports", requireSellerModule({ modules: ["reports", "payment-list", "staff-bill-report"] }));
+router.use("/seller/attributes", requireSellerModule({ modules: ["attribute-setup"], readModules: ["product"] }));
+router.use("/seller/variation-types", requireSellerModule({ modules: ["variation-setup"], readModules: ["product", "pos"] }));
+router.use("/seller/storage-locations", requireSellerModule({ modules: ["storage-location"], readModules: ["product", "pos"] }));
+router.use("/seller/inventory", requireSellerModule({ modules: ["product"], readModules: ["pos"] }));
+router.use("/seller/wallet", requireSellerModule({ modules: ["wallet"], readModules: ["payment-list"] }));
+router.use("/products", requireSellerModule({ modules: ["product"], readModules: ["pos", "orders", "requests"] }));
+router.use("/categories", requireSellerModule({ modules: ["category", "subcategory"], openReads: true }));
+router.use("/seller/taxes", requireSellerModule({ modules: ["product"], openReads: true }));
+router.use("/admin/staff", requireSellerModule({ modules: ["manage-staff"], readModules: ["staff-bill-report", "pos"] }));
+
 // Seller dashboard routes
 router.use("/seller/dashboard", dashboardRoutes);
 

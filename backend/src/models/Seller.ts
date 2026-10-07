@@ -70,8 +70,10 @@ export interface ISeller extends Document {
   isEnabled: boolean;
   canCreateCategories: boolean;
   billSettings?: Record<string, any>;
-
-
+  /** Store-wide plan rule is on and the seller has no active plan: store hidden, panel limited */
+  subscriptionLocked?: boolean;
+  /** Plan the seller chose while signing up (to pay right after) */
+  selectedPlan?: mongoose.Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -299,6 +301,16 @@ const SellerSchema = new Schema<ISeller>(
     billSettings: {
       type: Schema.Types.Mixed,
       default: {},
+    },
+    subscriptionLocked: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    selectedPlan: {
+      type: Schema.Types.ObjectId,
+      ref: "SubscriptionPlan",
+      default: null,
     },
   },
   {

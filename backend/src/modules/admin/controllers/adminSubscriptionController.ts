@@ -4,6 +4,7 @@ import { asyncHandler } from "../../../utils/asyncHandler";
 import Category from "../../../models/Category";
 import SubscriptionPlan, { PLAN_DURATION_UNITS } from "../../../models/SubscriptionPlan";
 import SellerSubscription from "../../../models/SellerSubscription";
+import { ALL_SELLER_MODULE_KEYS, ESSENTIAL_SELLER_MODULE_KEYS } from "../../../constants/sellerModules";
 import {
   SubscriptionError,
   adminActivatePlan,
@@ -11,7 +12,10 @@ import {
   adminExtendSubscription,
   adminGrantTrial,
   adminUpdateDates,
+  clearSellerPlanAccessCache,
   getSubscriptionSettings,
+  onStoreWidePlanRuleChanged,
+  parseDateRange,
 } from "../../../services/sellerSubscriptionService";
 
 const handle = (res: Response, error: any) => {
@@ -68,6 +72,14 @@ const parsePlanBody = async (body: any) => {
     errors.push("Commission must be between 0 and 100 (leave empty to use the seller's normal rate)");
   }
 
+  // Modules this plan unlocks in the seller panel; Dashboard + Subscriptions are always included
+  const chosenModules = Array.isArray(body.accessibleModules)
+    ? body.accessibleModules.filter((k: string) => ALL_SELLER_MODULE_KEYS.includes(k))
+    : ALL_SELLER_MODULE_KEYS;
+  const accessibleModules = ALL_SELLER_MODULE_KEYS.filter(
+    (k) => chosenModules.includes(k) || (ESSENTIAL_SELLER_MODULE_KEYS as readonly string[]).includes(k)
+  );
+
   return {
     errors,
     data: {
@@ -79,6 +91,7 @@ const parsePlanBody = async (body: any) => {
       categories: [...new Set(categoryIds)],
       features,
       limits: { maxProducts, commissionPercent, featuredStore: !!body.limits?.featuredStore },
+      accessibleModules,
       isActive: body.isActive === undefined ? true : !!body.isActive,
       sortOrder: Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : 0,
     },
@@ -93,8 +106,22 @@ export const getSettings = asyncHandler(async (_req: Request, res: Response) => 
 
 export const updateSettings = asyncHandler(async (req: Request, res: Response) => {
   const settings = await getSubscriptionSettings();
-  const { graceDays, trialDays, reminderDays, paymentMethods, gstPercent, invoiceEnabled, invoicePrefix } = req.body;
+  const { graceDays, trialDays, reminderDays, paymentMethods, gstPercent, invoiceEnabled, invoicePrefix, requirePlanForAllSellers, existingSellers } = req.body;
+  let ruleChange: { enabled: boolean; trial: { startDate: Date; endDate: Date } | null } | null = null;
   try {
+    if (requirePlanForAllSellers !== undefined && !!requirePlanForAllSellers !== !!settings.requirePlanForAllSellers) {
+      const enabled = !!requirePlanForAllSellers;
+      let trial: { startDate: Date; endDate: Date } | null = null;
+      if (enabled) {
+        // What existing sellers without a plan get: a free trial (admin's dates) or nothing (must buy now)
+        if (existingSellers?.mode === "trial") trial = parseDateRange(existingSellers.trialStartDate, existingSellers.trialEndDate);
+        else if (existingSellers?.mode !== "buy") {
+          return res.status(400).json({ success: false, message: "Choose a free trial or 'must buy a plan' for existing sellers" });
+        }
+      }
+      settings.requirePlanForAllSellers = enabled;
+      ruleChange = { enabled, trial };
+    }
     if (graceDays !== undefined) settings.graceDays = Number(graceDays);
     if (trialDays !== undefined) settings.trialDays = Number(trialDays);
     if (reminderDays !== undefined) {
@@ -119,10 +146,20 @@ export const updateSettings = asyncHandler(async (req: Request, res: Response) =
     if (invoicePrefix !== undefined) settings.invoicePrefix = String(invoicePrefix).trim().toUpperCase().slice(0, 10) || "SUB";
     if (req.user?.userId) settings.updatedBy = new mongoose.Types.ObjectId(req.user.userId);
     await settings.save();
+    clearSellerPlanAccessCache();
   } catch (error) {
     return handle(res, error);
   }
-  return res.status(200).json({ success: true, message: "Subscription settings saved", data: settings });
+
+  let message = "Subscription settings saved";
+  if (ruleChange) {
+    const result = await onStoreWidePlanRuleChanged(ruleChange.enabled, { trial: ruleChange.trial, adminId: req.user?.userId });
+    if (!ruleChange.enabled) message = "Plan requirement turned off: every store is live again.";
+    else if (result.trialsGranted) message = `Every seller now needs a plan. ${result.trialsGranted} existing seller(s) got a free trial.`;
+    else if (result.mustBuy) message = `Every seller now needs a plan. ${result.mustBuy} seller(s) without a plan are hidden until they buy one.`;
+    else message = "Every seller now needs a plan. All current sellers already have one.";
+  }
+  return res.status(200).json({ success: true, message, data: settings });
 });
 
 // ---------- Plans ----------

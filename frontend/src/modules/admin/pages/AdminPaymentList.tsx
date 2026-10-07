@@ -149,14 +149,14 @@ export default function AdminPaymentList() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
         <h1 className="text-2xl font-semibold text-neutral-800">
-          Payment Method
+          Payment List
         </h1>
         <div className="text-sm text-neutral-600">
           <span className="text-[var(--primary-color)] hover:text-[var(--primary-dark)] cursor-pointer">
             Home
           </span>
           <span className="mx-2">/</span>
-          <span className="text-neutral-800">Payment Method</span>
+          <span className="text-neutral-800">Payment List</span>
         </div>
       </div>
 

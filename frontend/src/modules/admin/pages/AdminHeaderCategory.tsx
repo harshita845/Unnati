@@ -238,6 +238,7 @@ export default function AdminHeaderCategory() {
         showToast('Header Category added successfully!');
       }
 
+      window.dispatchEvent(new Event('header_categories_updated'));
       fetchCategories();
       resetForm();
     } catch (error: any) {
@@ -277,6 +278,7 @@ export default function AdminHeaderCategory() {
       try {
         await deleteHeaderCategory(id);
         showToast('Header Category deleted successfully!');
+        window.dispatchEvent(new Event('header_categories_updated'));
         fetchCategories();
       } catch (error) {
         console.error(error);

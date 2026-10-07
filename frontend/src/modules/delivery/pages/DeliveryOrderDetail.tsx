@@ -313,9 +313,9 @@ export default function DeliveryOrderDetail() {
 
                 socket = io(baseURL, {
                     auth: { token },
-                    transports: ['websocket', 'polling'],
+                    transports: ['polling', 'websocket'],
                     reconnection: true,
-                    reconnectionAttempts: 5,
+                    reconnectionAttempts: 3,
                     reconnectionDelay: 2000
                 });
 

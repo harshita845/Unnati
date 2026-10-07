@@ -18,6 +18,7 @@ export interface SubscriptionPlan {
   categories: Array<{ _id: string; name: string; subscriptionEnabled?: boolean; subscriptionGraceDays?: number | null; subscriptionBillType?: "gst" | "receipt" | null } | string>;
   features: string[];
   limits: PlanLimits;
+  accessibleModules?: string[];
   isActive: boolean;
   sortOrder: number;
   activeSubscribers?: number;
@@ -36,6 +37,7 @@ export interface PlanInput {
   categories: string[];
   features: string[];
   limits: { maxProducts: number | null; commissionPercent: number | null; featuredStore: boolean };
+  accessibleModules?: string[];
   isActive: boolean;
   sortOrder?: number;
 }
@@ -48,6 +50,36 @@ export interface SubscriptionSettings {
   gstPercent: number;
   invoiceEnabled: boolean;
   invoicePrefix: string;
+  /** Every seller must have an active plan to sell */
+  requirePlanForAllSellers?: boolean;
+}
+
+/** What existing sellers without a plan get when "every seller needs a plan" is switched on */
+export type ExistingSellersOption = { mode: "trial"; trialStartDate: string; trialEndDate: string } | { mode: "buy" };
+
+export interface SellerPlanAccess {
+  required: boolean;
+  hasPlan: boolean;
+  inGrace: boolean;
+  locked: boolean;
+  modules: string[];
+  endDate: string | null;
+}
+
+/** A plan as shown on the seller signup page */
+export interface SignupPlan {
+  _id: string;
+  name: string;
+  description?: string;
+  price: number;
+  gstPercent: number;
+  totalPrice: number;
+  durationValue: number;
+  durationUnit: PlanDurationUnit;
+  features: string[];
+  limits?: PlanLimits;
+  accessibleModules: string[];
+  categories: Array<{ _id: string; name: string; headerCategory: string | null }>;
 }
 
 export interface SellerSubscription {
@@ -61,6 +93,7 @@ export interface SellerSubscription {
     durationUnit: PlanDurationUnit;
     features: string[];
     limits: PlanLimits;
+    accessibleModules?: string[];
   };
   categories: Array<{ _id: string; name: string }>;
   isTrial: boolean;
@@ -99,6 +132,8 @@ export interface SellerCategoryStatus {
 
 export interface SellerSubscriptionOverview {
   settings: { graceDays: number; paymentMethods: { online: boolean; manual: boolean; wallet: boolean }; gstPercent: number };
+  planAccess?: SellerPlanAccess;
+  selectedPlanId?: string | null;
   categories: SellerCategoryStatus[];
   plans: SubscriptionPlan[];
   history: SellerSubscription[];
@@ -125,7 +160,7 @@ export const dateInputToISO = (value: string, edge: "start" | "end") =>
 
 // ---------- Super Admin ----------
 export const getSubscriptionSettings = async () => (await api.get("/admin/subscriptions/settings")).data;
-export const updateSubscriptionSettings = async (data: Partial<SubscriptionSettings>) => (await api.put("/admin/subscriptions/settings", data)).data;
+export const updateSubscriptionSettings = async (data: Partial<SubscriptionSettings> & { existingSellers?: ExistingSellersOption }) => (await api.put("/admin/subscriptions/settings", data)).data;
 export const getPlans = async () => (await api.get("/admin/subscriptions/plans")).data;
 export const createPlan = async (data: PlanInput) => (await api.post("/admin/subscriptions/plans", data)).data;
 export const updatePlan = async (id: string, data: PlanInput) => (await api.put(`/admin/subscriptions/plans/${id}`, data)).data;
@@ -149,3 +184,7 @@ export const purchasePlan = async (planId: string, method: "Online" | "Wallet") 
 export const verifyPlanPayment = async (id: string, data: { razorpayOrderId: string; paymentId: string; razorpaySignature: string }) =>
   (await api.post(`/seller/subscriptions/${id}/verify`, data)).data;
 export const getSubscriptionInvoice = async (id: string) => (await api.get(`/seller/subscriptions/${id}/invoice`)).data;
+
+// ---------- Public (seller signup) ----------
+export const getSignupPlans = async (): Promise<{ success: boolean; data: { required: boolean; plans: SignupPlan[] } }> =>
+  (await api.get("/auth/seller/plans")).data;

@@ -45,7 +45,7 @@ const DEFAULT_SAMPLE_DATA: ReceiptData = {
   date: new Date().toLocaleDateString('en-IN'),
   time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
   paymentMethod: 'Cash',
-  customerName: 'Walk-in Customer',
+  customerName: 'Rahul Sharma',
   customerPhone: '9876543210',
   items: [
     { productName: 'BULBUL NANO RS20', sku: 'BLB-001', qty: 6, price: 20, compareAtPrice: 20 },
