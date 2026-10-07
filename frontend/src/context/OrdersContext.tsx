@@ -6,6 +6,7 @@ import {
 import { useAuth } from "./AuthContext";
 import { Order } from "../types/order";
 import { createOrder, getMyOrders } from "../services/api/customerOrderService";
+import { isCustomerDisplayPath } from "../utils/moduleAuth";
 import { OrdersContext } from "./ordersContext.types";
 
 // Type for API response order (with _id from MongoDB)
@@ -58,7 +59,7 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
     const userType =
       user?.userType || (isAuthenticated && user ? "Customer" : undefined);
 
-    if (!isAuthenticated || userType !== "Customer") {
+    if (!isAuthenticated || userType !== "Customer" || isCustomerDisplayPath()) {
       setLoading(false);
       return;
     }

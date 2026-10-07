@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { handleOrderAcceptance, handleOrderRejection } from '../services/orderNotificationService';
 import Order from '../models/Order';
 import DeliveryTracking from '../models/DeliveryTracking';
+import { CFD_ALL_ROOM, cfdRoom, findTerminalByKey } from '../modules/customerDisplay/customerDisplayService';
 
 // In-memory cache for order destinations (lat, lng) to avoid DB reads on every update
 // Key: orderId, Value: { latitude, longitude }
@@ -125,6 +126,22 @@ export const initializeSocket = (httpServer: HttpServer) => {
 
     io.on('connection', (socket) => {
         console.log('✅ Socket connected:', socket.id, 'User:', (socket as any).user?.userId || 'Unauthenticated');
+
+        // POS Customer Display screen joins its counter's room (authenticated by the terminal display key)
+        socket.on('cfd-join', async (payload: { terminal?: string; key?: string }, ack?: (res: { ok: boolean }) => void) => {
+            try {
+                const terminal = await findTerminalByKey(payload?.terminal, payload?.key);
+                if (!terminal) {
+                    ack?.({ ok: false });
+                    return;
+                }
+                socket.join(cfdRoom(terminal.code));
+                socket.join(CFD_ALL_ROOM);
+                ack?.({ ok: true });
+            } catch {
+                ack?.({ ok: false });
+            }
+        });
 
         // Customer subscribes to order tracking
         socket.on('track-order', async (orderId: string) => {

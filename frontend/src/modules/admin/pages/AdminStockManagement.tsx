@@ -102,6 +102,10 @@ interface ProductVariation {
   brand: string; // 23
   valueMrp: number; // 24
   valuePurchase: number; // 25
+  unitPriceMinQty2?: number | string; // 26
+  unitPriceMinQty4?: number | string; // 27
+  mfgDate?: string; // 30
+  expiryDate?: string; // 31
   storageCity?: string;
   storageWarehouse?: string;
   storageRoom?: string;
@@ -877,6 +881,19 @@ export default function AdminStockManagement() {
       const baseBarcodeVal = Array.isArray(p.barcode)
         ? p.barcode.join(", ")
         : (p.barcode || "-");
+      const baseUnitPricing =
+        p.variations?.[0]?.tieredPrices ||
+        (p as any).unitPricing ||
+        (product as any).unitPricing ||
+        [];
+      const pFor2 = Array.isArray(baseUnitPricing)
+        ? baseUnitPricing.find((u: any) => Number(u.minQty) === 2)?.price
+        : undefined;
+      const pFor4 = Array.isArray(baseUnitPricing)
+        ? baseUnitPricing.find((u: any) => Number(u.minQty) === 4)?.price
+        : undefined;
+      const baseMfgDate = p.mfgDate || (product as any).mfgDate || "";
+      const baseExpiryDate = p.expiryDate || (product as any).expiryDate || "";
 
       const baseVariation = {
         productId: product._id,
@@ -906,12 +923,16 @@ export default function AdminStockManagement() {
         taxCategory: taxName,
         gst: gstVal,
         purchasePrice: Number(p.purchasePrice) || 0,
-        compareAtPrice: Number(p.compareAtPrice) || 0, // MRP (17)
-        price: Number(p.price) || 0, // Selling Price (18),
+        compareAtPrice: Number(p.compareAtPrice) || 0, // MRP (16)
+        price: Number(p.price) || 0, // Selling Price (17)
         deliveryTime: p.deliveryTime || "-",
         wholesalePrice: Number((p as any).wholesalePrice) || 0,
         lowStockQuantity: Number(p.lowStockQuantity) || 5,
         brand: brandName,
+        unitPriceMinQty2: pFor2 !== undefined ? Number(pFor2) : "-",
+        unitPriceMinQty4: pFor4 !== undefined ? Number(pFor4) : "-",
+        mfgDate: baseMfgDate,
+        expiryDate: baseExpiryDate,
         publish: product.publish,
         allVariations: product.variations || [],
       };
@@ -937,6 +958,16 @@ export default function AdminStockManagement() {
             : baseGallery;
           const variantMainImg =
             v.mainImage || v.image || baseMainImg || variantGallery[0] || "";
+          const variantUnitPricing =
+            v.tieredPrices || v.unitPricing || baseUnitPricing;
+          const vPriceFor2 = Array.isArray(variantUnitPricing)
+            ? variantUnitPricing.find((u: any) => Number(u.minQty) === 2)?.price
+            : undefined;
+          const vPriceFor4 = Array.isArray(variantUnitPricing)
+            ? variantUnitPricing.find((u: any) => Number(u.minQty) === 4)?.price
+            : undefined;
+          const variantMfgDate = v.mfgDate || baseMfgDate;
+          const variantExpiryDate = v.expiryDate || baseExpiryDate;
 
           variations.push({
             ...baseVariation,
@@ -957,6 +988,16 @@ export default function AdminStockManagement() {
             galleryImage2: variantGallery[1] || "",
             galleryImage3: variantGallery[2] || "",
             galleryImages: variantGallery,
+            unitPriceMinQty2:
+              vPriceFor2 !== undefined
+                ? Number(vPriceFor2)
+                : baseVariation.unitPriceMinQty2,
+            unitPriceMinQty4:
+              vPriceFor4 !== undefined
+                ? Number(vPriceFor4)
+                : baseVariation.unitPriceMinQty4,
+            mfgDate: variantMfgDate,
+            expiryDate: variantExpiryDate,
             barcode: variantBarcodes.length
               ? variantBarcodes.join(", ")
               : (baseVariation.barcode !== "-" ? baseVariation.barcode : "-"),
@@ -1607,36 +1648,41 @@ export default function AdminStockManagement() {
                         aria-label="Select all displayed products"
                       />
                     </th>
-                    <th className="p-4 whitespace-nowrap">Image</th>
                     <th className="p-4 whitespace-nowrap">1. Category</th>
                     <th className="p-4 whitespace-nowrap">2. Sub Cat</th>
                     <th className="p-4 whitespace-nowrap">3. Sub Sub Cat</th>
                     <th className="p-4 whitespace-nowrap">4. Product Name</th>
                     <th className="p-4 whitespace-nowrap">5. SKU</th>
-                    <th className="p-4 whitespace-nowrap">6. City</th>
-                    <th className="p-4 whitespace-nowrap">7. Warehouse</th>
-                    <th className="p-4 whitespace-nowrap">8. Room</th>
-                    <th className="p-4 whitespace-nowrap">9. Rack</th>
-                    <th className="p-4 whitespace-nowrap">10. Desc</th>
-                    <th className="p-4 whitespace-nowrap">11. Barcode</th>
-                    <th className="p-4 whitespace-nowrap">12. HSN</th>
-                    <th className="p-4 whitespace-nowrap">13. Unit</th>
-                    <th className="p-4 whitespace-nowrap">14. Size</th>
-                    <th className="p-4 whitespace-nowrap">15. Color</th>
-                    <th className="p-4 whitespace-nowrap">Variations</th>
-                    <th className="p-4 whitespace-nowrap">16. Tax Cat</th>
-                    <th className="p-4 whitespace-nowrap">17. GST</th>
-                    <th className="p-4 whitespace-nowrap">18. Pur. Price</th>
-                    <th className="p-4 whitespace-nowrap">19. MRP</th>
-                    <th className="p-4 whitespace-nowrap">20. Sell Price</th>
-                    <th className="p-4 whitespace-nowrap">21. Del. Time</th>
-                    <th className="p-4 whitespace-nowrap">22. Stock</th>
-                    <th className="p-4 whitespace-nowrap">23. Offer Price</th>
-                    <th className="p-4 whitespace-nowrap">Wholesale Price</th>
-                    <th className="p-4 whitespace-nowrap">24. Low Stock</th>
-                    <th className="p-4 whitespace-nowrap">25. Brand</th>
-                    <th className="p-4 whitespace-nowrap">26. Val (MRP)</th>
-                    <th className="p-4 whitespace-nowrap">27. Val (Pur)</th>
+                    <th className="p-4 whitespace-nowrap">6. Rack</th>
+                    <th className="p-4 whitespace-nowrap">7. Desc</th>
+                    <th className="p-4 whitespace-nowrap">8. Barcode</th>
+                    <th className="p-4 whitespace-nowrap">9. HSN</th>
+                    <th className="p-4 whitespace-nowrap">10. Unit</th>
+                    <th className="p-4 whitespace-nowrap">11. Size</th>
+                    <th className="p-4 whitespace-nowrap">12. Color</th>
+                    <th className="p-4 whitespace-nowrap">13. Tax Cat</th>
+                    <th className="p-4 whitespace-nowrap">14. GST</th>
+                    <th className="p-4 whitespace-nowrap">15. Pur. Price</th>
+                    <th className="p-4 whitespace-nowrap">16. MRP</th>
+                    <th className="p-4 whitespace-nowrap">17. Sell Price</th>
+                    <th className="p-4 whitespace-nowrap">18. Del. Time</th>
+                    <th className="p-4 whitespace-nowrap">19. Stock</th>
+                    <th className="p-4 whitespace-nowrap">20. Offer Price</th>
+                    <th className="p-4 whitespace-nowrap">21. Wholesale Price</th>
+                    <th className="p-4 whitespace-nowrap">22. Low Stock</th>
+                    <th className="p-4 whitespace-nowrap">23. Brand</th>
+                    <th className="p-4 whitespace-nowrap">24. Val (MRP)</th>
+                    <th className="p-4 whitespace-nowrap">25. Val (Pur)</th>
+                    <th className="p-4 whitespace-nowrap">26. Unit Price (Min Qty 2)</th>
+                    <th className="p-4 whitespace-nowrap">27. Unit Price (Min Qty 4)</th>
+                    <th className="p-4 whitespace-nowrap">28. Variations</th>
+                    <th className="p-4 whitespace-nowrap">29. Image</th>
+                    <th className="p-4 whitespace-nowrap">30. Mfg Date</th>
+                    <th className="p-4 whitespace-nowrap">31. Expiry Date</th>
+                    <th className="p-4 whitespace-nowrap">32. Barcode</th>
+                    <th className="p-4 whitespace-nowrap">City</th>
+                    <th className="p-4 whitespace-nowrap">Warehouse</th>
+                    <th className="p-4 whitespace-nowrap">Room</th>
                     <th className="p-4 whitespace-nowrap">Status</th>
                     <th className="p-4 whitespace-nowrap">Action</th>
                   </tr>
@@ -1655,31 +1701,11 @@ export default function AdminStockManagement() {
                           aria-label={`Select ${product.name}`}
                         />
                       </td>
-                      <td className="p-4 align-middle">
-                        {product.image ? (
-                          <img
-                            src={product.image}
-                            alt={product.name}
-                            className="w-10 h-10 object-cover rounded border border-neutral-200"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src =
-                                'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="60" height="80"%3E%3Crect width="60" height="80" fill="%23e5e7eb"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af" font-size="10"%3ENo Image%3C/text%3E%3C/svg%3E';
-                            }}
-                          />
-                        ) : (
-                          <div className="w-10 h-10 bg-neutral-100 rounded flex items-center justify-center text-xs text-neutral-400">
-                            No Img
-                          </div>
-                        )}
-                      </td>
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.category}</td>
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.subCategory}</td>
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.subSubCategory}</td>
                       <td className="p-4 align-middle text-sm font-medium text-neutral-800">{product.name}</td>
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.sku}</td>
-                      <td className="p-4 align-middle text-sm text-neutral-600">{product.storageCity || "-"}</td>
-                      <td className="p-4 align-middle text-sm text-neutral-600">{product.storageWarehouse || "-"}</td>
-                      <td className="p-4 align-middle text-sm text-neutral-600">{product.storageRoom || "-"}</td>
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.rackNumber}</td>
                       <td
                         className="p-4 align-middle text-sm text-neutral-600 max-w-xs truncate"
@@ -1716,13 +1742,6 @@ export default function AdminStockManagement() {
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.unit}</td>
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.sizeName}</td>
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.colorName}</td>
-                      <td className="p-4 align-middle text-sm text-neutral-600 min-w-[150px]">
-                        {product.allVariations && product.allVariations.length > 0 ? (
-                          <VariationDropdown variations={product.allVariations} />
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </td>
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.taxCategory}</td>
                       <td className="p-4 align-middle text-sm text-neutral-600">{product.gst}</td>
                       <td className="p-4 align-middle text-sm text-neutral-800 text-right">{product.purchasePrice}</td>
@@ -1750,6 +1769,48 @@ export default function AdminStockManagement() {
                       <td className="p-4 align-middle text-sm text-neutral-600 text-right">
                         {product.valuePurchase.toLocaleString()}
                       </td>
+                      <td className="p-4 align-middle text-sm text-neutral-800 text-right">
+                        {product.unitPriceMinQty2 ?? "-"}
+                      </td>
+                      <td className="p-4 align-middle text-sm text-neutral-800 text-right">
+                        {product.unitPriceMinQty4 ?? "-"}
+                      </td>
+                      <td className="p-4 align-middle text-sm text-neutral-600 min-w-[150px]">
+                        {product.allVariations && product.allVariations.length > 0 ? (
+                          <VariationDropdown variations={product.allVariations} />
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="p-4 align-middle">
+                        {product.image ? (
+                          <img
+                            src={product.image}
+                            alt={product.name}
+                            className="w-10 h-10 object-cover rounded border border-neutral-200"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src =
+                                'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="60" height="80"%3E%3Crect width="60" height="80" fill="%23e5e7eb"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af" font-size="10"%3ENo Image%3C/text%3E%3C/svg%3E';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-10 h-10 bg-neutral-100 rounded flex items-center justify-center text-xs text-neutral-400">
+                            No Img
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-4 align-middle text-sm text-neutral-600 whitespace-nowrap">
+                        {product.mfgDate || "-"}
+                      </td>
+                      <td className="p-4 align-middle text-sm text-neutral-600 whitespace-nowrap">
+                        {product.expiryDate || "-"}
+                      </td>
+                      <td className="p-4 align-middle text-sm text-neutral-600 whitespace-nowrap">
+                        {product.barcode || "-"}
+                      </td>
+                      <td className="p-4 align-middle text-sm text-neutral-600">{product.storageCity || "-"}</td>
+                      <td className="p-4 align-middle text-sm text-neutral-600">{product.storageWarehouse || "-"}</td>
+                      <td className="p-4 align-middle text-sm text-neutral-600">{product.storageRoom || "-"}</td>
 
                       <td className="p-4 align-middle text-center">
                         <button

@@ -12,6 +12,7 @@ import {
 } from '../services/api/customerCartService';
 import { getApplicableUnitPrice, getCartItemVariantSelector, getCartLineUnitPrice } from '../utils/priceUtils';
 import { getCustomerFreeGiftRules } from '../services/api/customerFreeGiftService';
+import { isCustomerDisplayPath } from '../utils/moduleAuth';
 import { CartRewardRule, getGiftRules, normalizeCartRewardRule } from '../utils/freeGiftRuleUtils';
 
 const CART_STORAGE_KEY = 'saved_cart';
@@ -89,6 +90,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // product P x1 and a logged-in cart that already contained product P x2
   // ends up with P x3 after merge.
   useEffect(() => {
+    if (isCustomerDisplayPath()) {
+      setLoading(false);
+      return;
+    }
     if (isAuthenticated) {
       const guestItems = (itemsRef.current || []).filter(
         (i) => i?.product && !i.id && !i.isFreeGift

@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "copy-images": "node scripts/copy-images.js",
     "generate:sample-import": "node scripts/generate-sample-product-import-template.mjs",
-    "prebuild": "npm run copy-images"
+    "prebuild": "npm run copy-images",
+    "test:customer-display": "npx --yes tsx --test src/modules/customerDisplay/sync/__tests__/*.test.ts"
   },
   "dependencies": {
     "@react-google-maps/api": "^2.20.8",

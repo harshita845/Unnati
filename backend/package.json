@@ -8,6 +8,7 @@
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "test": "tsx test-auth.ts",
+    "test:customer-display": "tsx --test tests/customerDisplay/*.test.ts",
     "test:auth": "tsx src/scripts/testAuth.ts",
     "test:integration": "tsx src/scripts/test-frontend-backend-auth.ts",
     "test:vendor-approval": "tsx src/scripts/test-vendor-approval.ts",

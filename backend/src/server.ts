@@ -107,7 +107,8 @@ const corsOptions: cors.CorsOptions = {
     "Expires",
     "Pragma",
     "x-api-key",
-    "x-module-type"
+    "x-module-type",
+    "x-display-key" // POS Customer Display screens authenticate with their terminal key
   ],
   exposedHeaders: ["Content-Length", "Content-Type", "X-Total-Count", "Set-Cookie"],
   maxAge: 86400,

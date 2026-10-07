@@ -151,6 +151,8 @@ const ADMIN_SIDEBAR_SECTIONS: Array<{
       { label: 'POS Quotations', path: '/admin/pos/quotations' },
       { label: 'Supplier Ledger', path: '/admin/pos/suppliers' },
       { label: 'POS Bill Settings', path: '/admin/pos/bill-settings' },
+      { label: 'Customer Display Banners', path: '/admin/customer-display/banners' },
+      { label: 'Customer Display Settings', path: '/admin/customer-display/settings' },
     ],
   },
   {

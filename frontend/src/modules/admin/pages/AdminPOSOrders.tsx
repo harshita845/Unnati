@@ -19,6 +19,8 @@ import ConfirmModal from '../../../components/ConfirmModal';
 import { useAppContext } from '../../../context/AppContext';
 import { formatAmount } from '../../../utils/priceUtils';
 import { appendPOSStaffBill, getStaffSession } from '../../../utils/staffSession';
+import CustomerDisplayLauncher from '../../customerDisplay/components/CustomerDisplayLauncher';
+import { useCustomerDisplayPrefs, useCustomerDisplayPublisher } from '../../customerDisplay/hooks/useCustomerDisplayPublisher';
 
 import { expandProductsForPOS } from '../../../utils/posProductExpansion';
 import {
@@ -2066,6 +2068,26 @@ const AdminPOSOrders = () => {
         return acc + (price * item.qty);
     }, 0);
   };
+
+  // Customer Display (second screen): mirror the bill being billed, the payment step and the
+  // paid confirmation. Only customer-safe fields are sent (name, qty, price, MRP, GST %).
+  const { prefs: customerDisplayPrefs, setPrefs: setCustomerDisplayPrefs } = useCustomerDisplayPrefs();
+  const customerDisplayPaid = !!(showSuccessModal && lastBillDetails?.isPaid && !lastBillDetails.isQuotation && !lastBillDetails.isEdit);
+  const customerDisplayPhase = customerDisplayPaid ? 'paid' : showPaymentModal ? 'payment' : 'billing';
+  const customerDisplayLines = customerDisplayPaid ? lastBillDetails!.cart : cart;
+  useCustomerDisplayPublisher(customerDisplayPrefs, {
+    phase: customerDisplayPhase,
+    billNo: customerDisplayPaid ? `Bill #${lastBillDetails!.invoiceNum}` : activeBill.name,
+    lines: customerDisplayLines.map((item) => ({
+      id: getCartLineId(item),
+      name: item.productName,
+      qty: item.qty,
+      unitPrice: getEffectivePrice(item),
+      mrp: Number(item.compareAtPrice || 0),
+      gstPercent: Number(item.gst ?? (item as any).gstPercent ?? NaN),
+    })),
+    paymentMethod: customerDisplayPaid ? lastBillDetails!.paymentMethod : paymentMethod,
+  });
 
   const calculatePurchaseTotal = () => {
     return purchaseItems.reduce((sum, item) => {
@@ -4298,6 +4320,10 @@ const AdminPOSOrders = () => {
                 >
                   Add Bill
                 </span>
+              </div>
+
+              <div className="ml-auto flex-shrink-0 pb-1 pl-2">
+                <CustomerDisplayLauncher prefs={customerDisplayPrefs} setPrefs={setCustomerDisplayPrefs} />
               </div>
             </div>
 

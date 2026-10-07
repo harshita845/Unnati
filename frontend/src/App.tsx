@@ -235,6 +235,9 @@ const AdminOnlineOrderReport = lazy(() => import("./modules/admin/pages/AdminOnl
 const AdminPOSInvoiceReport = lazy(() => import("./modules/admin/pages/AdminPOSInvoiceReport"));
 const AdminAbandonedCarts = lazy(() => import("./modules/admin/pages/AdminAbandonedCarts"));
 const AdminPOSBillSettings = lazy(() => import("./modules/admin/pages/AdminPOSBillSettings"));
+const AdminCustomerDisplayBanners = lazy(() => import("./modules/admin/pages/AdminCustomerDisplayBanners"));
+const AdminCustomerDisplaySettings = lazy(() => import("./modules/admin/pages/AdminCustomerDisplaySettings"));
+const CustomerDisplayScreen = lazy(() => import("./modules/customerDisplay/pages/CustomerDisplayScreen"));
 const AdminThemeSettings = lazy(() => import("./modules/admin/pages/AdminThemeSettings"));
 
 import { useAuth } from './context/AuthContext';
@@ -400,6 +403,15 @@ function App() {
                       </PublicRoute>
                     }
                   />
+                  {/* POS Customer Display (second screen): no login, authenticated by the terminal display key */}
+                  <Route
+                    path="/customer-display"
+                    element={
+                      <Suspense fallback={<IconLoader forceShow />}>
+                        <CustomerDisplayScreen />
+                      </Suspense>
+                    }
+                  />
                   <Route
                     path="/admin/staff-login"
                     element={
@@ -544,6 +556,8 @@ function App() {
                              <Route path="purchase/report" element={<AdminPurchaseReport />} />
                              <Route path="pos/quotations" element={<AdminPOSQuotations />} />
                              <Route path="pos/bill-settings" element={<AdminPOSBillSettings />} />
+                             <Route path="customer-display/banners" element={<AdminCustomerDisplayBanners />} />
+                             <Route path="customer-display/settings" element={<AdminCustomerDisplaySettings />} />
                              <Route path="" element={<AdminDashboard />} />
                             <Route path="profile" element={<AdminProfile />} />
                             <Route path="category" element={<AdminCategory />} />

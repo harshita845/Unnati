@@ -178,6 +178,11 @@ import sellerSubscriptionRoutes from "./sellerSubscriptionRoutes";
 router.use("/admin/subscriptions", authenticate, requireUserType("Admin"), adminSubscriptionRoutes);
 router.use("/seller/subscriptions", authenticate, requireUserType("Seller"), sellerSubscriptionRoutes);
 
+// POS Customer Display: admin management + the customer-facing screen (terminal display key)
+import { adminCustomerDisplayRoutes, publicCustomerDisplayRoutes } from "./customerDisplayRoutes";
+router.use("/admin/customer-display", adminCustomerDisplayRoutes);
+router.use("/customer-display", publicCustomerDisplayRoutes);
+
 router.use("/admin", adminRoutes);
 
 // Admin Variation Type Routes

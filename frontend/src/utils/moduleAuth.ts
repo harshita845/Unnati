@@ -35,6 +35,15 @@ export const detectModuleFromPath = (path?: string): ModuleType => {
 };
 
 /**
+ * The POS Customer Display (/customer-display) is a standalone kiosk screen: it has no
+ * shopper session, so customer-app data (cart, orders, gift rules) must not load there.
+ */
+export const isCustomerDisplayPath = (path?: string): boolean => {
+  const pathname = path || (typeof window !== 'undefined' ? window.location.pathname : '/');
+  return pathname === '/customer-display' || pathname.startsWith('/customer-display/');
+};
+
+/**
  * Set auth token for a specific module
  */
 export const setModuleAuthToken = (token: string, module: ModuleType): void => {

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { verifyPOSPayment } from "../../../services/api/admin/adminOrderService";
 import { useToast } from "../../../context/ToastContext";
+import { announceCustomerDisplayPaid } from "../../customerDisplay/hooks/useCustomerDisplayPublisher";
 
 export default function AdminPOSSuccess() {
   const [searchParams] = useSearchParams();
@@ -31,6 +32,7 @@ export default function AdminPOSSuccess() {
           setStatus("success");
           setMessage("Payment successful. Order completed.");
           showToast("Payment verified successfully", "success");
+          void announceCustomerDisplayPaid("PhonePe");
           localStorage.removeItem("admin_pos_bills");
           localStorage.removeItem("admin_pos_active_bill");
         } else {
