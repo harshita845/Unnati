@@ -794,6 +794,8 @@ export const runSubscriptionJob = async (now = new Date()) => {
   const settings = await getSubscriptionSettings();
   const reminderDays = [...(settings.reminderDays || [])].filter((d) => d > 0).sort((a, b) => b - a);
   const stats = { reminders: 0, expired: 0, hidden: 0, pendingCleared: 0 };
+  // Stores locked before this run, so every store that becomes locked during it is told (whichever step locks it)
+  const lockedBefore = new Set((await Seller.distinct("_id", { subscriptionLocked: true })).map((id: any) => String(id)));
 
   // 1. Reminders before expiry
   if (reminderDays.length) {
@@ -873,9 +875,8 @@ export const runSubscriptionJob = async (now = new Date()) => {
     const sellers: any[] = await Seller.find({ category: { $ne: "Admin" } }).select("_id").lean();
     for (const seller of sellers) {
       const { access, changed } = await refreshSellerLock(seller._id);
-      if (!changed) continue;
-      await syncSellerVisibility(seller._id);
-      if (access.locked) {
+      if (changed) await syncSellerVisibility(seller._id);
+      if (access.locked && !lockedBefore.has(String(seller._id))) {
         await notifySeller(
           seller._id,
           "Store hidden: no active plan",
