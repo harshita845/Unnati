@@ -10,7 +10,10 @@ import connectDB from "./config/db";
 if (dns.setDefaultResultOrder) {
   dns.setDefaultResultOrder('ipv4first');
 }
-dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+// Local workaround for flaky ISP DNS; on Vercel use the platform resolver (overriding it breaks the SRV lookup)
+if (!process.env.VERCEL) {
+  dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+}
 import routes from "./routes";
 import searchRoutes from "./routes/searchRoutes";
 import { errorHandler } from "./middleware/errorHandler";
