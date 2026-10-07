@@ -11,8 +11,16 @@ const connectDB = async (): Promise<void> => {
 
     // Serverless (Vercel) reuses a warm instance between requests: reuse the open connection
     if (mongoose.connection.readyState === 1) return;
+    // Another request on this instance is already connecting: wait for it instead of connecting twice
+    if (mongoose.connection.readyState === 2) {
+      await mongoose.connection.asPromise();
+      return;
+    }
 
-    const conn = await mongoose.connect(process.env.MONGODB_URI);
+    const conn = await mongoose.connect(process.env.MONGODB_URI, {
+      // Fail fast on serverless so a bad connection returns an error before the function times out
+      ...(process.env.VERCEL && { serverSelectionTimeoutMS: 8000 }),
+    });
 
     console.log('\n\x1b[32m✓\x1b[0m \x1b[1mMongoDB Connected Successfully\x1b[0m');
     console.log(`   \x1b[36mHost:\x1b[0m ${conn.connection.host}`);

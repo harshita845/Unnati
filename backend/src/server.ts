@@ -3,6 +3,7 @@ import { createServer } from "http";
 import cors from "cors";
 import dotenv from "dotenv";
 import dns from "dns";
+import mongoose from "mongoose";
 import connectDB from "./config/db";
 
 // Force IPv4 first for DNS resolution to avoid ENOTFOUND issues in Node.js 17+
@@ -147,7 +148,10 @@ const ensureSetup = () => {
 };
 if (isServerless) {
   app.use((_req: Request, _res: Response, next: NextFunction) => {
-    ensureSetup().then(() => next(), next);
+    ensureSetup()
+      // A reused (frozen/thawed) instance can hold a dropped connection: reconnect before handling
+      .then(() => (mongoose.connection.readyState === 1 ? undefined : connectDB()))
+      .then(() => next(), next);
   });
 }
 
