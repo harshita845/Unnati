@@ -105,6 +105,11 @@ interface ProductVariation {
   storageCity?: string;
   storageWarehouse?: string;
   storageRoom?: string;
+  mainImage?: string;
+  galleryImage1?: string;
+  galleryImage2?: string;
+  galleryImage3?: string;
+  galleryImages?: string[];
 }
 
 const STATUS_OPTIONS = ["All Products", "Published", "Unpublished"];
@@ -864,12 +869,26 @@ export default function AdminStockManagement() {
           : String(sellerObj || "");
 
       // Base fields
+      const baseGallery = Array.isArray(product.galleryImages)
+        ? product.galleryImages
+        : [];
+      const baseMainImg =
+        product.mainImage || baseGallery[0] || (product as any).image || "";
+      const baseBarcodeVal = Array.isArray(p.barcode)
+        ? p.barcode.join(", ")
+        : (p.barcode || "-");
+
       const baseVariation = {
         productId: product._id,
         name: fixLikelyMojibake(product.productName),
         seller: sellerName,
         sellerId: sellerId,
-        image: product.mainImage || product.galleryImages?.[0] || "",
+        image: baseMainImg,
+        mainImage: baseMainImg,
+        galleryImage1: baseGallery[0] || "",
+        galleryImage2: baseGallery[1] || "",
+        galleryImage3: baseGallery[2] || "",
+        galleryImages: baseGallery,
         category: categoryName,
         categoryId: categoryId,
         subCategory: subCategoryName,
@@ -881,7 +900,7 @@ export default function AdminStockManagement() {
         storageWarehouse: p.storageLocation?.warehouse || "-",
         storageRoom: p.storageLocation?.room || "-",
         description: p.smallDescription || p.description || "-",
-        barcode: Array.isArray(p.barcode) ? p.barcode.join(', ') : (p.barcode || "-"),
+        barcode: baseBarcodeVal,
         hsnCode: p.hsnCode || "-",
         unit: p.pack || "-", // Unit (10)
         taxCategory: taxName,
@@ -913,6 +932,11 @@ export default function AdminStockManagement() {
             : v.barcode
               ? [v.barcode]
               : [];
+          const variantGallery = Array.isArray(v.galleryImages) && v.galleryImages.length > 0
+            ? v.galleryImages
+            : baseGallery;
+          const variantMainImg =
+            v.mainImage || v.image || baseMainImg || variantGallery[0] || "";
 
           variations.push({
             ...baseVariation,
@@ -927,10 +951,15 @@ export default function AdminStockManagement() {
             status: product.publish ? "Published" : "Unpublished",
             sku: v.sku || baseVariation.sku,
             rackNumber: v.rackNumber || baseVariation.rackNumber,
-            image: v.mainImage || v.image || baseVariation.image,
+            image: variantMainImg,
+            mainImage: variantMainImg,
+            galleryImage1: variantGallery[0] || "",
+            galleryImage2: variantGallery[1] || "",
+            galleryImage3: variantGallery[2] || "",
+            galleryImages: variantGallery,
             barcode: variantBarcodes.length
               ? variantBarcodes.join(", ")
-              : "-",
+              : (baseVariation.barcode !== "-" ? baseVariation.barcode : "-"),
             sizeName: isSize ? variationValue : "-",
             colorName: isColor ? variationValue : "-",
             attributeName: variationType,
@@ -1212,6 +1241,11 @@ export default function AdminStockManagement() {
       "Val (MRP)",
       "Val (Pur)",
       "Status",
+      "Main Image",
+      "Galleary Image1",
+      "Galleary Image2",
+      "Galleary Image3",
+      "Barcode",
     ];
 
     const escapeCsv = (val: any) => {
@@ -1258,6 +1292,11 @@ export default function AdminStockManagement() {
           escapeCsv(product.valueMrp),
           escapeCsv(product.valuePurchase),
           escapeCsv(product.publish ? "Active" : "Inactive"),
+          escapeCsv((product as any).mainImage || ""),
+          escapeCsv((product as any).galleryImage1 || ""),
+          escapeCsv((product as any).galleryImage2 || ""),
+          escapeCsv((product as any).galleryImage3 || ""),
+          escapeCsv(product.barcode || ""),
         ].join(",")
       ),
     ].join("\n");

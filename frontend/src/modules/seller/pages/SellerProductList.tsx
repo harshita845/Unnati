@@ -65,6 +65,11 @@ interface ProductVariation {
   brand: string; // 23
   valueMrp: number; // 24
   valuePurchase: number; // 25
+  mainImage?: string;
+  galleryImage1?: string;
+  galleryImage2?: string;
+  galleryImage3?: string;
+  galleryImages?: string[];
 }
 
 const STATUS_OPTIONS = ["All Products", "Published", "Unpublished"];
@@ -666,12 +671,28 @@ export default function SellerProductList() {
       const sellerId = typeof product.seller === "object" ? "" : product.seller || "";
 
       // Base fields
+      const baseGallery = Array.isArray((product as any).galleryImages)
+        ? (product as any).galleryImages
+        : Array.isArray((product as any).galleryImageUrls)
+        ? (product as any).galleryImageUrls
+        : [];
+      const baseMainImg =
+        product.mainImage || baseGallery[0] || (product as any).image || "";
+      const baseBarcodeVal = Array.isArray(p.barcode)
+        ? p.barcode.join(", ")
+        : (p.barcode || "-");
+
       const baseVariation = {
         productId: product._id,
         name: product.productName,
         seller: sellerName,
         sellerId: sellerId,
-        image: product.mainImage || (product.galleryImageUrls && product.galleryImageUrls[0]) || "",
+        image: baseMainImg,
+        mainImage: baseMainImg,
+        galleryImage1: baseGallery[0] || "",
+        galleryImage2: baseGallery[1] || "",
+        galleryImage3: baseGallery[2] || "",
+        galleryImages: baseGallery,
         category: categoryName,
         categoryId: categoryId,
         subCategory: subCategoryName,
@@ -679,7 +700,7 @@ export default function SellerProductList() {
         sku: p.itemCode || p.sku || "",
         rackNumber: p.rackNumber || "-",
         description: p.smallDescription || p.description || "-",
-        barcode: Array.isArray(p.barcode) ? p.barcode.join(', ') : (p.barcode || "-"),
+        barcode: baseBarcodeVal,
         hsnCode: p.hsnCode || "-",
         unit: p.pack || p.totalAllowedQuantity || "-",
         taxCategory: taxName,
@@ -700,6 +721,16 @@ export default function SellerProductList() {
           const currentStock = Number(v.stock) || 0;
           const isSize = (v.name || "").toLowerCase().includes("size");
           const isColor = (v.name || "").toLowerCase().includes("color");
+          const variantBarcodes = Array.isArray(v.barcode)
+            ? v.barcode
+            : v.barcode
+            ? [v.barcode]
+            : [];
+          const variantGallery = Array.isArray(v.galleryImages) && v.galleryImages.length > 0
+            ? v.galleryImages
+            : baseGallery;
+          const variantMainImg =
+            v.mainImage || v.image || baseMainImg || variantGallery[0] || "";
 
           variations.push({
             ...baseVariation,
@@ -711,6 +742,15 @@ export default function SellerProductList() {
             offerPrice: Number(v.discPrice) || Number((p as any).discPrice) || 0,
             status: product.publish ? "Published" : "Unpublished",
             sku: v.sku || baseVariation.sku,
+            image: variantMainImg,
+            mainImage: variantMainImg,
+            galleryImage1: variantGallery[0] || "",
+            galleryImage2: variantGallery[1] || "",
+            galleryImage3: variantGallery[2] || "",
+            galleryImages: variantGallery,
+            barcode: variantBarcodes.length
+              ? variantBarcodes.join(", ")
+              : (baseVariation.barcode !== "-" ? baseVariation.barcode : "-"),
             sizeName: isSize ? v.value : "-",
             colorName: isColor ? v.value : "-",
             attributeName: v.name || "-",
@@ -874,6 +914,11 @@ export default function SellerProductList() {
       "Val (MRP)",
       "Val (Pur)",
       "Status",
+      "Main Image",
+      "Galleary Image1",
+      "Galleary Image2",
+      "Galleary Image3",
+      "Barcode",
     ];
 
     const escapeCsv = (val: any) => {
@@ -916,6 +961,11 @@ export default function SellerProductList() {
           escapeCsv(product.valueMrp),
           escapeCsv(product.valuePurchase),
           escapeCsv(product.publish ? "Active" : "Inactive"),
+          escapeCsv((product as any).mainImage || ""),
+          escapeCsv((product as any).galleryImage1 || ""),
+          escapeCsv((product as any).galleryImage2 || ""),
+          escapeCsv((product as any).galleryImage3 || ""),
+          escapeCsv(product.barcode || ""),
         ].join(",")
       ),
     ].join("\n");

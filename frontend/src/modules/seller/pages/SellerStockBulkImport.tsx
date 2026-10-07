@@ -412,8 +412,31 @@ export default function SellerStockBulkImport({
         10
       ),
       brandId: rowCell(row, ["Brand", "24. Brand", "23. Brand", "PRODUCT_BRAND"]) || "",
-      mfgDate: rowCell(row, ["Mfg Date", "29. Mfg Date", "PRODUCT_MFG_DATE"]) || "",
-      expiryDate: rowCell(row, ["Expiry Date", "30. Expiry Date", "PRODUCT_EXPIRY_DATE"]) || "",
+      barcode:
+        rowCell(row, [
+          "32. Barcode",
+          "32.Barcode",
+          "Barcode",
+          "8. Barcode",
+          "BARCODE",
+          "barcode",
+        ]) || "",
+      mfgDate:
+        rowCell(row, [
+          "30. Mfg Date",
+          "30.Mfg Date",
+          "Mfg Date",
+          "29. Mfg Date",
+          "PRODUCT_MFG_DATE",
+        ]) || "",
+      expiryDate:
+        rowCell(row, [
+          "31. Expiry Date",
+          "31.Expiry Date",
+          "Expiry Date",
+          "30. Expiry Date",
+          "PRODUCT_EXPIRY_DATE",
+        ]) || "",
 
       publish: (() => {
         const st = (rowCell(row, ["Status", "PRODUCT_STATUS"]) || "").toLowerCase();
@@ -428,7 +451,21 @@ export default function SellerStockBulkImport({
       // We'll put price, stock, mrp into the first variation if no variations exist, or top level if supported.
       // CreateProductData requires variations: ProductVariation[]
 
-      mainImage: rowCell(row, ["Image", "Img", "Main Image", "PRODUCT_IMAGE", "PRODUCT_MAIN_IMAGE"]) || "",
+      mainImage:
+        rowCell(row, [
+          "29. Image",
+          "29.Image",
+          "Image",
+          "Img",
+          "Main Image",
+          "PRODUCT_IMAGE",
+          "PRODUCT_MAIN_IMAGE",
+        ]) || "",
+      galleryImages: [
+        rowCell(row, ["Galleary Image1", "Gallery Image 1", "Gallery Image1", "gallery image 1", "galleryImage1"]),
+        rowCell(row, ["Galleary Image2", "Gallery Image 2", "Gallery Image2", "gallery image 2", "galleryImage2"]),
+        rowCell(row, ["Galleary Image3", "Gallery Image 3", "Gallery Image3", "gallery image 3", "galleryImage3"]),
+      ].filter(Boolean) as string[],
 
     } as any; // Casting to any to allow flexible mapping, specifically for the variations array construction below
   };
@@ -809,18 +846,19 @@ export default function SellerStockBulkImport({
         "21. Wholesale Price", "22. Low Stock", "23. Brand", "24. Val (MRP)", "25. Val (Pur)"
     ];
 
-    // Row 1: Standard Cols + "Unit Pricing Rules" (Merged) + "28. Variations" + "Image" + "29. Mfg Date" + "30. Expiry Date"
-    const row1 = [...stdCols, "Unit Pricing Rules", "", "28. Variations", "Image", "29. Mfg Date", "30. Expiry Date"];
+    // Row 1: Standard Cols + "Unit Pricing Rules" (Merged) + "28. Variations" + "29. Image" + "30. Mfg Date" + "31. Expiry Date" + "32. Barcode"
+    const row1 = [...stdCols, "Unit Pricing Rules", "", "28. Variations", "29. Image", "30. Mfg Date", "31. Expiry Date", "32. Barcode"];
 
-    // Row 2: Standard Cols (Repeated for parsing) + Sub-Headers + "28. Variations" + "Image" + "29. Mfg Date" + "30. Expiry Date"
+    // Row 2: Standard Cols (Repeated for parsing) + Sub-Headers + "28. Variations" + "29. Image" + "30. Mfg Date" + "31. Expiry Date" + "32. Barcode"
     const row2 = [
       ...stdCols,
       "26. Unit Price (Min Qty 2)",
       "27. Unit Price (Min Qty 4)",
       "28. Variations",
-      "Image",
-      "29. Mfg Date",
-      "30. Expiry Date",
+      "29. Image",
+      "30. Mfg Date",
+      "31. Expiry Date",
+      "32. Barcode",
     ];
 
     const ws = XLSX.utils.aoa_to_sheet([row1, row2]);
@@ -828,24 +866,27 @@ export default function SellerStockBulkImport({
     // Merges
     const merges = [];
 
-    // Vertical Merges for Standard Columns & Image
+    // Vertical Merges for Standard Columns (0 to 24)
     for (let i = 0; i < stdCols.length; i++) {
         merges.push({ s: { r: 0, c: i }, e: { r: 1, c: i } });
     }
+    // Horizontal Merge for Unit Pricing (Index 25-26)
+    merges.push({ s: { r: 0, c: 25 }, e: { r: 0, c: 26 } });
+
     // Variations Column (Index 27)
     merges.push({ s: { r: 0, c: 27 }, e: { r: 1, c: 27 } });
 
-    // Image Column (Index 28)
+    // 29. Image Column (Index 28)
     merges.push({ s: { r: 0, c: 28 }, e: { r: 1, c: 28 } });
 
-    // Mfg Date Column (Index 29)
+    // 30. Mfg Date Column (Index 29)
     merges.push({ s: { r: 0, c: 29 }, e: { r: 1, c: 29 } });
 
-    // Expiry Date Column (Index 30)
+    // 31. Expiry Date Column (Index 30)
     merges.push({ s: { r: 0, c: 30 }, e: { r: 1, c: 30 } });
 
-    // Horizontal Merge for Unit Pricing (Index 25-26)
-    merges.push({ s: { r: 0, c: 25 }, e: { r: 0, c: 26 } });
+    // 32. Barcode Column (Index 31)
+    merges.push({ s: { r: 0, c: 31 }, e: { r: 1, c: 31 } });
 
     ws['!merges'] = merges;
 
@@ -900,7 +941,7 @@ export default function SellerStockBulkImport({
                 className="hidden"
               />
               <div className="mt-8 text-left text-sm text-neutral-500 bg-neutral-100 p-4 rounded w-full max-w-lg">
-                <p className="font-semibold mb-2">Expected Columns:</p>
+                <p className="font-semibold mb-2">Expected Columns (32 Total):</p>
                 <div className="grid grid-cols-3 gap-2">
                    <span>1. Category</span>
                    <span>2. Sub Cat</span>
@@ -930,9 +971,10 @@ export default function SellerStockBulkImport({
                    <span>26. Unit Price (Min Qty 2)</span>
                    <span>27. Unit Price (Min Qty 4)</span>
                    <span>28. Variations</span>
-                   <span>Image</span>
-                   <span>29. Mfg Date</span>
-                   <span>30. Expiry Date</span>
+                   <span>29. Image</span>
+                   <span>30. Mfg Date</span>
+                   <span>31. Expiry Date</span>
+                   <span>32. Barcode</span>
                 </div>
               </div>
             </div>
