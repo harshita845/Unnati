@@ -4,7 +4,7 @@ import { getProducts, getProductById, getPOSProducts, Product, getSellers, updat
 import { createPOSOrder, initiatePOSOnlineOrder, verifyPOSPayment, getOrderById, updateOrderItems } from '../../../services/api/admin/adminOrderService';
 import { getAllSuppliers } from '../../../services/api/admin/supplierService';
 import { getAllCustomers, createCustomer, Customer } from '../../../services/api/admin/adminCustomerService';
-import { getAppSettings, AppSettings } from '../../../services/api/admin/adminSettingsService';
+import { getAppSettings, AppSettings, getAdminBillSettings } from '../../../services/api/admin/adminSettingsService';
 import { upsertAdminPurchaseEntry } from '../../../services/api/admin/adminPosPurchaseEntryService';
 import { getCategories } from '../../../services/api/categoryService';
 import { getBrands } from '../../../services/api/brandService';
@@ -35,6 +35,7 @@ import {
   ADMIN_POS_BILL_SETTINGS_KEY,
   ADMIN_POS_BILL_SETTINGS_UPDATED_EVENT,
   readAdminPosBillSettings,
+  getDefaultPosBillSettings,
   getThermalReceiptFontFamily,
   getThermalReceiptWidthMm,
 } from '../../../utils/adminPosBillSettings';
@@ -148,6 +149,34 @@ const formatProductName = (name: string) => {
   return name.toLowerCase().replace(/(?:^|[\s_\-/])\w/g, c => c.toUpperCase());
 };
 
+/** "House no, City, State, 500001" from a saved customer (empty parts skipped). */
+const formatCustomerAddress = (c?: Partial<Customer> | null): string =>
+  c ? [c.address, c.city, c.state, c.pincode].map((p) => String(p || '').trim()).filter(Boolean).join(', ') : '';
+
+/** Everything known about the saved customer attached to this bill, shown under the search box. */
+const SelectedCustomerCard = ({ customer }: { customer: Customer }) => {
+  const address = formatCustomerAddress(customer);
+  const due = Number(customer.creditBalance) || 0;
+  return (
+    <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50/70 p-2.5 text-[11px] leading-snug">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="truncate text-xs font-extrabold text-gray-900">{customer.name}</div>
+          <div className="font-semibold text-gray-700">{customer.phone}</div>
+        </div>
+        <span className="shrink-0 rounded-full bg-emerald-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+          Saved customer
+        </span>
+      </div>
+      {customer.email && !/@placeholder\.com$/i.test(customer.email) && <div className="mt-1 truncate text-gray-500">{customer.email}</div>}
+      {address && <div className="mt-1 text-gray-600">{address}</div>}
+      {customer.gst && <div className="text-gray-600">GSTIN: {customer.gst}</div>}
+      {due > 0 && <div className="mt-1 font-bold text-red-600">Udhaar due: ₹{due.toLocaleString('en-IN')}</div>}
+      {due < 0 && <div className="mt-1 font-bold text-emerald-700">Advance: ₹{Math.abs(due).toLocaleString('en-IN')}</div>}
+    </div>
+  );
+};
+
 const AdminPOSOrders = () => {
    const [searchParams] = useSearchParams();
    const editOrderId = searchParams.get('edit');
@@ -172,6 +201,29 @@ const AdminPOSOrders = () => {
       }
     };
     loadPosBillSettings();
+    // The bill layout is saved on the server (POS Bill Settings). Pull it so every counter PC
+    // prints the same header/footer, even one that has never opened the Bill Settings page.
+    getAdminBillSettings()
+      .then((res) => {
+        if (!res?.success || !res.data || Object.keys(res.data).length === 0) return;
+        const defaults = getDefaultPosBillSettings();
+        let local: any = {};
+        try {
+          local = JSON.parse(localStorage.getItem(ADMIN_POS_BILL_SETTINGS_KEY) || '{}');
+        } catch {
+          local = {};
+        }
+        const merged = {
+          ...defaults,
+          ...local,
+          ...res.data,
+          tableColumns: { ...defaults.tableColumns, ...(local.tableColumns || {}), ...(res.data.tableColumns || {}) },
+          margins: { ...defaults.margins, ...(local.margins || {}), ...(res.data.margins || {}) },
+        };
+        localStorage.setItem(ADMIN_POS_BILL_SETTINGS_KEY, JSON.stringify(merged));
+        setPosBillSettings(merged);
+      })
+      .catch((err) => console.error('Failed to fetch POS bill settings from server', err));
     const onStorage = (e: StorageEvent) => {
       if (e.key === ADMIN_POS_BILL_SETTINGS_KEY || e.key === null) {
         loadPosBillSettings();
@@ -967,6 +1019,8 @@ const AdminPOSOrders = () => {
   // Modals
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  // UPI (scan the store QR): the cashier waits for the customer to pay, then confirms
+  const [upiPaymentOpen, setUpiPaymentOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CartItem | null>(null);
   const [editingPurchaseItem, setEditingPurchaseItem] = useState<PurchaseItem | null>(null);
   const [billToRemove, setBillToRemove] = useState<string | null>(null);
@@ -1013,16 +1067,29 @@ const AdminPOSOrders = () => {
   // Success/Print Modal
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showModalBreakdown, setShowModalBreakdown] = useState(false);
-  const [lastBillDetails, setLastBillDetails] = useState<{total: number, invoiceNum: string, date: string, time: string, cart: CartItem[], isPaid: boolean, isQuotation?: boolean, quotationEntry?: PurchaseEntryRecord, paymentMethod?: string, isEdit?: boolean, orderId?: string, customerName?: string, customerPhone?: string, cashTendered?: number | string, cashReturn?: number, printCopies?: number | string} | null>(null);
+  const [lastBillDetails, setLastBillDetails] = useState<{total: number, invoiceNum: string, date: string, time: string, cart: CartItem[], isPaid: boolean, isQuotation?: boolean, quotationEntry?: PurchaseEntryRecord, paymentMethod?: string, isEdit?: boolean, orderId?: string, customerName?: string, customerPhone?: string, customerAddress?: string, customerGst?: string, cashTendered?: number | string, cashReturn?: number, printCopies?: number | string} | null>(null);
 
   const captureBillCustomerFields = () => ({
     customerName: selectedCustomer?.name || customerSearch?.trim() || 'Walk-in Customer',
     customerPhone: selectedCustomer?.phone || '-',
+    customerAddress: formatCustomerAddress(selectedCustomer),
+    customerGst: selectedCustomer?.gst || '',
   });
+
+  /** What the cashier typed in "Search Customer" for a walk-in: saved on the order so reports show the buyer. */
+  const walkInContactForOrder = (): { customerName?: string; customerPhone?: string } => {
+    if (selectedCustomer) return {};
+    const typed = customerSearch?.trim() || '';
+    if (!typed) return {};
+    const digits = typed.replace(/\D/g, '');
+    return /^[\d\s+-]+$/.test(typed) && digits.length >= 10 ? { customerPhone: digits.slice(-10) } : { customerName: typed };
+  };
 
   const getBillCustomerDisplay = (details: typeof lastBillDetails) => ({
     name: details?.customerName || selectedCustomer?.name || customerSearch?.trim() || 'Walk-in Customer',
     phone: details?.customerPhone || selectedCustomer?.phone || '-',
+    address: details?.customerAddress ?? formatCustomerAddress(selectedCustomer),
+    gst: details?.customerGst ?? (selectedCustomer?.gst || ''),
   });
 
   // Add Customer Modal State
@@ -1641,19 +1708,37 @@ const AdminPOSOrders = () => {
         setShowCustomerDropdown(false);
         return;
     }
+    let cancelled = false;
     const timer = setTimeout(async () => {
         try {
             const res = await getAllCustomers({ search: customerSearch, limit: 5 });
-            if (res.success && res.data) {
-                setCustomers(res.data);
-                setShowCustomerDropdown(true);
+            if (cancelled || !res.success || !res.data) return;
+            setCustomers(res.data);
+
+            // Typed exactly one saved customer's mobile number or full name: attach them without
+            // needing a click, so the bill never silently falls back to a walk-in.
+            const typed = customerSearch.trim();
+            const typedDigits = typed.replace(/\D/g, '');
+            const looksLikePhone = /^[\d\s+-]+$/.test(typed) && typedDigits.length >= 10;
+            const exact = res.data.filter((c: Customer) =>
+                looksLikePhone
+                    ? String(c.phone || '').replace(/\D/g, '').slice(-10) === typedDigits.slice(-10)
+                    : typed.length >= 3 && c.name.trim().toLowerCase() === typed.toLowerCase()
+            );
+            if (exact.length === 1) {
+                selectCustomer(exact[0]);
+                return;
             }
+            setShowCustomerDropdown(true);
         } catch (e) {
             console.error(e);
         }
     }, 400);
-    return () => clearTimeout(timer);
-  }, [customerSearch, selectedCustomer]);
+    return () => {
+        cancelled = true;
+        clearTimeout(timer);
+    };
+  }, [customerSearch, selectedCustomer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectCustomer = (c: Customer) => {
       // setSelectedCustomer(c);
@@ -2075,9 +2160,16 @@ const AdminPOSOrders = () => {
   const customerDisplayPaid = !!(showSuccessModal && lastBillDetails?.isPaid && !lastBillDetails.isQuotation && !lastBillDetails.isEdit);
   const customerDisplayPhase = customerDisplayPaid ? 'paid' : showPaymentModal ? 'payment' : 'billing';
   const customerDisplayLines = customerDisplayPaid ? lastBillDetails!.cart : cart;
-  useCustomerDisplayPublisher(customerDisplayPrefs, {
+  // While the payment popup is open the method isn't chosen yet, so the screen offers the UPI QR
+  const customerDisplayMethod = customerDisplayPaid
+    ? lastBillDetails!.paymentMethod
+    : showPaymentModal
+      ? upiPaymentOpen ? 'UPI' : ''
+      : paymentMethod;
+  const { markPaid: markCustomerDisplayPaid } = useCustomerDisplayPublisher(customerDisplayPrefs, {
     phase: customerDisplayPhase,
     billNo: customerDisplayPaid ? `Bill #${lastBillDetails!.invoiceNum}` : activeBill.name,
+    customerName: selectedCustomer?.name || '',
     lines: customerDisplayLines.map((item) => ({
       id: getCartLineId(item),
       name: item.productName,
@@ -2086,7 +2178,7 @@ const AdminPOSOrders = () => {
       mrp: Number(item.compareAtPrice || 0),
       gstPercent: Number(item.gst ?? (item as any).gstPercent ?? NaN),
     })),
-    paymentMethod: customerDisplayPaid ? lastBillDetails!.paymentMethod : paymentMethod,
+    paymentMethod: customerDisplayMethod,
   });
 
   const calculatePurchaseTotal = () => {
@@ -3467,12 +3559,20 @@ const AdminPOSOrders = () => {
 
     currentY += 15;
     const billCustomer = getBillCustomerDisplay(lastBillDetails);
-    doc.text("Customer Name:", 14, currentY);
-    doc.text("Mobile:", 14, currentY + 5);
-    doc.text(String(billCustomer.name), 196, currentY, { align: 'right' });
-    doc.text(String(billCustomer.phone), 196, currentY + 5, { align: 'right' });
+    const customerRows: Array<[string, string[]]> = [
+      ["Customer Name:", [String(billCustomer.name)]],
+      ["Mobile:", [String(billCustomer.phone)]],
+    ];
+    if (billCustomer.address) customerRows.push(["Address:", (doc.splitTextToSize(billCustomer.address, 120) as string[]).slice(0, 2)]);
+    if (billCustomer.gst) customerRows.push(["Customer GSTIN:", [String(billCustomer.gst)]]);
+    let customerRowY = currentY;
+    customerRows.forEach(([label, lines]) => {
+      doc.text(label, 14, customerRowY);
+      lines.forEach((line, i) => doc.text(line, 196, customerRowY + i * 5, { align: 'right' }));
+      customerRowY += Math.max(1, lines.length) * 5;
+    });
 
-    currentY += 12;
+    currentY = customerRowY + 2;
     doc.setLineWidth(0.5);
     doc.line(14, currentY, 196, currentY);
     currentY += 5;
@@ -3717,7 +3817,13 @@ const AdminPOSOrders = () => {
   };
 
   const handlePaymentSelection = async (method: string) => {
+    if (method === 'UPI') {
+       // Keep the popup open: customer scans the QR (on the customer screen too), cashier confirms
+       setUpiPaymentOpen(true);
+       return;
+    }
     setShowPaymentModal(false);
+    setUpiPaymentOpen(false);
 
     if (method === 'Cash') {
        await performCashCheckout();
@@ -3756,6 +3862,7 @@ const AdminPOSOrders = () => {
                   warrantyDuration: (item as any).warrantyDuration || ''
               })),
               gateway: 'PhonePe',
+              ...walkInContactForOrder(),
               createdBy: activeStaffSession?.id,
               staffName: activeStaffSession?.name
           };
@@ -3811,6 +3918,7 @@ const AdminPOSOrders = () => {
                 });
               }
               showToast("Payment Successful & Order Placed!", "success");
+              markCustomerDisplayPaid('PhonePe');
               setCart([]);
           } else {
               showToast("Payment Verification Failed", "error");
@@ -3823,7 +3931,8 @@ const AdminPOSOrders = () => {
       }
   };
 
-  const performCashCheckout = async (): Promise<{ success: boolean; orderId?: string }> => {
+  /** Paid-now checkout: Cash, or UPI after the cashier confirms the money arrived. */
+  const performCashCheckout = async (method: 'Cash' | 'UPI' = 'Cash'): Promise<{ success: boolean; orderId?: string }> => {
     if (activeBillId.startsWith('edit_')) {
         showToast("Cannot create a new bill from an edit session. Please use Update.", "error");
         setLoading(false);
@@ -3845,7 +3954,8 @@ const AdminPOSOrders = () => {
                 warrantyType: (item as any).warrantyType || 'None',
                 warrantyDuration: (item as any).warrantyDuration || ''
             })),
-            paymentMethod: 'Cash',
+            paymentMethod: method,
+            ...walkInContactForOrder(),
             paymentStatus: "Paid" as const,
             createdBy: activeStaffSession?.id,
             staffName: activeStaffSession?.name
@@ -3859,7 +3969,7 @@ const AdminPOSOrders = () => {
                 orderId: response?.data?._id || (response?.data as any)?.id,
                 createdBy: activeStaffSession.id,
                 staffName: activeStaffSession.name,
-                paymentMode: 'Cash',
+                paymentMode: method,
                 totalAmount: calculateTotal(),
                 numberOfProducts: cart.reduce((sum, item) => sum + (item.qty || 0), 0),
                 createdAt: new Date().toISOString(),
@@ -3871,6 +3981,7 @@ const AdminPOSOrders = () => {
               });
             }
             showToast("Order placed successfully!", "success");
+            markCustomerDisplayPaid(method);
             setCart([]);
             return { success: true, orderId: response?.data?._id || (response?.data as any)?.id };
         } else {
@@ -3940,6 +4051,7 @@ const AdminPOSOrders = () => {
                   });
                 }
                 showToast(`Credit Order Placed! Balance updated for ${selectedCustomer.name}`, "success");
+                markCustomerDisplayPaid('Credit');
                 setCart([]);
                 // Navigate to REAL customer credit page
                 navigate(`/admin/pos/customers/${selectedCustomer._id}`);
@@ -4467,6 +4579,7 @@ const AdminPOSOrders = () => {
                     </svg>
                   </button>
                 </div>
+                {selectedCustomer && <SelectedCustomerCard customer={selectedCustomer} />}
               </div>
 
               {/* Cart Items List */}
@@ -4881,7 +4994,7 @@ const AdminPOSOrders = () => {
                             <div className="relative">
                                 <input
                                     type="text"
-                                    placeholder="Search Customer..."
+                                    placeholder="Search customer by name or mobile…"
                                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]/20 focus:border-[var(--primary-color)] transition-all"
                                     value={customerSearch}
                                     onChange={(e) => {
@@ -4906,12 +5019,24 @@ const AdminPOSOrders = () => {
                                               className="p-2 hover:bg-gray-50 cursor-pointer rounded-lg border-b border-gray-50 last:border-0"
                                           >
                                               <div className="font-bold text-[11px] text-gray-800">{c.name}</div>
-                                              <div className="text-[10px] text-gray-500">{c.phone}</div>
+                                              <div className="text-[10px] text-gray-500">
+                                                  {c.phone}
+                                                  {Number(c.creditBalance) > 0 && <span className="ml-2 font-semibold text-red-500">Due ₹{Number(c.creditBalance).toLocaleString('en-IN')}</span>}
+                                              </div>
                                           </div>
                                       ))}
                                   </div>
                               )}
                           </div>
+                          {selectedCustomer ? (
+                              <SelectedCustomerCard customer={selectedCustomer} />
+                          ) : customerSearch.trim().length >= 2 ? (
+                              <p className="mt-1.5 text-[10px] leading-snug text-gray-500">
+                                  Not attached to a saved customer. Pick one from the list, or the bill is made in the name “{customerSearch.trim()}”.
+                              </p>
+                          ) : (
+                              <p className="mt-1.5 text-[10px] text-gray-400">Type a name or mobile number to find a saved customer.</p>
+                          )}
                       </div>
 
                       {/* --- ORDER TYPE --- */}
@@ -6425,7 +6550,7 @@ const AdminPOSOrders = () => {
             <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
                 <div className="bg-gray-800 px-6 py-4 text-white flex justify-between items-center">
                     <h3 className="font-semibold text-lg">Select Payment Method</h3>
-                    <button onClick={() => setShowPaymentModal(false)} className="text-white/80 hover:text-white">✕</button>
+                    <button onClick={() => { setShowPaymentModal(false); setUpiPaymentOpen(false); }} className="text-white/80 hover:text-white">✕</button>
                 </div>
                 <div className="p-6 space-y-4">
                      <div className="text-center mb-6">
@@ -6433,7 +6558,58 @@ const AdminPOSOrders = () => {
                          <p className="text-3xl font-bold text-gray-900">₹{calculateTotal()}</p>
                      </div>
 
+                     {upiPaymentOpen ? (
+                       <div className="space-y-4 text-center">
+                         {(posBillSettings?.qrSettings?.url || posBillSettings?.qrCode) ? (
+                           <img
+                             src={posBillSettings?.qrSettings?.url || posBillSettings?.qrCode}
+                             alt="Store UPI QR"
+                             className="mx-auto h-40 w-40 rounded-lg border object-contain p-1"
+                           />
+                         ) : (
+                           <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                             No UPI QR saved yet. Add it in POS Bill Settings → QR Scanner Code.
+                           </p>
+                         )}
+                         <p className="text-sm text-gray-600">
+                           The customer scans this QR (also shown on the customer screen) and pays <b>₹{calculateTotal()}</b>.
+                           Check the money has arrived in your UPI app, then confirm.
+                         </p>
+                         <button
+                           type="button"
+                           disabled={loading}
+                           onClick={async () => {
+                             const result = await performCashCheckout('UPI');
+                             if (result.success) {
+                               setUpiPaymentOpen(false);
+                               setShowPaymentModal(false);
+                             }
+                           }}
+                           className="w-full rounded-xl bg-green-600 p-4 font-bold text-white hover:bg-green-700 disabled:opacity-60"
+                         >
+                           {loading ? 'Saving…' : 'Payment received'}
+                         </button>
+                         <button
+                           type="button"
+                           onClick={() => setUpiPaymentOpen(false)}
+                           className="w-full rounded-xl border p-3 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+                         >
+                           Back to payment methods
+                         </button>
+                       </div>
+                     ) : (
                      <div className="space-y-3">
+                        <button
+                          onClick={() => handlePaymentSelection('UPI')}
+                          className="w-full group flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:border-green-600 hover:bg-green-50 transition-all"
+                        >
+                            <div className="flex flex-col items-start">
+                                <span className="font-semibold text-gray-700 group-hover:text-green-700">UPI (Scan QR)</span>
+                                <span className="text-xs text-gray-400">Customer scans your QR, you confirm</span>
+                            </div>
+                            <span className="text-gray-300 group-hover:text-green-600">→</span>
+                        </button>
+
                         <button
                           onClick={() => handlePaymentSelection('PhonePe')}
                           className="w-full group flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:border-[var(--primary-color)] hover:bg-[var(--primary-alpha-10)] transition-all"
@@ -6463,6 +6639,7 @@ const AdminPOSOrders = () => {
                             <span className="text-gray-300 group-hover:text-[var(--primary-color)]">→</span>
                         </button>
                      </div>
+                     )}
                 </div>
             </div>
         </div>
@@ -6715,6 +6892,8 @@ const AdminPOSOrders = () => {
                           paymentMethod: lastBillDetails?.paymentMethod || 'Cash',
                           customerName: getBillCustomerDisplay(lastBillDetails).name,
                           customerPhone: getBillCustomerDisplay(lastBillDetails).phone,
+                          customerAddress: getBillCustomerDisplay(lastBillDetails).address,
+                          customerGst: getBillCustomerDisplay(lastBillDetails).gst,
                           items: items,
                           total: lastBillDetails?.total || calculateTotal(),
                           cashTendered: Number(lastBillDetails?.cashTendered ?? activeBill.cashTendered) || undefined,

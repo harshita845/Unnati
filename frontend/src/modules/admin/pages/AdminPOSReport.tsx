@@ -46,6 +46,16 @@ const FiLoader = ({ className }: { className?: string }) => (
   </svg>
 );
 
+/**
+ * Walk-in orders (no saved customer account) can be deleted. They can carry the name the cashier
+ * typed, so recognise them by their linked walk-in record, not by the name on the order.
+ */
+const isWalkInOrder = (order: any) => {
+    const linked = String(order?.customer?.name || '').toLowerCase();
+    const name = String(order?.customerName || '').toLowerCase();
+    return linked === 'walk-in customer' || order?.customer?.phone === '0000000000' || !name || name === 'walk-in customer';
+};
+
 const AdminPOSReport = () => {
     const { showToast } = useToast();
     const [loading, setLoading] = useState(true);
@@ -204,8 +214,7 @@ const AdminPOSReport = () => {
 
     const handleDeleteOrder = async (order: any) => {
         // Restriction: Cannot delete orders with customer names
-        const isWalkIn = !order.customerName || order.customerName.toLowerCase() === "walk-in customer";
-        if (!isWalkIn) {
+        if (!isWalkInOrder(order)) {
             showToast("Orders with customer names cannot be deleted.", "error");
             return;
         }
@@ -251,7 +260,7 @@ const AdminPOSReport = () => {
 
         // Check if any selected order is NOT deletable (has a customer name)
         const selectedOrdersList = reportData?.orders?.filter((o: any) => selectedOrderIds.has(o._id)) || [];
-        const hasNamedOrders = selectedOrdersList.some((o: any) => o.customerName && o.customerName.toLowerCase() !== "walk-in customer");
+        const hasNamedOrders = selectedOrdersList.some((o: any) => !isWalkInOrder(o));
 
         if (hasNamedOrders) {
             showToast("Cannot delete orders that have customer names assigned. Please deselect them first.", "error");
@@ -861,7 +870,7 @@ const AdminPOSReport = () => {
                                                     {new Date(order.orderDate || order.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                                                  </td>
                                                  <td className="px-6 py-4">
-                                                      {(!order.customerName || order.customerName.toLowerCase() === "walk-in customer") ? (
+                                                      {isWalkInOrder(order) ? (
                                                           <button
                                                               onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order); }}
                                                               className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors"
@@ -1045,7 +1054,7 @@ const AdminPOSReport = () => {
 
                                 <div className="border-t border-gray-100 my-1"></div>
 
-                                 {(!selectedActionOrder.customerName || selectedActionOrder.customerName.toLowerCase() === "walk-in customer") && (
+                                 {isWalkInOrder(selectedActionOrder) && (
                                      <button
                                          className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl transition-colors text-left group"
                                           onClick={() => {
@@ -1262,6 +1271,12 @@ const AdminPOSReport = () => {
                               paymentMethod: printOrder.paymentMethod || 'Cash',
                               customerName: (printOrder as any).customerName || (printOrder as any).customer?.name || 'Walk-in Customer',
                               customerPhone: (printOrder as any).customerPhone || (printOrder as any).customer?.phone || '',
+                              // Saved customers: reprint with their address and GSTIN too (walk-in record has none)
+                              customerAddress: isWalkInOrder(printOrder)
+                                ? ''
+                                : [(printOrder as any).customer?.address, (printOrder as any).customer?.city, (printOrder as any).customer?.state, (printOrder as any).customer?.pincode]
+                                    .map((p: any) => String(p || '').trim()).filter(Boolean).join(', '),
+                              customerGst: isWalkInOrder(printOrder) ? '' : (printOrder as any).customer?.gst || '',
                               items: items,
                               total: printOrder.totalAmount || printOrder.total || 0,
                             }}

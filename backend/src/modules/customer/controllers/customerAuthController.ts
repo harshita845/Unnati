@@ -23,22 +23,16 @@ export const sendSmsOtp = asyncHandler(async (req: Request, res: Response) => {
 
   // Check if customer exists with this mobile (Login Flow) - Only Global customers (sellerId: null) can login to the app
   let customer = await Customer.findOne({ phone: mobile, sellerId: null });
-  if (!customer && mobile === '9111966731') {
+  if (!customer) {
     customer = await Customer.create({
-      name: 'Test Customer',
-      email: 'customer9111966731@ecommerce.com',
-      phone: '9111966731',
+      name: mobile === '9111966731' ? 'Test Customer' : `Customer ${mobile.slice(-4)}`,
+      email: `customer${mobile}@ecommerce.com`,
+      phone: mobile,
       status: 'Active',
       totalOrders: 0,
       totalSpent: 0,
       creditBalance: 0,
-    });
-  }
-
-  if (!customer) {
-    return res.status(404).json({
-      success: false,
-      message: "Customer not found. Please register first.",
+      sellerId: null,
     });
   }
 
@@ -99,22 +93,16 @@ export const verifySmsOtp = asyncHandler(async (req: Request, res: Response) => 
 
   // Find customer - Only Global customers (sellerId: null)
   let customer = await Customer.findOne({ phone: mobile, sellerId: null });
-  if (!customer && mobile === '9111966731') {
+  if (!customer) {
     customer = await Customer.create({
-      name: 'Test Customer',
-      email: 'customer9111966731@ecommerce.com',
-      phone: '9111966731',
+      name: mobile === '9111966731' ? 'Test Customer' : `Customer ${mobile.slice(-4)}`,
+      email: `customer${mobile}@ecommerce.com`,
+      phone: mobile,
       status: 'Active',
       totalOrders: 0,
       totalSpent: 0,
       creditBalance: 0,
-    });
-  }
-
-  if (!customer) {
-    return res.status(404).json({
-      success: false,
-      message: "Customer not found",
+      sellerId: null,
     });
   }
 

@@ -380,7 +380,7 @@ const AdminCustomerDisplaySettings = () => {
                   min={3}
                   max={60}
                   value={settings.paidScreenSeconds}
-                  onChange={(e) => set('paidScreenSeconds', Number(e.target.value))}
+                  onChange={(e) => set('paidScreenSeconds', Math.min(60, Math.max(3, Number(e.target.value) || 3)))}
                   className={inputClass}
                 />
               </Field>
@@ -390,7 +390,7 @@ const AdminCustomerDisplaySettings = () => {
                   min={2}
                   max={120}
                   value={settings.defaultImageSeconds}
-                  onChange={(e) => set('defaultImageSeconds', Number(e.target.value))}
+                  onChange={(e) => set('defaultImageSeconds', Math.min(120, Math.max(2, Number(e.target.value) || 2)))}
                   className={inputClass}
                 />
               </Field>
@@ -487,7 +487,8 @@ const AdminCustomerDisplaySettings = () => {
           <button
             type="button"
             onClick={save}
-            disabled={!dirty || saving}
+            disabled={saving}
+            title={!dirty ? 'No changes yet — click still saves the settings as shown' : undefined}
             className="flex items-center gap-2 rounded-lg bg-[var(--primary-color)] px-5 py-2 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save settings

@@ -15,6 +15,8 @@ export interface PosLineInput {
 export interface SnapshotInput {
   phase: DisplayPhase;
   billNo?: string;
+  /** Saved customer's name; leave empty for walk-ins */
+  customerName?: string;
   lines: PosLineInput[];
   paymentMethod?: string;
 }
@@ -58,6 +60,7 @@ export const buildDisplayState = (input: SnapshotInput, seq: number, now: number
   return {
     phase,
     billNo: input.billNo || '',
+    customerName: input.customerName || '',
     items,
     totals: {
       itemCount: round2(itemCount),
@@ -81,7 +84,7 @@ export const isNewerState = (current: DisplayState | null, incoming: DisplayStat
 
 /** Content-only fingerprint, used to skip publishing when nothing visible changed. */
 export const stateFingerprint = (s: DisplayState) =>
-  JSON.stringify([s.phase, s.billNo, s.items, s.totals, s.payment]);
+  JSON.stringify([s.phase, s.billNo, s.customerName || '', s.items, s.totals, s.payment]);
 
 export type ScreenView = { phase: 'idle' } | { phase: 'billing' | 'payment' | 'paid'; state: DisplayState };
 

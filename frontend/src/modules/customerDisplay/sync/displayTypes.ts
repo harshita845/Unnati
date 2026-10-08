@@ -25,6 +25,8 @@ export interface DisplayTotals {
 export interface DisplayState {
   phase: DisplayPhase;
   billNo: string;
+  /** Saved customer being billed (name only; empty for walk-ins) */
+  customerName?: string;
   items: DisplayItem[];
   totals: DisplayTotals;
   payment: { method: string; amount: number } | null;

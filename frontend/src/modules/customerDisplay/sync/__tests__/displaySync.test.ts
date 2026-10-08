@@ -223,3 +223,28 @@ test('online payment returning on another page marks the last bill paid', async 
   again.dispose();
   stop();
 });
+
+test('saved customer name reaches the screen and a change of customer re-publishes', async () => {
+  const terminal = `t-cust-${Date.now()}`;
+  const publisher = new DisplayPublisher({ terminal, heartbeatMs: 1000 });
+  const received: DisplayState[] = [];
+  const stop = subscribeToDisplay({
+    terminal,
+    key: 'k',
+    fetchState: async () => ({ seq: 0, contentVersion: 1, state: null }),
+    onState: (s) => received.push(s),
+    pollMs: 1000,
+  });
+
+  publisher.publish({ phase: 'billing', lines: [milk] });
+  publisher.publish({ phase: 'billing', lines: [milk], customerName: 'Rahul Sharma' }); // same bill, customer attached
+  publisher.publish({ phase: 'billing', lines: [milk], customerName: 'Rahul Sharma' }); // nothing changed → not re-sent
+  await waitFor(() => received.length >= 2);
+
+  assert.equal(received.length, 2);
+  assert.equal(received[0].customerName, '');
+  assert.equal(received[1].customerName, 'Rahul Sharma');
+  assert.equal(buildDisplayState({ phase: 'billing', lines: [milk] }, 1).customerName, '');
+  stop();
+  publisher.dispose();
+});

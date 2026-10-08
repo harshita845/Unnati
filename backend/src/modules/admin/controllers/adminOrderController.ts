@@ -1392,6 +1392,19 @@ export const exportOrders = asyncHandler(
 /**
  * Create POS Order
  */
+/**
+ * Name/phone the cashier typed for a walk-in POS customer. The printed bill already shows them;
+ * the order keeps them too, so reports show who bought instead of "Walk-in Customer".
+ */
+const readWalkInContact = (body: any) => {
+  const name = typeof body?.customerName === "string" ? body.customerName.trim().slice(0, 80) : "";
+  const phone = typeof body?.customerPhone === "string" ? body.customerPhone.replace(/\D/g, "") : "";
+  return {
+    name: name && name.toLowerCase() !== "walk-in customer" ? name : "",
+    phone: /^\d{10}$/.test(phone) ? phone : "",
+  };
+};
+
 export const createPOSOrder = asyncHandler(
   async (req: Request, res: Response) => {
     try {
@@ -1410,6 +1423,9 @@ export const createPOSOrder = asyncHandler(
         if (!adminId) {
              console.warn("createPOSOrder: No admin user found in request (req.user)");
         }
+
+        const isWalkIn = customerId === "walk-in-customer";
+        const walkInContact = readWalkInContact(req.body);
 
         // Handle Walk-in Customer
         if (customerId === "walk-in-customer") {
@@ -1441,9 +1457,9 @@ export const createPOSOrder = asyncHandler(
         // 1. Create Order shell
         let order = await Order.create({
           customer: customer._id,
-          customerName: customer.name,
+          customerName: (isWalkIn && walkInContact.name) || customer.name,
           customerEmail: customer.email,
-          customerPhone: customer.phone,
+          customerPhone: (isWalkIn && walkInContact.phone) || customer.phone,
           deliveryAddress: {
             address: customer.address || "POS Order",
             city: customer.city || "POS",
@@ -1673,6 +1689,8 @@ export const initiatePOSOnlineOrder = asyncHandler(
   async (req: Request, res: Response) => {
     const { items, gateway } = req.body;
     let { customerId } = req.body;
+    const isWalkIn = customerId === "walk-in-customer";
+    const walkInContact = readWalkInContact(req.body);
 
     if (!customerId || !items || !items.length || !gateway) {
       return res.status(400).json({
@@ -1787,9 +1805,9 @@ export const initiatePOSOnlineOrder = asyncHandler(
     // Create Pending Order
     const order = await Order.create({
       customer: customer._id,
-      customerName: customer.name,
+      customerName: (isWalkIn && walkInContact.name) || customer.name,
       customerEmail: customer.email,
-      customerPhone: customer.phone,
+      customerPhone: (isWalkIn && walkInContact.phone) || customer.phone,
       deliveryAddress: {
         address: customer.address || "POS Order",
         city: customer.city || "POS",
@@ -2000,7 +2018,7 @@ export const getPOSReport = asyncHandler(
     const recentOrders = await Order.find(listQuery)
       .sort({ orderDate: -1 })
       .limit(limit)
-      .populate("customer", "name phone");
+      .populate("customer", "name phone address city state pincode gst");
 
     return res.status(200).json({
       success: true,

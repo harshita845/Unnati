@@ -315,6 +315,9 @@ export interface CreatePOSOrderData {
   }>;
   paymentMethod: string;
   paymentStatus?: "Pending" | "Paid" | "Failed";
+  /** Walk-in only: name/phone typed by the cashier, stored on the order for reports */
+  customerName?: string;
+  customerPhone?: string;
 }
 
 /**

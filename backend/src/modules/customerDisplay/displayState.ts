@@ -18,6 +18,8 @@ export interface DisplayItem {
 export interface DisplayState {
   phase: DisplayPhase;
   billNo: string;
+  /** Name of the saved customer being billed (name only: no phone, address or dues). */
+  customerName: string;
   items: DisplayItem[];
   totals: { itemCount: number; subtotal: number; discount: number; tax: number; grandTotal: number };
   payment: { method: string; amount: number } | null;
@@ -43,6 +45,7 @@ const text = (v: unknown, max: number): string => (typeof v === "string" || type
 export const emptyDisplayState = (seq = 0): DisplayState => ({
   phase: "idle",
   billNo: "",
+  customerName: "",
   items: [],
   totals: { itemCount: 0, subtotal: 0, discount: 0, tax: 0, grandTotal: 0 },
   payment: null,
@@ -74,6 +77,7 @@ export const sanitizeDisplayState = (input: any): DisplayState | null => {
   return {
     phase,
     billNo: text(input.billNo, 40),
+    customerName: text(input.customerName, 80),
     items,
     totals: {
       itemCount: count(totals.itemCount),

@@ -28,6 +28,9 @@ export interface ReceiptData {
   paymentMethod?: string;
   customerName?: string;
   customerPhone?: string;
+  /** Saved customers only: printed when present */
+  customerAddress?: string;
+  customerGst?: string;
   items: ReceiptItem[];
   total?: number;
   subtotal?: number;
@@ -305,6 +308,18 @@ export const ThermalReceiptContent: React.FC<ThermalReceiptContentProps> = ({
           <div className="flex items-center justify-between gap-2">
             <span className="shrink" style={{ fontWeight: mediumWeight }}>Mobile:</span>
             <span className="shrink-0 text-right" style={{ fontWeight: regularWeight }}>{data.customerPhone}</span>
+          </div>
+        )}
+        {data.customerAddress && (
+          <div className="flex items-start justify-between gap-2">
+            <span className="shrink-0" style={{ fontWeight: mediumWeight }}>Address:</span>
+            <span className="text-right" style={{ fontWeight: regularWeight }}>{data.customerAddress}</span>
+          </div>
+        )}
+        {data.customerGst && (
+          <div className="flex items-center justify-between gap-2">
+            <span className="shrink-0" style={{ fontWeight: mediumWeight }}>Customer GSTIN:</span>
+            <span className="shrink-0 text-right" style={{ fontWeight: regularWeight }}>{data.customerGst}</span>
           </div>
         )}
       </div>

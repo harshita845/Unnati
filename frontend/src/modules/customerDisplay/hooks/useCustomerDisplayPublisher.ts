@@ -83,4 +83,16 @@ export const useCustomerDisplayPublisher = (prefs: CustomerDisplayPrefs, input: 
   useEffect(() => {
     publisherRef.current?.publish(latestInput.current);
   }, [inputKey]);
+
+  /**
+   * Call right after a checkout succeeds (before the cart is cleared): the customer screen shows
+   * the confirmation for the bill they just saw, whatever happens to the cashier's screen next.
+   */
+  const markPaid = useCallback((method: string) => {
+    const publisher = publisherRef.current;
+    if (!publisher) return;
+    if (publisher.markPaid(method)) void publisher.flushNow().catch(() => undefined);
+  }, []);
+
+  return { markPaid };
 };

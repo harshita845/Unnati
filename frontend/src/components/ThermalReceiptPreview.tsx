@@ -56,6 +56,9 @@ export const ThermalReceiptPreview: React.FC<ThermalReceiptPreviewProps> = ({
           <span>Test Print</span>
         </button>
       </div>
+      <p className="w-full px-1 mb-3 text-[11px] leading-snug text-neutral-500">
+        Sample bill to preview your layout. Real bills print with the actual items, customer and totals from POS Orders.
+      </p>
 
       {/* Realistic Thermal Receipt Paper Simulation */}
       <div

@@ -106,3 +106,21 @@ test("display state keeps only whitelisted bill fields", () => {
   assert.equal(sanitizeDisplayState({ phase: "billing" }), null, "seq is required");
   assert.equal(sanitizeDisplayState({ seq: 1, phase: "hacked" })!.phase, "idle");
 });
+
+test("customer screen gets the saved customer's name only, never phone or address", () => {
+  const clean = sanitizeDisplayState({
+    seq: 9,
+    phase: "billing",
+    customerName: "Rahul Sharma",
+    customerPhone: "9876543210",
+    customerAddress: "12 MG Road",
+    customerGst: "29ABCDE1234F1Z5",
+    creditBalance: 1500,
+    items: [],
+  })! as any;
+  assert.equal(clean.customerName, "Rahul Sharma");
+  for (const leaked of ["customerPhone", "customerAddress", "customerGst", "creditBalance"]) {
+    assert.equal(clean[leaked], undefined, `${leaked} must not reach the customer screen`);
+  }
+  assert.equal(sanitizeDisplayState({ seq: 1 })!.customerName, "", "walk-ins have no name");
+});

@@ -39,12 +39,23 @@ export const StoreMark = ({ branding, theme, size = 'md' }: { branding: DisplayB
   );
 };
 
-const PanelHeader = ({ branding, theme, billNo }: { branding: DisplayBranding; theme: DisplayTheme; billNo: string }) => {
+const PanelHeader = ({
+  branding,
+  theme,
+  billNo,
+  customerName,
+}: {
+  branding: DisplayBranding;
+  theme: DisplayTheme;
+  billNo: string;
+  customerName?: string;
+}) => {
   const now = useClock();
   return (
     <div className="flex items-center justify-between gap-4 border-b px-6 py-4" style={{ borderColor: `${theme.text}14` }}>
       <StoreMark branding={branding} theme={theme} />
       <div className="shrink-0 text-right leading-tight" style={{ color: theme.text }}>
+        {customerName && <div className="text-base font-extrabold" style={{ color: theme.primary }}>Welcome, {customerName}</div>}
         {billNo && <div className="text-sm font-bold opacity-80">{billNo}</div>}
         <div className="text-xs opacity-60">
           {now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} ·{' '}
@@ -96,7 +107,7 @@ export const BillPanel = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col" style={{ background: theme.panel }}>
-      <PanelHeader branding={branding} theme={theme} billNo={state.billNo} />
+      <PanelHeader branding={branding} theme={theme} billNo={state.billNo} customerName={state.customerName} />
       <div
         className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 px-6 pb-2 pt-3 text-xs font-bold uppercase tracking-wider opacity-60"
         style={{ color: theme.text }}
@@ -162,7 +173,7 @@ export const PaymentPanel = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col" style={{ background: theme.panel, color: theme.text }}>
-      <PanelHeader branding={branding} theme={theme} billNo={state.billNo} />
+      <PanelHeader branding={branding} theme={theme} billNo={state.billNo} customerName={state.customerName} />
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-5 px-8 text-center">
         <div className="text-lg font-semibold uppercase tracking-widest opacity-70">Amount to pay</div>
         <div className="text-6xl font-black tabular-nums tracking-tight" style={{ color: theme.primary }}>
@@ -204,16 +215,23 @@ export const PaidPanel = ({
   theme: DisplayTheme;
   thankYouText: string;
   seconds: number;
-}) => (
+}) => {
+  // Udhaar bills aren't paid now: they're added to the customer's credit account
+  const isCredit = /credit|udhaar/i.test(state.payment?.method || '');
+  return (
   <div className="flex h-full min-h-0 flex-col" style={{ background: theme.panel, color: theme.text }}>
-    <PanelHeader branding={branding} theme={theme} billNo={state.billNo} />
+    <PanelHeader branding={branding} theme={theme} billNo={state.billNo} customerName={state.customerName} />
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-      <CheckCircle2 className="cfd-pop h-28 w-28 text-green-600" strokeWidth={1.75} />
-      <div className="text-4xl font-black text-green-700">Payment Successful</div>
+      <CheckCircle2 className={`cfd-pop h-28 w-28 ${isCredit ? 'text-amber-500' : 'text-green-600'}`} strokeWidth={1.75} />
+      <div className={`text-4xl font-black ${isCredit ? 'text-amber-600' : 'text-green-700'}`}>
+        {isCredit ? 'Added to your credit account' : 'Payment Successful'}
+      </div>
       <div className="text-5xl font-black tabular-nums">{formatINR(state.payment?.amount ?? state.totals.grandTotal)}</div>
       <div className="w-full max-w-md space-y-1.5 rounded-2xl px-5 py-4 text-left" style={{ background: `${theme.text}08` }}>
         <TotalRow label="Items" value={formatQty(state.totals.itemCount)} theme={theme} />
-        {state.payment?.method && <TotalRow label="Paid by" value={state.payment.method} theme={theme} />}
+        {state.payment?.method && (
+          <TotalRow label={isCredit ? 'Bill type' : 'Paid by'} value={isCredit ? 'Credit (Udhaar)' : state.payment.method} theme={theme} />
+        )}
         {state.totals.discount > 0 && <TotalRow label="You saved" value={formatINR(state.totals.discount)} theme={theme} tone="save" />}
       </div>
       <div className="text-2xl font-bold" style={{ color: theme.primary }}>
@@ -224,4 +242,5 @@ export const PaidPanel = ({
       <div className="cfd-countdown h-full" style={{ background: theme.primary, animationDuration: `${seconds}s` }} />
     </div>
   </div>
-);
+  );
+};
