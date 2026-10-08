@@ -37,6 +37,7 @@ export default function BulkBarcodeModal({
   initialSelectedIds,
   barcodeSettings,
 }: BulkBarcodeModalProps) {
+  const [columnsCount, setColumnsCount] = useState<1 | 2 | 3>(2);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [searchTerm, setSearchTerm] = useState("");
@@ -50,7 +51,9 @@ export default function BulkBarcodeModal({
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState("");
 
-  const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
+
+  const getProductId = (p: BulkBarcodeProduct) => p.productId || p._id || p.id || "";
 
   // Initialize selected products and default quantities
   useEffect(() => {
@@ -59,12 +62,13 @@ export default function BulkBarcodeModal({
         setSelectedIds(new Set(initialSelectedIds));
       } else {
         // Select all products by default if none specified
-        setSelectedIds(new Set(products.map((p) => p.productId)));
+        setSelectedIds(new Set(products.map((p) => getProductId(p)).filter(Boolean)));
       }
 
       const initialQty: Record<string, number> = {};
       products.forEach((p) => {
-        initialQty[p.productId] = 1;
+        const id = getProductId(p);
+        if (id) initialQty[id] = 1;
       });
       setQuantities(initialQty);
 
@@ -78,48 +82,80 @@ export default function BulkBarcodeModal({
     }
   }, [isOpen, products, initialSelectedIds, barcodeSettings]);
 
-  // Render live preview barcode
-  const previewProduct = products.find((p) => selectedIds.has(p.productId)) || products[0];
+  // Determine preview products based on selection and columnsCount
+  const selectedProductsList = products.filter((p) => selectedIds.has(getProductId(p)));
+  const previewProducts = selectedProductsList.slice(0, Math.max(columnsCount, 1));
 
   useEffect(() => {
-    if (!previewProduct || !previewCanvasRef.current) return;
+    if (!isOpen || previewProducts.length === 0) return;
 
     loadJsBarcode().then(() => {
-      if (!previewCanvasRef.current) return;
-      const rawBarcode = Array.isArray(previewProduct.barcode)
-        ? previewProduct.barcode[0]
-        : previewProduct.barcode;
-      const barcodeValue = rawBarcode || previewProduct.sku || previewProduct.productId || "123456789";
-      
-      try {
-        (window as any).JsBarcode(previewCanvasRef.current, barcodeValue, {
-          format: "CODE128",
-          width: 2,
-          height: 48,
-          displayValue: showSku,
-          fontSize: 12,
-          margin: 4,
-        });
-      } catch (e) {
-        console.error("JsBarcode preview error:", e);
-      }
+      previewProducts.forEach((prod, index) => {
+        const canvas = canvasRefs.current[index];
+        if (!canvas || !prod) return;
+
+        const rawBarcode = Array.isArray(prod.barcode) ? prod.barcode[0] : prod.barcode;
+        const barcodeValue = rawBarcode || prod.sku || getProductId(prod) || "123456789";
+
+        try {
+          (window as any).JsBarcode(canvas, barcodeValue, {
+            format: "CODE128",
+            width: columnsCount === 3 ? 1.4 : columnsCount === 2 ? 1.75 : 2,
+            height: columnsCount === 3 ? 36 : columnsCount === 2 ? 42 : 48,
+            displayValue: showSku,
+            fontSize: columnsCount === 3 ? 10 : 11,
+            margin: 2,
+          });
+        } catch (e) {
+          console.error("JsBarcode preview error:", e);
+        }
+      });
     });
-  }, [previewProduct, showSku, isOpen]);
+  }, [
+    previewProducts,
+    showSku,
+    isOpen,
+    columnsCount,
+    labelSize,
+    showStoreName,
+    storeName,
+    showProductName,
+    showPrice,
+    showMrp,
+  ]);
 
   if (!isOpen) return null;
 
   const filteredProducts = products.filter(
     (p) =>
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (p.barcode && String(p.barcode).toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
+  const isAllSelected =
+    filteredProducts.length > 0 &&
+    filteredProducts.every((p) => selectedIds.has(getProductId(p)));
+
   const toggleSelectAll = () => {
-    if (selectedIds.size === filteredProducts.length) {
-      setSelectedIds(new Set());
+    if (isAllSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredProducts.forEach((p) => {
+          const id = getProductId(p);
+          if (id) next.delete(id);
+        });
+        return next;
+      });
     } else {
-      setSelectedIds(new Set(filteredProducts.map((p) => p.productId)));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredProducts.forEach((p) => {
+          const id = getProductId(p);
+          if (id) next.add(id);
+        });
+        return next;
+      });
     }
   };
 
@@ -217,7 +253,7 @@ export default function BulkBarcodeModal({
 
   // 1. Download Bulk ZIP of editable PDF files
   const handleDownloadZipPDFs = async () => {
-    const selectedList = products.filter((p) => selectedIds.has(p.productId));
+    const selectedList = products.filter((p) => selectedIds.has(getProductId(p)));
     if (selectedList.length === 0) {
       alert("Please select at least one product.");
       return;
@@ -231,7 +267,8 @@ export default function BulkBarcodeModal({
 
       for (let i = 0; i < selectedList.length; i++) {
         const product = selectedList[i];
-        const qty = quantities[product.productId] || 1;
+        const prodId = getProductId(product);
+        const qty = quantities[prodId] || 1;
 
         setGenerationProgress(`Generating PDF ${i + 1} of ${selectedList.length}: ${product.name}`);
 
@@ -241,7 +278,7 @@ export default function BulkBarcodeModal({
         const sanitizedName = product.name
           .replace(/[^a-zA-Z0-9_-]/g, "_")
           .substring(0, 30);
-        const filename = `Barcode_${sanitizedName}_${product.sku || product.productId}.pdf`;
+        const filename = `Barcode_${sanitizedName}_${product.sku || prodId}.pdf`;
 
         zip.file(filename, pdfArrayBuffer);
       }
@@ -264,16 +301,16 @@ export default function BulkBarcodeModal({
     }
   };
 
-  // 2. Download single compiled Bulk PDF sheet (2 COLUMNS PER PAGE)
+  // 2. Download single compiled Bulk PDF sheet (Customizable 1, 2, or 3 Columns)
   const handleDownloadSingleBulkPdf = async () => {
-    const selectedList = products.filter((p) => selectedIds.has(p.productId));
+    const selectedList = products.filter((p) => selectedIds.has(getProductId(p)));
     if (selectedList.length === 0) {
       alert("Please select at least one product.");
       return;
     }
 
     setIsGenerating(true);
-    setGenerationProgress("Generating 2-Column Barcode PDF sheet...");
+    setGenerationProgress(`Generating ${columnsCount}-Column Barcode PDF sheet...`);
 
     try {
       const doc = new jsPDF({
@@ -282,24 +319,52 @@ export default function BulkBarcodeModal({
         format: "a4",
       });
 
-      const pageMarginLeft = 10;
-      const pageMarginTop = 10;
-      const colWidth = 92;
-      const rowHeight = 43;
-      const colGap = 6;
-      const rowGap = 3;
+      // Dimension calculations based on columnsCount
+      let pageMarginLeft = 10;
+      let pageMarginTop = 10;
+      let colWidth = 92;
+      let rowHeight = 43;
+      let colGap = 6;
+      let rowGap = 3;
+      const colsPerPage = columnsCount;
+      let rowsPerPage = 6;
 
-      const colsPerPage = 2;
-      const rowsPerPage = 6;
-      const itemsPerPage = colsPerPage * rowsPerPage; // 12 barcodes per A4 page (2 columns x 6 rows)
+      if (columnsCount === 1) {
+        pageMarginLeft = 15;
+        pageMarginTop = 12;
+        colWidth = 180;
+        rowHeight = 40;
+        colGap = 0;
+        rowGap = 4;
+        rowsPerPage = 6;
+      } else if (columnsCount === 2) {
+        pageMarginLeft = 10;
+        pageMarginTop = 10;
+        colWidth = 92;
+        rowHeight = 43;
+        colGap = 6;
+        rowGap = 3;
+        rowsPerPage = 6;
+      } else if (columnsCount === 3) {
+        pageMarginLeft = 7;
+        pageMarginTop = 8;
+        colWidth = 62;
+        rowHeight = 37;
+        colGap = 4.5;
+        rowGap = 3;
+        rowsPerPage = 7;
+      }
+
+      const itemsPerPage = colsPerPage * rowsPerPage;
 
       let itemIndex = 0;
 
       for (let i = 0; i < selectedList.length; i++) {
         const product = selectedList[i];
-        const qty = quantities[product.productId] || 1;
+        const prodId = getProductId(product);
+        const qty = quantities[prodId] || 1;
         const rawBarcode = Array.isArray(product.barcode) ? product.barcode[0] : product.barcode;
-        const barcodeVal = rawBarcode || product.sku || product.productId || "123456789";
+        const barcodeVal = rawBarcode || product.sku || prodId || "123456789";
         const barcodeImg = await code128DataUrl(barcodeVal);
 
         for (let q = 0; q < qty; q++) {
@@ -308,8 +373,8 @@ export default function BulkBarcodeModal({
           }
 
           const positionOnPage = itemIndex % itemsPerPage;
-          const col = positionOnPage % colsPerPage; // 0 or 1
-          const row = Math.floor(positionOnPage / colsPerPage); // 0..5
+          const col = positionOnPage % colsPerPage;
+          const row = Math.floor(positionOnPage / colsPerPage);
 
           const x = pageMarginLeft + col * (colWidth + colGap);
           const y = pageMarginTop + row * (rowHeight + rowGap);
@@ -319,53 +384,56 @@ export default function BulkBarcodeModal({
           doc.setFillColor(255, 255, 255);
           doc.roundedRect(x, y, colWidth, rowHeight, 2, 2, "FD");
 
-          let currentY = y + 4.5;
+          let currentY = y + (columnsCount === 3 ? 3.5 : 4.5);
           const centerX = x + colWidth / 2;
 
           // Header Store Name
           if (showStoreName && storeName) {
-            doc.setFontSize(8.5);
+            doc.setFontSize(columnsCount === 3 ? 7.5 : 8.5);
             doc.setFont("helvetica", "bold");
             doc.setTextColor(15, 23, 42);
             doc.text(storeName.toUpperCase(), centerX, currentY, { align: "center" });
-            currentY += 4.5;
+            currentY += columnsCount === 3 ? 3.5 : 4.2;
           }
 
           // Product Name (wrapped properly without overlapping)
           if (showProductName && product.name) {
-            doc.setFontSize(8);
+            doc.setFontSize(columnsCount === 3 ? 7 : 8);
             doc.setFont("helvetica", "bold");
             doc.setTextColor(30, 41, 59);
 
-            const wrappedLines: string[] = doc.splitTextToSize(product.name, colWidth - 8);
-            const linesToPrint = wrappedLines.slice(0, 2);
+            const wrappedLines: string[] = doc.splitTextToSize(
+              product.name,
+              colWidth - (columnsCount === 3 ? 6 : 8)
+            );
+            const linesToPrint = wrappedLines.slice(0, columnsCount === 3 ? 1 : 2);
             linesToPrint.forEach((line: string) => {
               doc.text(line, centerX, currentY, { align: "center" });
-              currentY += 3.8;
+              currentY += columnsCount === 3 ? 3.2 : 3.6;
             });
           }
 
           // Barcode Image
           if (barcodeImg) {
-            const imgW = colWidth - 16;
-            const imgH = 14;
-            const imgX = x + 8;
+            const imgW = colWidth - (columnsCount === 3 ? 10 : columnsCount === 2 ? 16 : 30);
+            const imgH = columnsCount === 3 ? 12 : 14;
+            const imgX = x + (colWidth - imgW) / 2;
             doc.addImage(barcodeImg, "PNG", imgX, currentY, imgW, imgH);
-            currentY += imgH + 2;
+            currentY += imgH + 1.8;
           }
 
           // SKU & Barcode Code Text
           if (showSku) {
-            doc.setFontSize(7.5);
+            doc.setFontSize(columnsCount === 3 ? 6.5 : 7.5);
             doc.setFont("courier", "bold");
             doc.setTextColor(15, 23, 42);
             doc.text(barcodeVal, centerX, currentY, { align: "center" });
-            currentY += 3.5;
+            currentY += columnsCount === 3 ? 2.8 : 3.2;
           }
 
           // Price / MRP / SP
           if (showPrice) {
-            doc.setFontSize(7.5);
+            doc.setFontSize(columnsCount === 3 ? 6.5 : 7.5);
             doc.setFont("helvetica", "bold");
             doc.setTextColor(15, 23, 42);
             const sp = product.sellingPrice || product.price || 0;
@@ -381,18 +449,20 @@ export default function BulkBarcodeModal({
         }
       }
 
-      doc.save(`bulk_barcodes_2col_sheet_${new Date().toISOString().slice(0, 10)}.pdf`);
+      doc.save(
+        `bulk_barcodes_${columnsCount}col_sheet_${new Date().toISOString().slice(0, 10)}.pdf`
+      );
     } catch (err) {
-      console.error("Failed to generate 2-Column PDF sheet:", err);
+      console.error("Failed to generate PDF sheet:", err);
       alert("Failed to generate PDF sheet.");
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // 3. Print Barcodes (2 COLUMNS PER PAGE, NO TEXT BREAKING)
+  // 3. Print Barcodes (Customizable 1, 2, or 3 Columns)
   const handlePrintBarcodes = async () => {
-    const selectedList = products.filter((p) => selectedIds.has(p.productId));
+    const selectedList = products.filter((p) => selectedIds.has(getProductId(p)));
     if (selectedList.length === 0) {
       alert("Please select at least one product.");
       return;
@@ -404,15 +474,18 @@ export default function BulkBarcodeModal({
       return;
     }
 
+    const cardWidthPercent =
+      columnsCount === 1 ? "100%" : columnsCount === 2 ? "48.5%" : "31.8%";
+
     let htmlContent = `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Print Bulk Barcodes (2 Columns)</title>
+        <title>Print Bulk Barcodes (${columnsCount} Column${columnsCount > 1 ? "s" : ""})</title>
         <style>
           @page {
             size: A4 portrait;
-            margin: 10mm;
+            margin: 8mm;
           }
           *, *:before, *:after {
             box-sizing: border-box;
@@ -431,11 +504,11 @@ export default function BulkBarcodeModal({
             width: 100%;
           }
           .label-card {
-            width: 48.5%;
+            width: ${cardWidthPercent};
             border: 1px solid #cbd5e1;
             border-radius: 6px;
-            padding: 8px 10px;
-            margin-bottom: 6mm;
+            padding: ${columnsCount === 3 ? "6px 6px" : "8px 10px"};
+            margin-bottom: ${columnsCount === 3 ? "4mm" : "5mm"};
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -444,10 +517,10 @@ export default function BulkBarcodeModal({
             background: #ffffff;
             page-break-inside: avoid;
             break-inside: avoid;
-            min-height: 125px;
+            min-height: ${columnsCount === 3 ? "110px" : "125px"};
           }
           .store-name {
-            font-size: 10px;
+            font-size: ${columnsCount === 3 ? "9px" : "10px"};
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -461,11 +534,11 @@ export default function BulkBarcodeModal({
             padding-bottom: 2px;
           }
           .product-title {
-            font-size: 11px;
+            font-size: ${columnsCount === 3 ? "9.5px" : "11px"};
             font-weight: 600;
             color: #1e293b;
             line-height: 1.25;
-            margin-bottom: 4px;
+            margin-bottom: 3px;
             width: 100%;
             max-height: 2.5em;
             overflow: hidden;
@@ -482,12 +555,12 @@ export default function BulkBarcodeModal({
             margin: 2px 0;
           }
           .barcode-img {
-            max-width: 88%;
-            height: 48px;
+            max-width: ${columnsCount === 3 ? "95%" : "88%"};
+            height: ${columnsCount === 3 ? "40px" : "48px"};
             object-fit: contain;
           }
           .sku-code {
-            font-size: 10px;
+            font-size: ${columnsCount === 3 ? "8.5px" : "10px"};
             font-family: "Courier New", Courier, monospace;
             font-weight: 700;
             color: #0f172a;
@@ -495,13 +568,13 @@ export default function BulkBarcodeModal({
             letter-spacing: 0.5px;
           }
           .price-line {
-            font-size: 10px;
+            font-size: ${columnsCount === 3 ? "8.5px" : "10px"};
             font-weight: 800;
             color: #0f172a;
             margin-top: 3px;
           }
           .mrp-strike {
-            font-size: 9px;
+            font-size: ${columnsCount === 3 ? "8px" : "9px"};
             font-weight: 400;
             color: #64748b;
             text-decoration: line-through;
@@ -514,9 +587,10 @@ export default function BulkBarcodeModal({
     `;
 
     for (const product of selectedList) {
-      const qty = quantities[product.productId] || 1;
+      const prodId = getProductId(product);
+      const qty = quantities[prodId] || 1;
       const rawBarcode = Array.isArray(product.barcode) ? product.barcode[0] : product.barcode;
-      const barcodeVal = rawBarcode || product.sku || product.productId || "123456789";
+      const barcodeVal = rawBarcode || product.sku || prodId || "123456789";
       const barcodeImg = await code128DataUrl(barcodeVal);
 
       const sp = product.sellingPrice || product.price || 0;
@@ -582,7 +656,7 @@ export default function BulkBarcodeModal({
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-full hover:bg-white/20 transition-colors text-white"
+            className="p-1 rounded-full hover:bg-white/20 transition-colors text-white cursor-pointer"
             title="Close Modal"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -596,7 +670,7 @@ export default function BulkBarcodeModal({
         <div className="flex-1 grid grid-cols-1 md:grid-cols-12 overflow-hidden bg-neutral-50">
           
           {/* Left Column: Product Selection List */}
-          <div className="md:col-span-6 border-r border-neutral-200 p-4 flex flex-col overflow-hidden bg-white">
+          <div className="md:col-span-5 border-r border-neutral-200 p-4 flex flex-col overflow-hidden bg-white">
             <div className="flex items-center justify-between gap-2 mb-3">
               <div className="relative flex-1">
                 <input
@@ -614,9 +688,9 @@ export default function BulkBarcodeModal({
 
               <button
                 onClick={toggleSelectAll}
-                className="text-xs font-semibold px-3 py-1.5 border border-neutral-300 rounded-lg hover:bg-neutral-100 transition-colors text-neutral-700 whitespace-nowrap"
+                className="text-xs font-semibold px-3 py-1.5 border border-neutral-300 rounded-lg hover:bg-neutral-100 transition-colors text-neutral-700 whitespace-nowrap cursor-pointer"
               >
-                {selectedIds.size === filteredProducts.length ? "Deselect All" : "Select All"}
+                {isAllSelected ? "Deselect All" : "Select All"}
               </button>
             </div>
 
@@ -631,14 +705,15 @@ export default function BulkBarcodeModal({
                 <div className="p-8 text-center text-xs text-neutral-400">No matching products found.</div>
               ) : (
                 filteredProducts.map((product) => {
-                  const isChecked = selectedIds.has(product.productId);
-                  const qty = quantities[product.productId] || 1;
+                  const prodId = getProductId(product);
+                  const isChecked = selectedIds.has(prodId);
+                  const qty = quantities[prodId] || 1;
                   const rawBarcode = Array.isArray(product.barcode) ? product.barcode[0] : product.barcode;
                   const barcodeVal = rawBarcode || product.sku || "N/A";
 
                   return (
                     <div
-                      key={product.productId}
+                      key={prodId}
                       className={`p-2.5 flex items-center justify-between gap-3 text-xs transition-colors ${
                         isChecked ? "bg-emerald-50/50 hover:bg-emerald-50" : "hover:bg-neutral-50"
                       }`}
@@ -647,7 +722,7 @@ export default function BulkBarcodeModal({
                         <input
                           type="checkbox"
                           checked={isChecked}
-                          onChange={() => toggleSelectProduct(product.productId)}
+                          onChange={() => toggleSelectProduct(prodId)}
                           className="w-4 h-4 rounded text-[var(--primary-color)] focus:ring-[var(--primary-color)] cursor-pointer"
                         />
                         <div className="truncate">
@@ -666,7 +741,7 @@ export default function BulkBarcodeModal({
                             min="1"
                             max="999"
                             value={qty}
-                            onChange={(e) => handleQtyChange(product.productId, parseInt(e.target.value) || 1)}
+                            onChange={(e) => handleQtyChange(prodId, parseInt(e.target.value) || 1)}
                             className="w-12 text-center text-xs font-semibold focus:outline-none"
                           />
                         </div>
@@ -679,15 +754,47 @@ export default function BulkBarcodeModal({
           </div>
 
           {/* Right Column: Settings & Live Preview */}
-          <div className="md:col-span-6 p-5 flex flex-col justify-between overflow-y-auto space-y-5">
+          <div className="md:col-span-7 p-5 flex flex-col justify-between overflow-y-auto space-y-4">
             
             {/* Label Customization Settings */}
-            <div className="bg-white border border-neutral-200 rounded-xl p-4 shadow-xs space-y-4">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-700 border-b border-neutral-100 pb-2">
-                Barcode Label Settings
+            <div className="bg-white border border-neutral-200 rounded-xl p-4 shadow-xs space-y-3.5">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-700 border-b border-neutral-100 pb-2 flex items-center justify-between">
+                <span>Barcode Label Settings</span>
+                <span className="text-[10px] text-[var(--primary-color)] lowercase font-normal bg-emerald-50 px-2 py-0.5 rounded">
+                  {columnsCount} Column{columnsCount > 1 ? "s" : ""} mode
+                </span>
               </h3>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Layout Columns Choice (1, 2, or 3 columns) */}
+              <div>
+                <label className="block text-[11px] font-semibold text-neutral-700 mb-1.5 flex items-center justify-between">
+                  <span>Columns Layout (Per Row)</span>
+                  <span className="text-[10px] text-neutral-400 font-normal">Choose 1, 2 or 3 labels per line</span>
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[1, 2, 3].map((col) => (
+                    <button
+                      key={col}
+                      type="button"
+                      onClick={() => setColumnsCount(col as 1 | 2 | 3)}
+                      className={`py-2 px-3 rounded-lg text-xs font-semibold border flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                        columnsCount === col
+                          ? "bg-[var(--primary-color)] text-white border-[var(--primary-color)] shadow-sm scale-[1.02]"
+                          : "bg-neutral-50 text-neutral-700 border-neutral-300 hover:bg-neutral-100"
+                      }`}
+                    >
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-extrabold ${
+                        columnsCount === col ? "bg-white text-[var(--primary-color)]" : "bg-neutral-200 text-neutral-700"
+                      }`}>
+                        {col}
+                      </span>
+                      <span>{col === 1 ? "1 Column" : `${col} Columns`}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-1 border-t border-neutral-100">
                 <div>
                   <label className="block text-[11px] font-semibold text-neutral-600 mb-1">
                     Label Paper Format
@@ -763,50 +870,77 @@ export default function BulkBarcodeModal({
               </div>
             </div>
 
-            {/* Live Preview Card */}
-            <div className="bg-neutral-100 border border-neutral-300 border-dashed rounded-xl p-4 flex flex-col items-center justify-center">
+            {/* Live Preview Card - Dynamically shows 1, 2, or 3 columns */}
+            <div className="bg-neutral-100 border border-neutral-300 border-dashed rounded-xl p-3 flex flex-col items-center justify-center min-h-[170px]">
               <div className="flex items-center justify-between w-full mb-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-500 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
-                  Live Barcode Label Preview
+                <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-600 flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full inline-block ${previewProducts.length > 0 ? "bg-emerald-500 animate-pulse" : "bg-neutral-400"}`}></span>
+                  Live Barcode Label Preview ({columnsCount} Column{columnsCount > 1 ? "s" : ""})
                 </span>
-                <span className="text-[10px] text-neutral-400 font-mono">
-                  {labelSize === "38x25" ? "38mm × 25mm" : labelSize === "60x40" ? "60mm × 40mm" : "50mm × 30mm"}
+                <span className="text-[10px] text-neutral-500 font-mono font-medium">
+                  {columnsCount === 1 ? "1 Column / Row" : columnsCount === 2 ? "2 Columns / Row" : "3 Columns / Row"}
                 </span>
               </div>
 
-              {/* Simulated Thermal Label Box */}
-              {previewProduct ? (
-                <div className="bg-white border border-neutral-400 shadow-md rounded-md p-3 w-56 flex flex-col items-center text-center space-y-1 transition-all">
-                  {showStoreName && storeName && (
-                    <div className="text-[10px] font-extrabold uppercase tracking-tight text-neutral-900 border-b border-neutral-200 pb-0.5 w-full">
-                      {storeName}
-                    </div>
-                  )}
+              {/* Grid of Preview Cards */}
+              {previewProducts.length > 0 ? (
+                <div
+                  className={`grid gap-2 w-full ${
+                    columnsCount === 1
+                      ? "grid-cols-1 max-w-xs mx-auto"
+                      : columnsCount === 2
+                      ? "grid-cols-2"
+                      : "grid-cols-3"
+                  }`}
+                >
+                  {previewProducts.map((p, idx) => {
+                    const prodId = getProductId(p);
+                    const sp = p.sellingPrice || p.price || 0;
+                    const mrp = p.mrp || p.valueMrp || sp;
 
-                  {showProductName && (
-                    <div className="text-[11px] font-medium leading-tight text-neutral-800 line-clamp-1">
-                      {previewProduct.name}
-                    </div>
-                  )}
+                    return (
+                      <div
+                        key={`${prodId}-${idx}`}
+                        className="bg-white border border-neutral-300 shadow-xs rounded-md p-2 flex flex-col items-center text-center justify-between transition-all min-h-[135px]"
+                      >
+                        {showStoreName && storeName && (
+                          <div className="text-[9px] font-extrabold uppercase tracking-tight text-neutral-900 border-b border-neutral-100 pb-0.5 w-full truncate">
+                            {storeName}
+                          </div>
+                        )}
 
-                  <div className="my-1 flex justify-center w-full">
-                    <canvas ref={previewCanvasRef} className="max-w-full h-12" />
-                  </div>
+                        {showProductName && (
+                          <div className="text-[10px] font-semibold leading-tight text-neutral-800 line-clamp-1 w-full my-0.5">
+                            {p.name}
+                          </div>
+                        )}
 
-                  {showPrice && (
-                    <div className="text-[11px] font-bold text-neutral-900">
-                      {showMrp && (previewProduct.mrp || previewProduct.valueMrp) ? (
-                        <span className="mr-1 text-[10px] text-neutral-500 font-normal line-through">
-                          MRP: ₹{previewProduct.mrp || previewProduct.valueMrp}
-                        </span>
-                      ) : null}
-                      <span>SP: ₹{previewProduct.sellingPrice || previewProduct.price || 0}</span>
-                    </div>
-                  )}
+                        <div className="my-1 flex justify-center w-full overflow-hidden">
+                          <canvas
+                            ref={(el) => (canvasRefs.current[idx] = el)}
+                            className="max-w-full h-auto"
+                          />
+                        </div>
+
+                        {showPrice && (
+                          <div className="text-[9.5px] font-bold text-neutral-900 w-full pt-0.5 border-t border-neutral-100/60 flex items-center justify-center gap-1 flex-wrap">
+                            {showMrp && mrp > sp ? (
+                              <span className="text-[8.5px] text-neutral-400 font-normal line-through">
+                                ₹{mrp}
+                              </span>
+                            ) : null}
+                            <span>SP: ₹{sp}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
-                <div className="py-6 text-xs text-neutral-400">Select a product to view barcode preview</div>
+                <div className="py-6 flex flex-col items-center justify-center text-center text-neutral-400 space-y-1">
+                  <p className="text-xs font-semibold text-neutral-600">No products selected</p>
+                  <p className="text-[11px] text-neutral-400">Select one or more products on the left to preview and export barcodes</p>
+                </div>
               )}
             </div>
 
@@ -821,14 +955,14 @@ export default function BulkBarcodeModal({
             )}
 
             {/* Action Buttons Footer */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
               
               {/* Option 1: ZIP Archive of PDFs */}
               <button
                 onClick={handleDownloadZipPDFs}
                 disabled={isGenerating || selectedIds.size === 0}
-                className="bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] disabled:opacity-50 text-white font-medium text-xs px-3 py-2.5 rounded-lg flex items-center justify-center gap-1.5 shadow-xs transition-colors"
-                title="Download ZIP containing editable individual PDF barcodes for all products"
+                className="bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium text-xs px-3 py-2.5 rounded-lg flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                title="Download ZIP containing editable individual PDF barcodes for selected products"
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -842,8 +976,8 @@ export default function BulkBarcodeModal({
               <button
                 onClick={handleDownloadSingleBulkPdf}
                 disabled={isGenerating || selectedIds.size === 0}
-                className="bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-medium text-xs px-3 py-2.5 rounded-lg flex items-center justify-center gap-1.5 shadow-xs transition-colors"
-                title="Download single combined PDF sheet with all product barcodes"
+                className="bg-emerald-700 hover:bg-emerald-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium text-xs px-3 py-2.5 rounded-lg flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                title={`Download single combined PDF sheet with selected barcodes in ${columnsCount} columns`}
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -851,22 +985,22 @@ export default function BulkBarcodeModal({
                   <line x1="12" y1="18" x2="12" y2="12"></line>
                   <line x1="9" y1="15" x2="15" y2="15"></line>
                 </svg>
-                Bulk Sheet PDF
+                Bulk Sheet PDF ({columnsCount} Col{columnsCount > 1 ? "s" : ""})
               </button>
 
               {/* Option 3: Direct Print */}
               <button
                 onClick={handlePrintBarcodes}
                 disabled={isGenerating || selectedIds.size === 0}
-                className="bg-neutral-800 hover:bg-neutral-900 disabled:opacity-50 text-white font-medium text-xs px-3 py-2.5 rounded-lg flex items-center justify-center gap-1.5 shadow-xs transition-colors"
-                title="Direct print barcodes to thermal or standard printer"
+                className="bg-neutral-800 hover:bg-neutral-900 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium text-xs px-3 py-2.5 rounded-lg flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                title={`Direct print selected barcodes in ${columnsCount} columns`}
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="6 9 6 2 18 2 18 9"></polyline>
                   <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
                   <rect x="6" y="14" width="12" height="8"></rect>
                 </svg>
-                Print Barcodes
+                Print Barcodes ({columnsCount} Col{columnsCount > 1 ? "s" : ""})
               </button>
             </div>
 
