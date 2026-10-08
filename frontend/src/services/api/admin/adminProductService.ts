@@ -277,6 +277,12 @@ export interface CreateProductData {
   unitPricing?: { minQty: number; price: number }[];
   mfgDate?: string;
   expiryDate?: string;
+  storageLocation?: {
+    city?: string;
+    warehouse?: string;
+    room?: string;
+    rackNumber?: string;
+  };
 }
 
 export interface GetProductsParams {

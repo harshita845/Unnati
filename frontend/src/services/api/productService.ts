@@ -133,6 +133,12 @@ export interface CreateProductData {
   warrantyDuration?: string;
   mfgDate?: string;
   expiryDate?: string;
+  storageLocation?: {
+    city?: string;
+    warehouse?: string;
+    room?: string;
+    rackNumber?: string;
+  };
 }
 
 export interface Shop {

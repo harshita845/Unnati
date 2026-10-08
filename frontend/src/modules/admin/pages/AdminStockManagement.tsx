@@ -1252,15 +1252,11 @@ export default function AdminStockManagement() {
 
   const handleExport = () => {
     const headers = [
-      "Variation Id",
       "Category",
       "Sub Cat",
       "Sub Sub Cat",
       "Product Name",
       "SKU",
-      "City",
-      "Warehouse",
-      "Room",
       "Rack",
       "Desc",
       "Barcode",
@@ -1281,12 +1277,20 @@ export default function AdminStockManagement() {
       "Brand",
       "Val (MRP)",
       "Val (Pur)",
-      "Status",
+      "Unit Price (Min Qty 2)",
+      "Unit Price (Min Qty 4)",
+      "Variations",
       "Main Image",
-      "Galleary Image1",
-      "Galleary Image2",
-      "Galleary Image3",
+      "Gallery Image 1",
+      "Gallery Image 2",
+      "Gallery Image 3",
+      "Mfg Date",
+      "Expiry Date",
       "Barcode",
+      "City",
+      "Warehouse",
+      "Room",
+      "Status",
     ];
 
     const escapeCsv = (val: any) => {
@@ -1303,15 +1307,11 @@ export default function AdminStockManagement() {
       headers.join(","),
       ...sortedProducts.map((product) =>
         [
-          escapeCsv(product.id),
           escapeCsv(product.category),
           escapeCsv(product.subCategory),
           escapeCsv(product.subSubCategory),
           escapeCsv(product.name),
           escapeCsv(product.sku),
-          escapeCsv(product.storageCity),
-          escapeCsv(product.storageWarehouse),
-          escapeCsv(product.storageRoom),
           escapeCsv(product.rackNumber),
           escapeCsv(product.description),
           escapeCsv(product.barcode),
@@ -1332,12 +1332,20 @@ export default function AdminStockManagement() {
           escapeCsv(product.brand),
           escapeCsv(product.valueMrp),
           escapeCsv(product.valuePurchase),
-          escapeCsv(product.publish ? "Active" : "Inactive"),
-          escapeCsv((product as any).mainImage || ""),
-          escapeCsv((product as any).galleryImage1 || ""),
-          escapeCsv((product as any).galleryImage2 || ""),
-          escapeCsv((product as any).galleryImage3 || ""),
+          escapeCsv((product as any).unitPriceMinQty2 ?? ""),
+          escapeCsv((product as any).unitPriceMinQty4 ?? ""),
+          escapeCsv((product as any).variation ?? ""),
+          escapeCsv((product as any).mainImage || (product as any).image || ""),
+          escapeCsv((product as any).galleryImage1 || (product as any).galleryImages?.[0] || ""),
+          escapeCsv((product as any).galleryImage2 || (product as any).galleryImages?.[1] || ""),
+          escapeCsv((product as any).galleryImage3 || (product as any).galleryImages?.[2] || ""),
+          escapeCsv((product as any).mfgDate || ""),
+          escapeCsv((product as any).expiryDate || ""),
           escapeCsv(product.barcode || ""),
+          escapeCsv(product.storageCity && product.storageCity !== "-" ? product.storageCity : ""),
+          escapeCsv(product.storageWarehouse && product.storageWarehouse !== "-" ? product.storageWarehouse : ""),
+          escapeCsv(product.storageRoom && product.storageRoom !== "-" ? product.storageRoom : ""),
+          escapeCsv(product.publish ? "Active" : "Inactive"),
         ].join(",")
       ),
     ].join("\n");
@@ -1676,14 +1684,17 @@ export default function AdminStockManagement() {
                     <th className="p-4 whitespace-nowrap">26. Unit Price (Min Qty 2)</th>
                     <th className="p-4 whitespace-nowrap">27. Unit Price (Min Qty 4)</th>
                     <th className="p-4 whitespace-nowrap">28. Variations</th>
-                    <th className="p-4 whitespace-nowrap">29. Image</th>
-                    <th className="p-4 whitespace-nowrap">30. Mfg Date</th>
-                    <th className="p-4 whitespace-nowrap">31. Expiry Date</th>
-                    <th className="p-4 whitespace-nowrap">32. Barcode</th>
-                    <th className="p-4 whitespace-nowrap">City</th>
-                    <th className="p-4 whitespace-nowrap">Warehouse</th>
-                    <th className="p-4 whitespace-nowrap">Room</th>
-                    <th className="p-4 whitespace-nowrap">Status</th>
+                    <th className="p-4 whitespace-nowrap">29. Main Image</th>
+                    <th className="p-4 whitespace-nowrap">30. Gallery Image 1</th>
+                    <th className="p-4 whitespace-nowrap">31. Gallery Image 2</th>
+                    <th className="p-4 whitespace-nowrap">32. Gallery Image 3</th>
+                    <th className="p-4 whitespace-nowrap">33. Mfg Date</th>
+                    <th className="p-4 whitespace-nowrap">34. Expiry Date</th>
+                    <th className="p-4 whitespace-nowrap">35. Barcode</th>
+                    <th className="p-4 whitespace-nowrap">36. City</th>
+                    <th className="p-4 whitespace-nowrap">37. Warehouse</th>
+                    <th className="p-4 whitespace-nowrap">38. Room</th>
+                    <th className="p-4 whitespace-nowrap">39. Status</th>
                     <th className="p-4 whitespace-nowrap">Action</th>
                   </tr>
                 </thead>
@@ -1797,6 +1808,51 @@ export default function AdminStockManagement() {
                           <div className="w-10 h-10 bg-neutral-100 rounded flex items-center justify-center text-xs text-neutral-400">
                             No Img
                           </div>
+                        )}
+                      </td>
+                      <td className="p-4 align-middle">
+                        {product.galleryImage1 ? (
+                          <img
+                            src={product.galleryImage1}
+                            alt="Gallery 1"
+                            className="w-10 h-10 object-cover rounded border border-neutral-200"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src =
+                                'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="60" height="80"%3E%3Crect width="60" height="80" fill="%23e5e7eb"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af" font-size="10"%3ENo Image%3C/text%3E%3C/svg%3E';
+                            }}
+                          />
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="p-4 align-middle">
+                        {product.galleryImage2 ? (
+                          <img
+                            src={product.galleryImage2}
+                            alt="Gallery 2"
+                            className="w-10 h-10 object-cover rounded border border-neutral-200"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src =
+                                'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="60" height="80"%3E%3Crect width="60" height="80" fill="%23e5e7eb"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af" font-size="10"%3ENo Image%3C/text%3E%3C/svg%3E';
+                            }}
+                          />
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="p-4 align-middle">
+                        {product.galleryImage3 ? (
+                          <img
+                            src={product.galleryImage3}
+                            alt="Gallery 3"
+                            className="w-10 h-10 object-cover rounded border border-neutral-200"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src =
+                                'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="60" height="80"%3E%3Crect width="60" height="80" fill="%23e5e7eb"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%239ca3af" font-size="10"%3ENo Image%3C/text%3E%3C/svg%3E';
+                            }}
+                          />
+                        ) : (
+                          <span className="text-gray-400">-</span>
                         )}
                       </td>
                       <td className="p-4 align-middle text-sm text-neutral-600 whitespace-nowrap">

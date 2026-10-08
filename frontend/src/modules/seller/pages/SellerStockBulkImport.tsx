@@ -414,6 +414,8 @@ export default function SellerStockBulkImport({
       brandId: rowCell(row, ["Brand", "24. Brand", "23. Brand", "PRODUCT_BRAND"]) || "",
       barcode:
         rowCell(row, [
+          "35. Barcode",
+          "35.Barcode",
           "32. Barcode",
           "32.Barcode",
           "Barcode",
@@ -423,6 +425,8 @@ export default function SellerStockBulkImport({
         ]) || "",
       mfgDate:
         rowCell(row, [
+          "33. Mfg Date",
+          "33.Mfg Date",
           "30. Mfg Date",
           "30.Mfg Date",
           "Mfg Date",
@@ -431,6 +435,8 @@ export default function SellerStockBulkImport({
         ]) || "",
       expiryDate:
         rowCell(row, [
+          "34. Expiry Date",
+          "34.Expiry Date",
           "31. Expiry Date",
           "31.Expiry Date",
           "Expiry Date",
@@ -439,9 +445,39 @@ export default function SellerStockBulkImport({
         ]) || "",
 
       publish: (() => {
-        const st = (rowCell(row, ["Status", "PRODUCT_STATUS"]) || "").toLowerCase();
-        return st === "active" || st === "published";
+        const st = (
+          rowCell(row, ["39. Status", "39.Status", "Status", "status", "PRODUCT_STATUS"]) || ""
+        ).toLowerCase().trim();
+        if (
+          st === "inactive" ||
+          st === "unpublished" ||
+          st === "false" ||
+          st === "0" ||
+          st === "draft" ||
+          st === "disabled"
+        ) {
+          return false;
+        }
+        return true;
       })(),
+      storageLocation: {
+        city:
+          rowCell(row, ["36. City", "36.City", "City", "city", "STORAGE_CITY", "storageCity"]) ||
+          undefined,
+        warehouse:
+          rowCell(row, [
+            "37. Warehouse",
+            "37.Warehouse",
+            "Warehouse",
+            "warehouse",
+            "STORAGE_WAREHOUSE",
+            "storageWarehouse",
+          ]) || undefined,
+        room:
+          rowCell(row, ["38. Room", "38.Room", "Room", "room", "STORAGE_ROOM", "storageRoom"]) ||
+          undefined,
+        rackNumber: rowCell(row, ["Rack", "6. Rack"]) || undefined,
+      },
       popular: false,
       dealOfDay: false,
       isReturnable: false,
@@ -453,18 +489,22 @@ export default function SellerStockBulkImport({
 
       mainImage:
         rowCell(row, [
+          "29. Main Image",
+          "29.Main Image",
+          "Main Image",
+          "mainImage",
+          "main_image",
           "29. Image",
           "29.Image",
           "Image",
           "Img",
-          "Main Image",
           "PRODUCT_IMAGE",
           "PRODUCT_MAIN_IMAGE",
         ]) || "",
       galleryImages: [
-        rowCell(row, ["Galleary Image1", "Gallery Image 1", "Gallery Image1", "gallery image 1", "galleryImage1"]),
-        rowCell(row, ["Galleary Image2", "Gallery Image 2", "Gallery Image2", "gallery image 2", "galleryImage2"]),
-        rowCell(row, ["Galleary Image3", "Gallery Image 3", "Gallery Image3", "gallery image 3", "galleryImage3"]),
+        rowCell(row, ["30. Gallery Image 1", "30.Gallery Image 1", "Gallery Image 1", "Gallery Image1", "Galleary Image1", "Galleary Image 1", "gallery image 1", "galleryImage1"]),
+        rowCell(row, ["31. Gallery Image 2", "31.Gallery Image 2", "Gallery Image 2", "Gallery Image2", "Galleary Image2", "Galleary Image 2", "gallery image 2", "galleryImage2"]),
+        rowCell(row, ["32. Gallery Image 3", "32.Gallery Image 3", "Gallery Image 3", "Gallery Image3", "Galleary Image3", "Galleary Image 3", "gallery image 3", "galleryImage3"]),
       ].filter(Boolean) as string[],
 
     } as any; // Casting to any to allow flexible mapping, specifically for the variations array construction below
@@ -836,9 +876,7 @@ export default function SellerStockBulkImport({
   }, []);
 
   const handleDownloadTemplate = () => {
-    // 2-Row Header Structure for "Sub-Column" effect
-
-    // Standard Columns (0-25)
+    // Standard Columns (0-24)
     const stdCols = [
         "1. Category", "2. Sub Cat", "3. Sub Sub Cat", "4. Product Name", "5. SKU", "6. Rack", "7. Desc",
         "8. Barcode", "9. HSN", "10. Unit", "11. Size", "12. Color", "13. Tax Cat", "14. GST",
@@ -846,19 +884,30 @@ export default function SellerStockBulkImport({
         "21. Wholesale Price", "22. Low Stock", "23. Brand", "24. Val (MRP)", "25. Val (Pur)"
     ];
 
-    // Row 1: Standard Cols + "Unit Pricing Rules" (Merged) + "28. Variations" + "29. Image" + "30. Mfg Date" + "31. Expiry Date" + "32. Barcode"
-    const row1 = [...stdCols, "Unit Pricing Rules", "", "28. Variations", "29. Image", "30. Mfg Date", "31. Expiry Date", "32. Barcode"];
+    const trailingCols = [
+        "28. Variations",
+        "29. Main Image",
+        "30. Gallery Image 1",
+        "31. Gallery Image 2",
+        "32. Gallery Image 3",
+        "33. Mfg Date",
+        "34. Expiry Date",
+        "35. Barcode",
+        "36. City",
+        "37. Warehouse",
+        "38. Room",
+        "39. Status"
+    ];
 
-    // Row 2: Standard Cols (Repeated for parsing) + Sub-Headers + "28. Variations" + "29. Image" + "30. Mfg Date" + "31. Expiry Date" + "32. Barcode"
+    // Row 1: Standard Cols + "Unit Pricing Rules" (Merged) + Trailing Cols
+    const row1 = [...stdCols, "Unit Pricing Rules", "", ...trailingCols];
+
+    // Row 2: Standard Cols + Sub-Headers + Trailing Cols
     const row2 = [
       ...stdCols,
       "26. Unit Price (Min Qty 2)",
       "27. Unit Price (Min Qty 4)",
-      "28. Variations",
-      "29. Image",
-      "30. Mfg Date",
-      "31. Expiry Date",
-      "32. Barcode",
+      ...trailingCols,
     ];
 
     const ws = XLSX.utils.aoa_to_sheet([row1, row2]);
@@ -873,20 +922,11 @@ export default function SellerStockBulkImport({
     // Horizontal Merge for Unit Pricing (Index 25-26)
     merges.push({ s: { r: 0, c: 25 }, e: { r: 0, c: 26 } });
 
-    // Variations Column (Index 27)
-    merges.push({ s: { r: 0, c: 27 }, e: { r: 1, c: 27 } });
-
-    // 29. Image Column (Index 28)
-    merges.push({ s: { r: 0, c: 28 }, e: { r: 1, c: 28 } });
-
-    // 30. Mfg Date Column (Index 29)
-    merges.push({ s: { r: 0, c: 29 }, e: { r: 1, c: 29 } });
-
-    // 31. Expiry Date Column (Index 30)
-    merges.push({ s: { r: 0, c: 30 }, e: { r: 1, c: 30 } });
-
-    // 32. Barcode Column (Index 31)
-    merges.push({ s: { r: 0, c: 31 }, e: { r: 1, c: 31 } });
+    // Vertical Merges for Trailing Columns (Index 27 to 38)
+    for (let i = 0; i < trailingCols.length; i++) {
+        const colIdx = 27 + i;
+        merges.push({ s: { r: 0, c: colIdx }, e: { r: 1, c: colIdx } });
+    }
 
     ws['!merges'] = merges;
 
@@ -941,7 +981,7 @@ export default function SellerStockBulkImport({
                 className="hidden"
               />
               <div className="mt-8 text-left text-sm text-neutral-500 bg-neutral-100 p-4 rounded w-full max-w-lg">
-                <p className="font-semibold mb-2">Expected Columns (32 Total):</p>
+                <p className="font-semibold mb-2">Expected Columns (39 Total):</p>
                 <div className="grid grid-cols-3 gap-2">
                    <span>1. Category</span>
                    <span>2. Sub Cat</span>
@@ -971,10 +1011,17 @@ export default function SellerStockBulkImport({
                    <span>26. Unit Price (Min Qty 2)</span>
                    <span>27. Unit Price (Min Qty 4)</span>
                    <span>28. Variations</span>
-                   <span>29. Image</span>
-                   <span>30. Mfg Date</span>
-                   <span>31. Expiry Date</span>
-                   <span>32. Barcode</span>
+                   <span>29. Main Image</span>
+                   <span>30. Gallery Image 1</span>
+                   <span>31. Gallery Image 2</span>
+                   <span>32. Gallery Image 3</span>
+                   <span>33. Mfg Date</span>
+                   <span>34. Expiry Date</span>
+                   <span>35. Barcode</span>
+                   <span>36. City</span>
+                   <span>37. Warehouse</span>
+                   <span>38. Room</span>
+                   <span>39. Status</span>
                 </div>
               </div>
             </div>

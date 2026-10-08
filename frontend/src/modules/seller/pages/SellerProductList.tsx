@@ -887,7 +887,6 @@ export default function SellerProductList() {
 
   const handleExport = () => {
     const headers = [
-      "Variation Id",
       "Category",
       "Sub Cat",
       "Sub Sub Cat",
@@ -913,12 +912,20 @@ export default function SellerProductList() {
       "Brand",
       "Val (MRP)",
       "Val (Pur)",
-      "Status",
+      "Unit Price (Min Qty 2)",
+      "Unit Price (Min Qty 4)",
+      "Variations",
       "Main Image",
-      "Galleary Image1",
-      "Galleary Image2",
-      "Galleary Image3",
+      "Gallery Image 1",
+      "Gallery Image 2",
+      "Gallery Image 3",
+      "Mfg Date",
+      "Expiry Date",
       "Barcode",
+      "City",
+      "Warehouse",
+      "Room",
+      "Status",
     ];
 
     const escapeCsv = (val: any) => {
@@ -934,7 +941,6 @@ export default function SellerProductList() {
       headers.join(","),
       ...sortedProducts.map((product) =>
         [
-          escapeCsv(product.id),
           escapeCsv(product.category),
           escapeCsv(product.subCategory),
           escapeCsv(product.subSubCategory),
@@ -960,12 +966,20 @@ export default function SellerProductList() {
           escapeCsv(product.brand),
           escapeCsv(product.valueMrp),
           escapeCsv(product.valuePurchase),
-          escapeCsv(product.publish ? "Active" : "Inactive"),
-          escapeCsv((product as any).mainImage || ""),
-          escapeCsv((product as any).galleryImage1 || ""),
-          escapeCsv((product as any).galleryImage2 || ""),
-          escapeCsv((product as any).galleryImage3 || ""),
+          escapeCsv((product as any).unitPriceMinQty2 ?? ""),
+          escapeCsv((product as any).unitPriceMinQty4 ?? ""),
+          escapeCsv((product as any).variation ?? ""),
+          escapeCsv((product as any).mainImage || (product as any).image || ""),
+          escapeCsv((product as any).galleryImage1 || (product as any).galleryImages?.[0] || ""),
+          escapeCsv((product as any).galleryImage2 || (product as any).galleryImages?.[1] || ""),
+          escapeCsv((product as any).galleryImage3 || (product as any).galleryImages?.[2] || ""),
+          escapeCsv((product as any).mfgDate || ""),
+          escapeCsv((product as any).expiryDate || ""),
           escapeCsv(product.barcode || ""),
+          escapeCsv((product as any).storageCity && (product as any).storageCity !== "-" ? (product as any).storageCity : ""),
+          escapeCsv((product as any).storageWarehouse && (product as any).storageWarehouse !== "-" ? (product as any).storageWarehouse : ""),
+          escapeCsv((product as any).storageRoom && (product as any).storageRoom !== "-" ? (product as any).storageRoom : ""),
+          escapeCsv(product.publish ? "Active" : "Inactive"),
         ].join(",")
       ),
     ].join("\n");
