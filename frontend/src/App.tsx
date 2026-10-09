@@ -198,6 +198,7 @@ const POSCreditVerify = lazy(() => import("./modules/shared/POSCreditVerify"));
 const AdminPOSReport = lazy(() => import("./modules/admin/pages/AdminPOSReport"));
 const AdminPurchaseReport = lazy(() => import("./modules/admin/pages/AdminPurchaseReport"));
 const AdminPOSQuotations = lazy(() => import("./modules/admin/pages/AdminPOSQuotations"));
+const AdminScanBill = lazy(() => import("./modules/admin/pages/AdminScanBill"));
 const AdminVideoManagement = lazy(() => import("./modules/admin/pages/AdminVideoManagement"));
 const AdminProductDisplaySettings = lazy(() => import("./modules/admin/pages/AdminProductDisplaySettings"));
 const AdminBarcodeSettings = lazy(() => import("./modules/admin/pages/AdminBarcodeSettings"));
@@ -555,6 +556,7 @@ function App() {
                              <Route path="pos/report" element={<AdminPOSReport />} />
                              <Route path="purchase/report" element={<AdminPurchaseReport />} />
                              <Route path="pos/quotations" element={<AdminPOSQuotations />} />
+                             <Route path="pos/scan-bill" element={<AdminScanBill />} />
                              <Route path="pos/bill-settings" element={<AdminPOSBillSettings />} />
                              <Route path="customer-display/banners" element={<AdminCustomerDisplayBanners />} />
                              <Route path="customer-display/settings" element={<AdminCustomerDisplaySettings />} />

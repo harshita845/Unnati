@@ -149,6 +149,7 @@ const ADMIN_SIDEBAR_SECTIONS: Array<{
       { label: 'POS Report', path: '/admin/pos/report' },
       { label: 'Purchase Report', path: '/admin/purchase/report' },
       { label: 'POS Quotations', path: '/admin/pos/quotations' },
+      { label: 'Scan Bill', path: '/admin/pos/scan-bill' },
       { label: 'Supplier Ledger', path: '/admin/pos/suppliers' },
       { label: 'POS Bill Settings', path: '/admin/pos/bill-settings' },
       { label: 'Customer Display Banners', path: '/admin/customer-display/banners' },
