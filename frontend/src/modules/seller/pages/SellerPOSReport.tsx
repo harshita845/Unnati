@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { deleteSellerPOSOrder, getPOSReport, updateStockLedgerEntry, getPOSStockLedger, getOrderById } from '../../../services/api/orderService';
+import { getSellerBillSettings } from '../../../services/api/seller/sellerPurchaseService';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
 import { useToast } from '../../../context/ToastContext';
@@ -104,16 +105,27 @@ const SellerPOSReport = () => {
         // Initial load (Today default handled by backend if no params)
         fetchData();
         refreshConfig();
-        const loadPosBillSettings = () => {
+        const loadPosBillSettings = async () => {
           try {
             const saved = localStorage.getItem(SELLER_BILL_SETTINGS_KEY);
             if (saved) {
               setPosBillSettings(JSON.parse(saved));
-            } else {
-              setPosBillSettings(null);
             }
           } catch (e) {
-            console.error('Failed to load POS bill settings', e);
+            console.error('Failed to load POS bill settings from localStorage', e);
+          }
+
+          try {
+            const res = await getSellerBillSettings();
+            if (res.success && res.data && Object.keys(res.data).length > 0) {
+              setPosBillSettings((prev: any) => {
+                const merged = { ...(prev || {}), ...res.data };
+                localStorage.setItem(SELLER_BILL_SETTINGS_KEY, JSON.stringify(merged));
+                return merged;
+              });
+            }
+          } catch (e) {
+            console.error('Failed to fetch seller bill settings from API', e);
           }
         };
         loadPosBillSettings();
@@ -302,12 +314,17 @@ const SellerPOSReport = () => {
             setLoading(false);
         }
 
+        let fresh = readSellerPosBillSettings();
         try {
-            const fresh = readSellerPosBillSettings();
-            setPosBillSettings(fresh);
+            const apiRes = await getSellerBillSettings();
+            if (apiRes.success && apiRes.data && Object.keys(apiRes.data).length > 0) {
+                fresh = { ...(fresh || {}), ...apiRes.data };
+                localStorage.setItem(SELLER_BILL_SETTINGS_KEY, JSON.stringify(fresh));
+            }
         } catch (e) {
             console.error('Failed to sync bill settings before print', e);
         }
+        setPosBillSettings(fresh);
 
         setPrintOrder(fullOrder);
         document.body.classList.add('is-printing-seller-report');
@@ -378,14 +395,22 @@ const SellerPOSReport = () => {
         doc.text(String(customerName), 196, 63, { align: "right" });
         doc.text(String(customerPhone), 196, 68, { align: "right" });
 
+        const sellerName = order.sellerName || order.seller?.name || order.seller?.storeName || posBillSettings?.sellerName || "";
+        let lineY = 73;
+        if (sellerName) {
+            doc.text("Seller Name:", 14, 73);
+            doc.text(String(sellerName), 196, 73, { align: "right" });
+            lineY = 78;
+        }
+
         doc.setLineWidth(0.5);
-        doc.line(14, 73, 196, 73);
+        doc.line(14, lineY, 196, lineY);
 
         // --- Table Header ---
         doc.setFont("helvetica", "bold");
-        doc.text("Tax Invoice", 105, 78, { align: "center" });
+        doc.text("Tax Invoice", 105, lineY + 5, { align: "center" });
 
-        let y = 84;
+        let y = lineY + 11;
         doc.setFontSize(10);
         doc.text("Item-name", 14, y);
         doc.text("Qty", 100, y);
@@ -1176,6 +1201,7 @@ const SellerPOSReport = () => {
                               paymentMethod: printOrder.paymentMethod || 'Cash',
                               customerName: (printOrder as any).customerName || (printOrder as any).customer?.name || 'Walk-in Customer',
                               customerPhone: (printOrder as any).customerPhone || (printOrder as any).customer?.phone || '',
+                              sellerName: (printOrder as any).sellerName || (printOrder as any).seller?.name || (printOrder as any).seller?.storeName || (printOrder as any).staffName || posBillSettings?.sellerName || readSellerPosBillSettings()?.sellerName || 'Store Attendant',
                               items: items,
                               total: printOrder.totalAmount || printOrder.total || 0,
                             }}

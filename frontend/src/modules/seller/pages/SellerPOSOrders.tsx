@@ -3685,7 +3685,8 @@ const SellerPOSOrders = () => {
             paymentMethod: 'Cash',
             paymentStatus: "Paid" as const,
             createdBy: activeStaffSession?.id,
-            staffName: activeStaffSession?.name
+            staffName: activeStaffSession?.name,
+            sellerName: activeStaffSession?.name || posBillSettings?.sellerName || readSellerPosBillSettings()?.sellerName || ''
         };
 
         const response = await createPOSOrder(orderData);
@@ -3747,7 +3748,8 @@ const SellerPOSOrders = () => {
                 paymentMethod: 'Credit',
                 paymentStatus: "Pending" as const,
                 createdBy: activeStaffSession?.id,
-                staffName: activeStaffSession?.name
+                staffName: activeStaffSession?.name,
+                sellerName: activeStaffSession?.name || posBillSettings?.sellerName || readSellerPosBillSettings()?.sellerName || ''
             };
 
             const response = await createPOSOrder(orderData);
@@ -6533,6 +6535,7 @@ const SellerPOSOrders = () => {
                           paymentMethod: lastBillDetails?.paymentMethod || 'Cash',
                           customerName: getBillCustomerDisplay(lastBillDetails).name,
                           customerPhone: getBillCustomerDisplay(lastBillDetails).phone,
+                          sellerName: (lastBillDetails as any)?.sellerName || (activeBill as any)?.sellerName || posBillSettings?.sellerName,
                           items: items,
                           total: lastBillDetails?.total || calculateTotal(),
                           cashTendered: Number(lastBillDetails?.cashTendered ?? activeBill.cashTendered) || undefined,

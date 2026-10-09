@@ -628,6 +628,20 @@ const SellerBillSettings = () => {
 
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Seller Name (Store Operator / Cashier)
+              </label>
+              <input
+                type="text"
+                name="sellerName"
+                value={settings.sellerName || ""}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)] text-sm"
+                placeholder="e.g. Store Attendant / Cashier Name"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Phone Number (10 digits)
               </label>
               <input

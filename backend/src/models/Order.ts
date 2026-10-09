@@ -102,6 +102,11 @@ export interface IOrder extends Document {
   cancelledAt?: Date;
   cancelledBy?: mongoose.Types.ObjectId;
 
+  // POS / Seller Info
+  seller?: mongoose.Types.ObjectId;
+  sellerName?: string;
+  staffName?: string;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -368,6 +373,20 @@ const OrderSchema = new Schema<IOrder>(
     cancelledBy: {
       type: Schema.Types.ObjectId,
       ref: "Admin",
+    },
+
+    // POS / Seller Info
+    seller: {
+      type: Schema.Types.ObjectId,
+      ref: "Seller",
+    },
+    sellerName: {
+      type: String,
+      trim: true,
+    },
+    staffName: {
+      type: String,
+      trim: true,
     },
   },
   {

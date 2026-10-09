@@ -14,6 +14,7 @@ import Return from "../../../models/Return";
 import { notifySellersOfOrderUpdate } from "../../../services/sellerNotificationService";
 import Product from "../../../models/Product";
 import Customer from "../../../models/Customer";
+import AppSettings from "../../../models/AppSettings";
 import { Server as SocketIOServer } from "socket.io";
 import StockLedger from "../../../models/StockLedger";
 import CreditTransaction from "../../../models/CreditTransaction";
@@ -1454,12 +1455,18 @@ export const createPOSOrder = asyncHandler(
           });
         }
 
+        // Resolve Seller / Staff Name from request or AppSettings
+        const appSettings: any = await AppSettings.findOne().select("billSettings").lean();
+        const resolvedSellerName = req.body.sellerName || req.body.staffName || appSettings?.billSettings?.sellerName || "";
+
         // 1. Create Order shell
         let order = await Order.create({
           customer: customer._id,
           customerName: (isWalkIn && walkInContact.name) || customer.name,
           customerEmail: customer.email,
           customerPhone: (isWalkIn && walkInContact.phone) || customer.phone,
+          sellerName: resolvedSellerName,
+          staffName: req.body.staffName || resolvedSellerName,
           deliveryAddress: {
             address: customer.address || "POS Order",
             city: customer.city || "POS",

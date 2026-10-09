@@ -20,6 +20,7 @@ import {
   Image as ImageIcon,
   Check,
   RotateCcw,
+  User,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { uploadImage } from "../../../services/api/uploadService";
@@ -640,6 +641,21 @@ const AdminPOSBillSettings = () => {
                   rows={2}
                   placeholder="Address lines printed on bill"
                   className="w-full rounded-2xl border border-neutral-200 bg-neutral-50/30 px-4 py-2.5 text-sm font-semibold text-neutral-800 outline-none focus:border-[var(--primary-color)] resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-neutral-600 ml-1 flex items-center gap-1.5 mb-1">
+                  <User className="h-3.5 w-3.5 text-[var(--primary-color)]" />
+                  Seller Name (Store Operator / Cashier)
+                </label>
+                <input
+                  type="text"
+                  name="sellerName"
+                  value={settings.sellerName || ""}
+                  onChange={handleChange}
+                  placeholder="e.g. Rahul Sharma / Store Attendant"
+                  className="w-full rounded-2xl border border-neutral-200 bg-neutral-50/30 px-4 py-2.5 text-sm font-semibold text-neutral-800 outline-none focus:border-[var(--primary-color)]"
                 />
               </div>
             </div>

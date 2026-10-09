@@ -123,11 +123,17 @@ export const createPOSOrder = asyncHandler(
           });
         }
 
+        const sellerDoc = await Seller.findById(sellerId).session(session);
+        const resolvedSellerName = req.body.sellerName || (sellerDoc as any)?.billSettings?.sellerName || sellerDoc?.sellerName || sellerDoc?.storeName || "";
+
         const order = new Order({
           customer: customer._id,
           customerName: customer.name,
           customerEmail: customer.email,
           customerPhone: customer.phone,
+          seller: sellerDoc?._id || sellerId,
+          sellerName: resolvedSellerName,
+          staffName: req.body.staffName || resolvedSellerName,
           deliveryAddress: {
             address: customer.address || "POS Order",
             city: customer.city || "POS",

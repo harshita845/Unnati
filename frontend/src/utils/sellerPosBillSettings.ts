@@ -6,6 +6,7 @@ export const SELLER_BILL_SETTINGS_UPDATED_EVENT = 'seller_bill_settings_updated'
 
 export interface PosBillSettings {
   shopName?: string;
+  sellerName?: string;
   address?: string;
   phone?: string;
   email?: string;
@@ -99,6 +100,7 @@ export interface PosBillSettings {
 export function getDefaultPosBillSettings(): PosBillSettings {
   return {
     shopName: '',
+    sellerName: '',
     address: '',
     phone: '',
     email: '',

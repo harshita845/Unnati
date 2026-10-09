@@ -4,6 +4,7 @@ import { getOrderById, deletePOSOrder } from "../../../services/api/admin/adminO
 import { getCustomerHistory } from "../../../services/api/admin/creditService";
 import jsPDF from "jspdf";
 import { useToast } from "../../../context/ToastContext";
+import { readSellerPosBillSettings } from "../../../utils/sellerPosBillSettings";
 
 const FiLoader = ({ className }: { className?: string }) => (
   <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -216,14 +217,22 @@ const AdminPOSCustomerOrders = () => {
         doc.text(String(customerName), 196, 63, { align: 'right' });
         doc.text(String(customerPhone), 196, 68, { align: 'right' });
 
+        const sellerName = order.sellerName || order.seller?.name || order.seller?.storeName || (order as any).cashierName || readSellerPosBillSettings()?.sellerName || "";
+        let lineY = 73;
+        if (sellerName) {
+            doc.text("Seller Name:", 14, 73);
+            doc.text(String(sellerName), 196, 73, { align: 'right' });
+            lineY = 78;
+        }
+
         doc.setLineWidth(0.5);
-        doc.line(14, 73, 196, 73);
+        doc.line(14, lineY, 196, lineY);
 
         // --- Table Header ---
         doc.setFont("helvetica", "bold");
-        doc.text("Total Item List", 105, 78, { align: 'center' });
+        doc.text("Total Item List", 105, lineY + 5, { align: 'center' });
 
-        let y = 84;
+        let y = lineY + 11;
         doc.setFontSize(10);
         doc.text("Item-name", 14, y);
         doc.text("Qty", 100, y);

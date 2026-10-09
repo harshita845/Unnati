@@ -3864,7 +3864,8 @@ const AdminPOSOrders = () => {
               gateway: 'PhonePe',
               ...walkInContactForOrder(),
               createdBy: activeStaffSession?.id,
-              staffName: activeStaffSession?.name
+              staffName: activeStaffSession?.name,
+              sellerName: activeStaffSession?.name || posBillSettings?.sellerName || readAdminPosBillSettings()?.sellerName || ''
           };
 
           const response = await initiatePOSOnlineOrder(orderData);
@@ -3958,7 +3959,8 @@ const AdminPOSOrders = () => {
             ...walkInContactForOrder(),
             paymentStatus: "Paid" as const,
             createdBy: activeStaffSession?.id,
-            staffName: activeStaffSession?.name
+            staffName: activeStaffSession?.name,
+            sellerName: activeStaffSession?.name || posBillSettings?.sellerName || readAdminPosBillSettings()?.sellerName || ''
         };
 
         const response = await createPOSOrder(orderData);
@@ -4027,7 +4029,8 @@ const AdminPOSOrders = () => {
                 paymentMethod: 'Credit',
                 paymentStatus: "Pending" as const,
                 createdBy: activeStaffSession?.id,
-                staffName: activeStaffSession?.name
+                staffName: activeStaffSession?.name,
+                sellerName: activeStaffSession?.name || posBillSettings?.sellerName || readAdminPosBillSettings()?.sellerName || ''
             };
 
             const response = await createPOSOrder(orderData);
@@ -6892,6 +6895,7 @@ const AdminPOSOrders = () => {
                           paymentMethod: lastBillDetails?.paymentMethod || 'Cash',
                           customerName: getBillCustomerDisplay(lastBillDetails).name,
                           customerPhone: getBillCustomerDisplay(lastBillDetails).phone,
+                          sellerName: (lastBillDetails as any)?.sellerName || (activeBill as any)?.sellerName || posBillSettings?.sellerName,
                           customerAddress: getBillCustomerDisplay(lastBillDetails).address,
                           customerGst: getBillCustomerDisplay(lastBillDetails).gst,
                           items: items,
