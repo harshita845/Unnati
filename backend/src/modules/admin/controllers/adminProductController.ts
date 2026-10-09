@@ -263,23 +263,31 @@ export const getCategories = asyncHandler(
       .populate("headerCategoryId", "name status")
       .sort(sort);
 
-    // Count child categories for each category
-    const categoriesWithCounts = await Promise.all(
-      categories.map(async (category) => {
-        const childrenCount = await Category.countDocuments({
-          parentId: category._id,
-        });
-        // Also count old SubCategory model for backward compatibility
-        const subcategoryCount = await SubCategory.countDocuments({
-          category: category._id,
-        });
-        return {
-          ...category.toObject(),
-          childrenCount,
-          totalSubcategories: childrenCount + subcategoryCount,
-        };
-      })
-    );
+    // Count child categories (and old SubCategory docs) for every category in two grouped
+    // queries. One count per category made this endpoint take 15+ seconds on the live site.
+    const categoryIds = categories.map((c) => c._id);
+    const [childCounts, legacyCounts] = await Promise.all([
+      Category.aggregate([
+        { $match: { parentId: { $in: categoryIds } } },
+        { $group: { _id: "$parentId", n: { $sum: 1 } } },
+      ]),
+      // Also count old SubCategory model for backward compatibility
+      SubCategory.aggregate([
+        { $match: { category: { $in: categoryIds } } },
+        { $group: { _id: "$category", n: { $sum: 1 } } },
+      ]),
+    ]);
+    const childCountOf = new Map(childCounts.map((r: any) => [String(r._id), r.n as number]));
+    const legacyCountOf = new Map(legacyCounts.map((r: any) => [String(r._id), r.n as number]));
+    const categoriesWithCounts = categories.map((category) => {
+      const childrenCount = childCountOf.get(String(category._id)) || 0;
+      const subcategoryCount = legacyCountOf.get(String(category._id)) || 0;
+      return {
+        ...category.toObject(),
+        childrenCount,
+        totalSubcategories: childrenCount + subcategoryCount,
+      };
+    });
 
     // If includeChildren is true, build hierarchical structure
     if (includeChildren === "true") {
@@ -793,19 +801,16 @@ export const getSubCategories = asyncHandler(
     // 4. Combine both
     const allSubcategories = [...legacySubcategories, ...mappedHierarchical];
 
-    // 5. Get product counts for each subcategory
-    const resultsWithCounts = await Promise.all(
-      allSubcategories.map(async (subcategory: any) => {
-        const productCount = await Product.countDocuments({
-          subcategory: subcategory._id,
-        });
-
-        return {
-          ...subcategory,
-          totalProduct: productCount,
-        };
-      })
-    );
+    // 5. Product counts for every subcategory in one grouped query (was one query each)
+    const productCounts = await Product.aggregate([
+      { $match: { subcategory: { $in: allSubcategories.map((sc: any) => sc._id) } } },
+      { $group: { _id: "$subcategory", n: { $sum: 1 } } },
+    ]);
+    const productCountOf = new Map(productCounts.map((r: any) => [String(r._id), r.n as number]));
+    const resultsWithCounts = allSubcategories.map((subcategory: any) => ({
+      ...subcategory,
+      totalProduct: productCountOf.get(String(subcategory._id)) || 0,
+    }));
 
     return res.status(200).json({
       success: true,
