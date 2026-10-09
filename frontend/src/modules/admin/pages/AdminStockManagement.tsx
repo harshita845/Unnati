@@ -1368,8 +1368,8 @@ export default function AdminStockManagement() {
     <div className="space-y-6">
       {/* Main Panel */}
       <div className="bg-white rounded-lg shadow-sm border border-neutral-200">
-        {/* Sticky Header & Filter/Controls Section */}
-        <div className="sticky -top-4 md:-top-6 z-30 bg-white rounded-t-lg shadow-sm border-b border-neutral-200">
+        {/* Header & Filter/Controls Section */}
+        <div className="bg-white rounded-t-lg border-b border-neutral-200">
           {/* Header */}
           <div className="bg-[var(--primary-color)] text-white px-6 py-4 rounded-t-lg flex justify-between items-center">
             <h2 className="text-lg font-semibold">View Stock Management</h2>
@@ -1644,11 +1644,11 @@ export default function AdminStockManagement() {
           ) : displayedProducts.length === 0 ? (
             <div className="p-12 text-center text-neutral-400">No products found.</div>
           ) : viewMode === "list" ? (
-            <div className="overflow-x-auto horizontal-scrollbar pb-2">
-              <table className="w-full min-w-max text-left border-collapse">
-                <thead>
-                  <tr className="bg-neutral-50 text-xs font-bold text-neutral-800 border-b border-neutral-200">
-                    <th className="p-4 whitespace-nowrap">
+            <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-320px)] min-h-[400px] horizontal-scrollbar pb-2 relative border border-neutral-200/80 rounded-xl shadow-sm">
+              <table className="w-full min-w-max text-left border-separate border-spacing-0">
+                <thead className="sticky top-0 z-20 bg-neutral-50 shadow-sm">
+                  <tr className="bg-neutral-50 text-xs font-bold text-neutral-800">
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">
                       <input
                         type="checkbox"
                         checked={areAllDisplayedSelected}
@@ -1656,46 +1656,46 @@ export default function AdminStockManagement() {
                         aria-label="Select all displayed products"
                       />
                     </th>
-                    <th className="p-4 whitespace-nowrap">1. Category</th>
-                    <th className="p-4 whitespace-nowrap">2. Sub Cat</th>
-                    <th className="p-4 whitespace-nowrap">3. Sub Sub Cat</th>
-                    <th className="p-4 whitespace-nowrap">4. Product Name</th>
-                    <th className="p-4 whitespace-nowrap">5. SKU</th>
-                    <th className="p-4 whitespace-nowrap">6. Rack</th>
-                    <th className="p-4 whitespace-nowrap">7. Desc</th>
-                    <th className="p-4 whitespace-nowrap">8. Barcode</th>
-                    <th className="p-4 whitespace-nowrap">9. HSN</th>
-                    <th className="p-4 whitespace-nowrap">10. Unit</th>
-                    <th className="p-4 whitespace-nowrap">11. Size</th>
-                    <th className="p-4 whitespace-nowrap">12. Color</th>
-                    <th className="p-4 whitespace-nowrap">13. Tax Cat</th>
-                    <th className="p-4 whitespace-nowrap">14. GST</th>
-                    <th className="p-4 whitespace-nowrap">15. Pur. Price</th>
-                    <th className="p-4 whitespace-nowrap">16. MRP</th>
-                    <th className="p-4 whitespace-nowrap">17. Sell Price</th>
-                    <th className="p-4 whitespace-nowrap">18. Del. Time</th>
-                    <th className="p-4 whitespace-nowrap">19. Stock</th>
-                    <th className="p-4 whitespace-nowrap">20. Offer Price</th>
-                    <th className="p-4 whitespace-nowrap">21. Wholesale Price</th>
-                    <th className="p-4 whitespace-nowrap">22. Low Stock</th>
-                    <th className="p-4 whitespace-nowrap">23. Brand</th>
-                    <th className="p-4 whitespace-nowrap">24. Val (MRP)</th>
-                    <th className="p-4 whitespace-nowrap">25. Val (Pur)</th>
-                    <th className="p-4 whitespace-nowrap">26. Unit Price (Min Qty 2)</th>
-                    <th className="p-4 whitespace-nowrap">27. Unit Price (Min Qty 4)</th>
-                    <th className="p-4 whitespace-nowrap">28. Variations</th>
-                    <th className="p-4 whitespace-nowrap">29. Main Image</th>
-                    <th className="p-4 whitespace-nowrap">30. Gallery Image 1</th>
-                    <th className="p-4 whitespace-nowrap">31. Gallery Image 2</th>
-                    <th className="p-4 whitespace-nowrap">32. Gallery Image 3</th>
-                    <th className="p-4 whitespace-nowrap">33. Mfg Date</th>
-                    <th className="p-4 whitespace-nowrap">34. Expiry Date</th>
-                    <th className="p-4 whitespace-nowrap">35. Barcode</th>
-                    <th className="p-4 whitespace-nowrap">36. City</th>
-                    <th className="p-4 whitespace-nowrap">37. Warehouse</th>
-                    <th className="p-4 whitespace-nowrap">38. Room</th>
-                    <th className="p-4 whitespace-nowrap">39. Status</th>
-                    <th className="p-4 whitespace-nowrap">Action</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">1. Category</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">2. Sub Cat</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">3. Sub Sub Cat</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">4. Product Name</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">5. SKU</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">6. Rack</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">7. Desc</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">8. Barcode</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">9. HSN</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">10. Unit</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">11. Size</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">12. Color</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">13. Tax Cat</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">14. GST</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">15. Pur. Price</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">16. MRP</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">17. Sell Price</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">18. Del. Time</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">19. Stock</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">20. Offer Price</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">21. Wholesale Price</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">22. Low Stock</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">23. Brand</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">24. Val (MRP)</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">25. Val (Pur)</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">26. Unit Price (Min Qty 2)</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">27. Unit Price (Min Qty 4)</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">28. Variations</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">29. Main Image</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">30. Gallery Image 1</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">31. Gallery Image 2</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">32. Gallery Image 3</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">33. Mfg Date</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">34. Expiry Date</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">35. Barcode</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">36. City</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">37. Warehouse</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">38. Room</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">39. Status</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">Action</th>
                   </tr>
                 </thead>
                 <tbody>

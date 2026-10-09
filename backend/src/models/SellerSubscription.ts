@@ -21,6 +21,7 @@ export interface ISellerSubscription extends Document {
     accessibleModules?: string[];
   };
   categories: mongoose.Types.ObjectId[];
+  headerCategories?: mongoose.Types.ObjectId[];
   isTrial: boolean;
   status: SellerSubscriptionStatus;
   startDate?: Date;
@@ -68,6 +69,8 @@ const SellerSubscriptionSchema = new Schema<ISellerSubscription>(
       accessibleModules: { type: [String], default: undefined },
     },
     categories: [{ type: Schema.Types.ObjectId, ref: "Category" }],
+    // Header categories bought as a whole: also covers main categories added to them after purchase
+    headerCategories: { type: [{ type: Schema.Types.ObjectId, ref: "HeaderCategory" }], default: [] },
     isTrial: { type: Boolean, default: false },
     status: { type: String, enum: SUBSCRIPTION_STATUSES, default: "PendingPayment" },
     startDate: { type: Date },

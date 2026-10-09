@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import type { Server as SocketIOServer } from "socket.io";
 import Category from "../models/Category";
+import HeaderCategory from "../models/HeaderCategory";
 import Product from "../models/Product";
 import Seller from "../models/Seller";
 import Notification from "../models/Notification";
@@ -126,6 +127,44 @@ export const expandCategoryWithDescendants = async (mainCategoryIds: unknown[]):
   return [...result].map((id) => new mongoose.Types.ObjectId(id));
 };
 
+/** Main (top-level) categories filed under these header categories, e.g. everything in "Beauty". */
+export const mainCategoriesUnderHeaders = async (headerIds: unknown[]): Promise<mongoose.Types.ObjectId[]> => {
+  const ids = [...new Set((headerIds || []).map(idStr).filter((id) => mongoose.isValidObjectId(id)))];
+  if (!ids.length) return [];
+  const mains: any[] = await Category.find({ parentId: null, headerCategoryId: { $in: ids } }).select("_id").lean();
+  return mains.map((c) => c._id);
+};
+
+/**
+ * Every main category a plan or subscription covers: its whole header categories (looked up now,
+ * so categories added to a header later are included) plus any individually picked main categories.
+ * Subcategories always follow their main category.
+ */
+export const resolveCoveredCategoryIds = async (source: { categories?: unknown[]; headerCategories?: unknown[] }) => {
+  const fromHeaders = await mainCategoriesUnderHeaders(source.headerCategories || []);
+  const all = [...(source.categories || []).map(idStr), ...fromHeaders.map(idStr)].filter((id) => mongoose.isValidObjectId(id));
+  return [...new Set(all)].map((id) => new mongoose.Types.ObjectId(id));
+};
+
+/** Plans as sent to sellers/admins: `categories` = everything covered, `headerCategories` = whole groups. */
+export const withCoveredCategories = async (plans: any[], categoryFields: string) => {
+  const covered = await Promise.all(plans.map((p) => resolveCoveredCategoryIds(p)));
+  const allIds = [...new Set(covered.flat().map(idStr))];
+  const headerIds = [...new Set(plans.flatMap((p) => (p.headerCategories || []).map(idStr)))];
+  const [cats, headers]: any[] = await Promise.all([
+    Category.find({ _id: { $in: allIds } }).select(`${categoryFields} headerCategoryId`).populate("headerCategoryId", "name").lean(),
+    headerIds.length ? HeaderCategory.find({ _id: { $in: headerIds } }).select("name").lean() : [],
+  ]);
+  const catById = new Map(cats.map((c: any) => [idStr(c._id), c]));
+  const headerById = new Map(headers.map((h: any) => [idStr(h._id), h]));
+  return plans.map((p, i) => ({
+    ...p,
+    explicitCategories: (p.categories || []).map(idStr),
+    headerCategories: (p.headerCategories || []).map((h: any) => headerById.get(idStr(h)) || { _id: idStr(h), name: "Category group" }),
+    categories: covered[i].map((id) => catById.get(idStr(id))).filter(Boolean),
+  }));
+};
+
 /**
  * Whether the category needs a plan, its grace period and its bill type (category value or
  * global default). `categoryId` can be a main category or a subcategory under it — either way
@@ -133,11 +172,17 @@ export const expandCategoryWithDescendants = async (mainCategoryIds: unknown[]):
  */
 export const getCategoryRules = async (categoryId: unknown, settings?: ISubscriptionSettings) => {
   const s = settings || (await getSubscriptionSettings());
-  const defaults = { required: false, graceDays: s.graceDays, billType: (s.invoiceEnabled ? "gst" : "receipt") as "gst" | "receipt", mainCategoryId: null as string | null };
+  const defaults = {
+    required: false,
+    graceDays: s.graceDays,
+    billType: (s.invoiceEnabled ? "gst" : "receipt") as "gst" | "receipt",
+    mainCategoryId: null as string | null,
+    headerCategoryId: null as string | null,
+  };
   const mainCategoryId = await resolveMainCategoryId(categoryId);
   if (!mainCategoryId) return defaults;
   const category: any = await Category.findById(mainCategoryId)
-    .select("subscriptionEnabled subscriptionGraceDays subscriptionBillType")
+    .select("subscriptionEnabled subscriptionGraceDays subscriptionBillType headerCategoryId")
     .lean();
   if (!category) return defaults;
   return {
@@ -145,6 +190,7 @@ export const getCategoryRules = async (categoryId: unknown, settings?: ISubscrip
     graceDays: typeof category.subscriptionGraceDays === "number" ? category.subscriptionGraceDays : s.graceDays,
     billType: (category.subscriptionBillType || (s.invoiceEnabled ? "gst" : "receipt")) as "gst" | "receipt",
     mainCategoryId,
+    headerCategoryId: category.headerCategoryId ? idStr(category.headerCategoryId) : null,
   };
 };
 
@@ -174,8 +220,11 @@ export const getCategoryAccess = async (sellerId: unknown, categoryId: unknown) 
     status: { $in: ["Active", "Expired"] },
     startDate: { $lte: now },
     endDate: { $gt: new Date(now.getTime() - rules.graceDays * DAY_MS) },
-    // Plans cover main categories; match on that, not on whatever sub/main id was passed in
-    categories: toId(rules.mainCategoryId!),
+    // Plans cover main categories, or whole header categories (which include categories added later)
+    $or: [
+      { categories: toId(rules.mainCategoryId!) },
+      ...(rules.headerCategoryId ? [{ headerCategories: toId(rules.headerCategoryId) }] : []),
+    ],
   }).sort({ endDate: -1 });
 
   if (!subscription) return { required: true, allowed: false as const, graceDays: rules.graceDays };
@@ -198,7 +247,7 @@ export const assertSellerCanListProduct = async (sellerId: unknown, categoryId: 
   }
   const maxProducts = access.subscription?.planSnapshot?.limits?.maxProducts;
   if (maxProducts) {
-    const matchIds = await expandCategoryWithDescendants(access.subscription!.categories);
+    const matchIds = await expandCategoryWithDescendants(await resolveCoveredCategoryIds(access.subscription!));
     const count = await Product.countDocuments({
       seller: toId(sellerId),
       category: { $in: matchIds },
@@ -533,10 +582,8 @@ export const onStoreWidePlanRuleChanged = async (
 /** Active plans as shown to someone signing up as a seller (before they have an account). */
 export const getPublicPlans = async () => {
   const settings = await getSubscriptionSettings();
-  const plans: any[] = await SubscriptionPlan.find({ isActive: true })
-    .populate({ path: "categories", select: "name headerCategoryId", populate: { path: "headerCategoryId", select: "name" } })
-    .sort({ sortOrder: 1, price: 1 })
-    .lean();
+  const rawPlans: any[] = await SubscriptionPlan.find({ isActive: true }).sort({ sortOrder: 1, price: 1 }).lean();
+  const plans = await withCoveredCategories(rawPlans, "name");
   const result = [];
   for (const plan of plans) {
     const billType = await billTypeFor(plan.categories, settings);
@@ -554,6 +601,7 @@ export const getPublicPlans = async () => {
       limits: plan.limits,
       accessibleModules: Array.isArray(plan.accessibleModules) && plan.accessibleModules.length ? plan.accessibleModules : ALL_SELLER_MODULE_KEYS,
       categories: (plan.categories || []).map((c: any) => ({ _id: c._id, name: c.name, headerCategory: c.headerCategoryId?.name || null })),
+      headerCategories: plan.headerCategories.map((h: any) => ({ _id: h._id, name: h.name })),
     });
   }
   return { required: !!settings.requirePlanForAllSellers, plans: result };
@@ -572,7 +620,9 @@ const buildPendingSubscription = async (sellerId: unknown, planId: unknown) => {
   if (!seller) throw new SubscriptionError(404, "Seller not found");
 
   const settings = await getSubscriptionSettings();
-  const billType = await billTypeFor(plan.categories, settings);
+  const coveredCategories = await resolveCoveredCategoryIds(plan);
+  if (!coveredCategories.length) throw new SubscriptionError(400, "This plan has no categories yet. Contact support.");
+  const billType = await billTypeFor(coveredCategories, settings);
   const baseAmount = round2(plan.price);
   // GST is charged only when the categories bill with a GST invoice
   const gstPercent = billType === "gst" ? settings.gstPercent || 0 : 0;
@@ -597,7 +647,8 @@ const buildPendingSubscription = async (sellerId: unknown, planId: unknown) => {
         },
         accessibleModules: plan.accessibleModules || ALL_SELLER_MODULE_KEYS,
       },
-      categories: plan.categories,
+      categories: coveredCategories,
+      headerCategories: plan.headerCategories || [],
       status: "PendingPayment",
       billType,
       payment: { baseAmount, gstPercent, gstAmount, totalAmount: round2(baseAmount + gstAmount) },
@@ -620,7 +671,7 @@ const activateSubscription = async (
   const latest = await SellerSubscription.findOne({
     seller: subscription.seller,
     status: { $in: ["Active", "Expired"] },
-    categories: { $all: subscription.categories },
+    $or: [{ categories: { $all: subscription.categories } }, ...(subscription.plan ? [{ plan: subscription.plan }] : [])],
     endDate: { $gt: now },
     _id: { $ne: subscription._id },
   }).sort({ endDate: -1 });
@@ -812,7 +863,7 @@ export const runSubscriptionJob = async (now = new Date()) => {
       const renewed = await SellerSubscription.exists({
         seller: sub.seller,
         status: "Active",
-        categories: { $all: sub.categories },
+        $or: [{ categories: { $all: sub.categories } }, ...(sub.plan ? [{ plan: sub.plan }] : [])],
         startDate: { $gte: sub.endDate },
       });
       sub.remindersSent.push(...due);
@@ -910,7 +961,7 @@ export const getSellerSubscriptionOverview = async (sellerId: unknown) => {
   const sid = toId(sellerId);
 
   const [plans, history, requiredCategories, sellerCategoryIds] = await Promise.all([
-    SubscriptionPlan.find({ isActive: true }).populate("categories", "name").sort({ sortOrder: 1, price: 1 }).lean(),
+    SubscriptionPlan.find({ isActive: true }).sort({ sortOrder: 1, price: 1 }).lean().then((p: any[]) => withCoveredCategories(p, "name")),
     SellerSubscription.find({ seller: sid, status: { $ne: "PendingPayment" } }).populate("categories", "name").sort({ createdAt: -1 }).limit(100).lean(),
     Category.find({ subscriptionEnabled: true, status: "Active", parentId: null }).select("name").lean(),
     Product.distinct("category", { seller: sid }),

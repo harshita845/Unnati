@@ -276,7 +276,14 @@ export default function SellerSubscriptions() {
         ) : (
           <div className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">
             {data.plans.map((plan) => {
-              const covered = plan.categories.map((c: any) => c.name).filter(Boolean);
+              // Whole groups read better than a long list ("All of Beauty" instead of 30 category names)
+              const groups = (plan.headerCategories || []).map((h: any) => `All of ${h.name}`);
+              const groupIds = new Set((plan.headerCategories || []).map((h: any) => String(h._id)));
+              const singles = plan.categories
+                .filter((c: any) => !groupIds.has(String(c.headerCategoryId?._id || c.headerCategoryId || "")))
+                .map((c: any) => c.name)
+                .filter(Boolean);
+              const covered = groups.length ? [...groups, ...singles] : plan.categories.map((c: any) => c.name).filter(Boolean);
               const current = data.categories.find(
                 (c) => plan.categories.some((pc: any) => String(pc._id || pc) === c.categoryId) && c.planName === plan.name && c.state !== "Expired"
               );

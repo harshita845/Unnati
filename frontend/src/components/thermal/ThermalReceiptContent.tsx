@@ -51,7 +51,6 @@ const DEFAULT_SAMPLE_DATA: ReceiptData = {
   paymentMethod: 'Cash',
   customerName: 'Rahul Sharma',
   customerPhone: '9876543210',
-  sellerName: 'Unnati Store Manager',
   items: [
     { productName: 'BULBUL NANO RS20', sku: 'BLB-001', qty: 6, price: 20, compareAtPrice: 20 },
     { productName: 'BULBUL KHUTI RS20', sku: 'BLB-002', qty: 1, price: 150, compareAtPrice: 160 },
@@ -312,10 +311,10 @@ export const ThermalReceiptContent: React.FC<ThermalReceiptContentProps> = ({
             <span className="shrink-0 text-right" style={{ fontWeight: regularWeight }}>{data.customerPhone}</span>
           </div>
         )}
-        {(data.sellerName || settings?.sellerName) && (
+        {(settings?.sellerName || data.sellerName) && (
           <div className="flex items-center justify-between gap-2">
             <span className="shrink" style={{ fontWeight: mediumWeight }}>Seller Name:</span>
-            <span className="truncate text-right" style={{ fontWeight: regularWeight }}>{data.sellerName || settings?.sellerName}</span>
+            <span className="truncate text-right" style={{ fontWeight: regularWeight }}>{settings?.sellerName || data.sellerName}</span>
           </div>
         )}
         {data.customerAddress && (

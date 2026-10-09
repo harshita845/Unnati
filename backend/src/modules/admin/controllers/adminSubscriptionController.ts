@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import mongoose from "mongoose";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Category from "../../../models/Category";
+import HeaderCategory from "../../../models/HeaderCategory";
 import SubscriptionPlan, { PLAN_DURATION_UNITS } from "../../../models/SubscriptionPlan";
 import SellerSubscription from "../../../models/SellerSubscription";
 import { ALL_SELLER_MODULE_KEYS, ESSENTIAL_SELLER_MODULE_KEYS } from "../../../constants/sellerModules";
@@ -16,6 +17,7 @@ import {
   getSubscriptionSettings,
   onStoreWidePlanRuleChanged,
   parseDateRange,
+  withCoveredCategories,
 } from "../../../services/sellerSubscriptionService";
 
 const handle = (res: Response, error: any) => {
@@ -49,13 +51,20 @@ const parsePlanBody = async (body: any) => {
   const durationUnit = String(body.durationUnit || "");
   if (!(PLAN_DURATION_UNITS as readonly string[]).includes(durationUnit)) errors.push("Duration unit must be day, month or year");
 
-  // Plans cover main (top-level) categories only — a subcategory always follows its main category
-  const categoryIds: string[] = Array.isArray(body.categories) ? body.categories.map(String) : [];
-  if (!categoryIds.length) errors.push("Select at least one category");
+  // A plan covers whole header categories (Beauty, Electronics…: every category and subcategory under
+  // them, including ones added later) and/or individually picked main categories (older plans).
+  const headerCategoryIds: string[] = Array.isArray(body.headerCategories) ? [...new Set<string>(body.headerCategories.map(String))] : [];
+  const categoryIds: string[] = Array.isArray(body.categories) ? [...new Set<string>(body.categories.map(String))] : [];
+  if (!headerCategoryIds.length && !categoryIds.length) errors.push("Select at least one category");
+  if (headerCategoryIds.some((id) => !mongoose.isValidObjectId(id))) errors.push("Invalid category group selected");
+  else if (headerCategoryIds.length) {
+    const found = await HeaderCategory.countDocuments({ _id: { $in: headerCategoryIds } });
+    if (found !== headerCategoryIds.length) errors.push("One of the selected categories no longer exists");
+  }
   if (categoryIds.some((id) => !mongoose.isValidObjectId(id))) errors.push("Invalid category selected");
   else if (categoryIds.length) {
     const found = await Category.countDocuments({ _id: { $in: categoryIds }, parentId: null });
-    if (found !== new Set(categoryIds).size) errors.push("Plans can only cover main categories, not subcategories");
+    if (found !== categoryIds.length) errors.push("Plans can only cover main categories, not subcategories");
   }
 
   const features = (Array.isArray(body.features) ? body.features : [])
@@ -88,7 +97,8 @@ const parsePlanBody = async (body: any) => {
       price,
       durationValue,
       durationUnit,
-      categories: [...new Set(categoryIds)],
+      headerCategories: headerCategoryIds,
+      categories: categoryIds,
       features,
       limits: { maxProducts, commissionPercent, featuredStore: !!body.limits?.featuredStore },
       accessibleModules,
@@ -165,10 +175,9 @@ export const updateSettings = asyncHandler(async (req: Request, res: Response) =
 // ---------- Plans ----------
 
 export const listPlans = asyncHandler(async (_req: Request, res: Response) => {
-  const plans = await SubscriptionPlan.find()
-    .populate("categories", "name subscriptionEnabled subscriptionGraceDays subscriptionBillType")
-    .sort({ sortOrder: 1, createdAt: -1 })
-    .lean();
+  const rawPlans = await SubscriptionPlan.find().sort({ sortOrder: 1, createdAt: -1 }).lean();
+  // categories = everything covered right now (whole header groups expanded); explicitCategories = individual picks
+  const plans = await withCoveredCategories(rawPlans, "name subscriptionEnabled subscriptionGraceDays subscriptionBillType");
   const counts = await SellerSubscription.aggregate([
     { $match: { status: "Active", plan: { $ne: null } } },
     { $group: { _id: "$plan", count: { $sum: 1 } } },

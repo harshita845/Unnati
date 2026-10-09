@@ -15,7 +15,12 @@ export interface SubscriptionPlan {
   price: number;
   durationValue: number;
   durationUnit: PlanDurationUnit;
+  /** Everything the plan covers right now (whole header groups expanded) */
   categories: Array<{ _id: string; name: string; subscriptionEnabled?: boolean; subscriptionGraceDays?: number | null; subscriptionBillType?: "gst" | "receipt" | null } | string>;
+  /** Whole header categories picked (cover every category under them, including new ones) */
+  headerCategories?: Array<{ _id: string; name: string }>;
+  /** Main categories picked one by one (older plans) */
+  explicitCategories?: string[];
   features: string[];
   limits: PlanLimits;
   accessibleModules?: string[];
@@ -34,6 +39,9 @@ export interface PlanInput {
   price: number;
   durationValue: number;
   durationUnit: PlanDurationUnit;
+  /** Header category ids (Beauty, Electronics…) covered as a whole */
+  headerCategories: string[];
+  /** Individually picked main category ids (kept from older plans) */
   categories: string[];
   features: string[];
   limits: { maxProducts: number | null; commissionPercent: number | null; featuredStore: boolean };
@@ -80,6 +88,7 @@ export interface SignupPlan {
   limits?: PlanLimits;
   accessibleModules: string[];
   categories: Array<{ _id: string; name: string; headerCategory: string | null }>;
+  headerCategories?: Array<{ _id: string; name: string }>;
 }
 
 export interface SellerSubscription {

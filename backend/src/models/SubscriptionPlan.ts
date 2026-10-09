@@ -13,6 +13,9 @@ export interface ISubscriptionPlan extends Document {
   price: number;
   durationValue: number;
   durationUnit: PlanDurationUnit;
+  /** Whole header categories (e.g. Beauty): covers every main category and subcategory under them, including ones added later */
+  headerCategories: mongoose.Types.ObjectId[];
+  /** Individually picked main categories (plans made before header selection) */
   categories: mongoose.Types.ObjectId[];
   features: string[];
   limits: {
@@ -40,10 +43,9 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
       validate: { validator: Number.isInteger, message: "Duration must be a whole number" },
     },
     durationUnit: { type: String, enum: PLAN_DURATION_UNITS, required: true },
-    categories: {
-      type: [{ type: Schema.Types.ObjectId, ref: "Category" }],
-      validate: { validator: (v: unknown[]) => Array.isArray(v) && v.length > 0, message: "Select at least one category" },
-    },
+    headerCategories: { type: [{ type: Schema.Types.ObjectId, ref: "HeaderCategory" }], default: [] },
+    // At least one header category or main category is required (checked when the plan is saved)
+    categories: { type: [{ type: Schema.Types.ObjectId, ref: "Category" }], default: [] },
     features: { type: [{ type: String, trim: true }], default: [] },
     limits: {
       maxProducts: { type: Number, min: [1, "Max products must be at least 1"], default: null },
