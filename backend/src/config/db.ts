@@ -18,8 +18,16 @@ const connectDB = async (): Promise<void> => {
     }
 
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      // Fail fast on serverless so a bad connection returns an error before the function times out
-      ...(process.env.VERCEL && { serverSelectionTimeoutMS: 8000 }),
+      ...(process.env.VERCEL && {
+        // Fail fast on serverless so a bad connection returns an error before the function times out
+        serverSelectionTimeoutMS: 8000,
+        // Every Vercel instance gets its own pool. The default (up to 100 each, kept open) lets a few
+        // instances plus a redeploy use up the Atlas connection limit (500 on the free tier), after
+        // which Atlas refuses new connections ("SSL alert number 80") and every request fails.
+        maxPoolSize: 5,
+        minPoolSize: 0,
+        maxIdleTimeMS: 10000,
+      }),
     });
 
     console.log('\n\x1b[32m✓\x1b[0m \x1b[1mMongoDB Connected Successfully\x1b[0m');
