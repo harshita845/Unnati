@@ -270,6 +270,7 @@ const AdminPOSBillSettings = () => {
                 >
                   <option value="80mm">3 Inches (80mm) - Standard Thermal POS</option>
                   <option value="58mm">2 Inches (58mm) - Compact Thermal POS</option>
+                  <option value="A4">A4 sheet - Normal printer</option>
                 </select>
               </div>
 

@@ -7,7 +7,10 @@ import {
   getThermalReceiptLineHeight,
   getThermalReceiptLetterSpacing,
   getThermalReceiptWidthMm,
+  formatBillDate,
+  cleanBillItemName,
 } from '../../utils/sellerPosBillSettings';
+import { amountToIndianWords } from '../../utils/amountInWords';
 
 export interface ReceiptItem {
   productName: string;
@@ -18,6 +21,10 @@ export interface ReceiptItem {
   compareAtPrice?: number;
   warrantyType?: string;
   warrantyDuration?: string;
+  /** Printed under the item on a tax invoice */
+  hsnCode?: string;
+  /** GST % (prices are GST-inclusive, as everywhere in POS) */
+  gst?: number;
   [key: string]: any;
 }
 
@@ -25,7 +32,10 @@ export interface ReceiptData {
   invoiceNum?: string;
   date?: string;
   time?: string;
+  /** How it was paid: Cash, UPI, Card, Credit… */
   paymentMethod?: string;
+  /** Paid / Pending / Unpaid. Derived from the payment method when not given */
+  paymentStatus?: string;
   customerName?: string;
   customerPhone?: string;
   sellerName?: string;
@@ -46,15 +56,15 @@ export interface ReceiptData {
 
 const DEFAULT_SAMPLE_DATA: ReceiptData = {
   invoiceNum: '7514',
-  date: new Date().toLocaleDateString('en-IN'),
+  date: formatBillDate(new Date()),
   time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
   paymentMethod: 'Cash',
   customerName: 'Rahul Sharma',
   customerPhone: '9876543210',
   items: [
-    { productName: 'BULBUL NANO RS20', sku: 'BLB-001', qty: 6, price: 20, compareAtPrice: 20 },
-    { productName: 'BULBUL KHUTI RS20', sku: 'BLB-002', qty: 1, price: 150, compareAtPrice: 160 },
-    { productName: 'BULBUL MINI RS5', sku: 'BLB-003', qty: 10, price: 5, compareAtPrice: 5 },
+    { productName: 'BULBUL NANO RS20', sku: 'BLB-001', qty: 6, price: 20, compareAtPrice: 20, hsnCode: '3605', gst: 18 },
+    { productName: 'BULBUL KHUTI RS20', sku: 'BLB-002', qty: 1, price: 150, compareAtPrice: 160, hsnCode: '3605', gst: 18 },
+    { productName: 'BULBUL MINI RS5', sku: 'BLB-003', qty: 10, price: 5, compareAtPrice: 5, hsnCode: '3605', gst: 18 },
   ],
   totalQty: 17,
   totalMrp: 330,
@@ -174,6 +184,36 @@ export const ThermalReceiptContent: React.FC<ThermalReceiptContentProps> = ({
       ? ((savings / totalMRP) * 100).toFixed(0)
       : '0';
 
+  // Bill type: a GST-registered store prints a TAX INVOICE; otherwise (or when the caller says so) an ESTIMATE
+  const gstRegistered = !!(settings?.gst?.enabled && settings?.gst?.text?.trim());
+  const isTaxInvoice = gstRegistered && data.isEstimated !== true;
+  const showBillTitle = isTaxInvoice || settings?.showEstimatedBillHeader !== false;
+  const isA4 = settings?.paperWidth === 'A4';
+
+  // Payment: how it was paid and whether it is settled are two different things
+  const method = (data.paymentMethod || '').trim();
+  const isCredit = /credit|pay ?later|udhar/i.test(method);
+  const paymentStatus = data.paymentStatus || (method ? (isCredit ? 'Unpaid' : 'Paid') : '');
+
+  // GST summary (prices include GST): taxable value and CGST/SGST per rate
+  const gstByRate = new Map<number, { taxable: number; tax: number }>();
+  if (isTaxInvoice) {
+    items.forEach((item) => {
+      const rate = Number(item.gst);
+      if (!Number.isFinite(rate) || rate <= 0) return;
+      const sp = item.customPrice !== undefined ? Number(item.customPrice) : Number(item.price) || 0;
+      const lineTotal = sp * (Number(item.qty) || 0);
+      const tax = (lineTotal * rate) / (100 + rate);
+      const row = gstByRate.get(rate) || { taxable: 0, tax: 0 };
+      row.taxable += lineTotal - tax;
+      row.tax += tax;
+      gstByRate.set(rate, row);
+    });
+  }
+  const gstRows = [...gstByRate.entries()].sort((a, b) => a[0] - b[0]);
+  const money = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const amountWords = Number(finalBill) > 0 ? amountToIndianWords(Number(finalBill)) : '';
+
   // QR Code
   const qrUrl = settings?.qrSettings?.url || settings?.qrCode;
   const showQr = settings?.qrSettings?.enabled !== false && !!qrUrl;
@@ -184,8 +224,6 @@ export const ThermalReceiptContent: React.FC<ThermalReceiptContentProps> = ({
       ? 48
       : 64;
   const qrAlign = settings?.qrSettings?.alignment || 'center';
-  const qrAlignClass =
-    qrAlign === 'left' ? 'justify-start' : qrAlign === 'right' ? 'justify-end' : 'justify-center';
 
   // Logo
   const showLogo = settings?.logo?.enabled && !!settings?.logo?.url;
@@ -281,22 +319,35 @@ export const ThermalReceiptContent: React.FC<ThermalReceiptContentProps> = ({
 
       {renderDivider(true)}
 
-      {/* 3. INVOICE METADATA */}
+      {/* 3. BILL TITLE */}
+      {showBillTitle && (
+        <div className="text-center uppercase tracking-wider mb-1" style={{ fontSize: `${headerColSize + 1}px`, fontWeight: boldWeight }}>
+          {isTaxInvoice ? 'Tax Invoice' : 'Estimate'}
+        </div>
+      )}
+
+      {/* 4. INVOICE METADATA */}
       <div className="space-y-0.5" style={{ fontSize: `${metaSize}px` }}>
         <div className="flex items-center justify-between gap-2">
-          <span className="shrink" style={{ fontWeight: mediumWeight }}>Invoice Number:</span>
+          <span className="shrink" style={{ fontWeight: mediumWeight }}>{isTaxInvoice ? 'Invoice No.:' : 'Bill No.:'}</span>
           <span className="shrink-0 text-right" style={{ fontWeight: regularWeight }}>{data.invoiceNum || '7514'}</span>
         </div>
         <div className="flex items-center justify-between gap-2">
-          <span className="shrink" style={{ fontWeight: mediumWeight }}>Invoice Date:</span>
+          <span className="shrink" style={{ fontWeight: mediumWeight }}>Date:</span>
           <span className="shrink-0 text-right" style={{ fontWeight: regularWeight }}>
-            {data.date || ''} {data.time || ''}
+            {formatBillDate(data.date)} {data.time || ''}
           </span>
         </div>
-        {data.paymentMethod && (
+        {method && (
           <div className="flex items-center justify-between gap-2">
-            <span className="shrink" style={{ fontWeight: mediumWeight }}>Payment Status:</span>
-            <span className="shrink-0 text-right" style={{ fontWeight: regularWeight }}>{data.paymentMethod}</span>
+            <span className="shrink" style={{ fontWeight: mediumWeight }}>Payment Mode:</span>
+            <span className="shrink-0 text-right" style={{ fontWeight: regularWeight }}>{method}</span>
+          </div>
+        )}
+        {paymentStatus && (
+          <div className="flex items-center justify-between gap-2">
+            <span className="shrink" style={{ fontWeight: mediumWeight }}>Status:</span>
+            <span className="shrink-0 text-right" style={{ fontWeight: boldWeight }}>{paymentStatus}</span>
           </div>
         )}
         {data.customerName && (
@@ -333,16 +384,6 @@ export const ThermalReceiptContent: React.FC<ThermalReceiptContentProps> = ({
 
       {renderDivider(true)}
 
-      {/* 4. ESTIMATED BILL HEADER */}
-      {settings?.showEstimatedBillHeader !== false && (
-        <div
-          className="text-center uppercase tracking-wider my-1"
-          style={{ fontSize: `${headerColSize}px`, fontWeight: boldWeight }}
-        >
-          Estimated Bill
-        </div>
-      )}
-
       {/* 5 & 6. ITEM TABLE (Fixed table layout prevents any horizontal clipping or column merging) */}
       <table className="w-full table-fixed border-collapse my-1">
         <thead>
@@ -355,14 +396,14 @@ export const ThermalReceiptContent: React.FC<ThermalReceiptContentProps> = ({
                 Qty
               </th>
             )}
-            {cols.showMrp && !is58mm && (
+            {cols.showMrp && (!is58mm || isA4) && (
               <th className="text-right pb-1" style={{ width: '15%' }}>
                 MRP
               </th>
             )}
             {cols.showSp && (
               <th className="text-right pb-1" style={{ width: is58mm ? '19%' : '15%' }}>
-                Sp
+                Rate
               </th>
             )}
             {cols.showTotal && (
@@ -386,12 +427,19 @@ export const ThermalReceiptContent: React.FC<ThermalReceiptContentProps> = ({
                     style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
                   >
                     {cols.showIndex ? `(${idx + 1}) ` : ''}
-                    {item.productName}
+                    {cleanBillItemName(item.productName)}
+                    {isTaxInvoice && (item.hsnCode || Number(item.gst) > 0) && (
+                      <div className="text-neutral-700" style={{ fontSize: `${Math.max(baseSize - 2.5, 8)}px` }}>
+                        {item.hsnCode ? `HSN ${item.hsnCode}` : ''}
+                        {item.hsnCode && Number(item.gst) > 0 ? ' · ' : ''}
+                        {Number(item.gst) > 0 ? `GST ${Number(item.gst)}%` : ''}
+                      </div>
+                    )}
                   </td>
                   {cols.showQty && (
                     <td className="py-0.5 text-center px-0.5 whitespace-nowrap">{item.qty}</td>
                   )}
-                  {cols.showMrp && !is58mm && (
+                  {cols.showMrp && (!is58mm || isA4) && (
                     <td className="py-0.5 text-right px-0.5 whitespace-nowrap">{mrp > 0 ? mrp : '-'}</td>
                   )}
                   {cols.showSp && (
@@ -422,7 +470,7 @@ export const ThermalReceiptContent: React.FC<ThermalReceiptContentProps> = ({
       <div className="space-y-0.5" style={{ fontSize: `${metaSize}px` }}>
         <div className="flex items-center justify-between gap-2">
           <span className="shrink" style={{ fontWeight: regularWeight }}>Total Qty.: {totalQty}</span>
-          <span className="shrink-0 text-right" style={{ fontWeight: boldWeight }}>Total MRP: Rs {totalMRP}</span>
+          <span className="shrink-0 text-right" style={{ fontWeight: boldWeight }}>Total MRP: ₹{money(Number(totalMRP))}</span>
         </div>
         {Number(savings) > 0 && (
           <div
@@ -435,14 +483,44 @@ export const ThermalReceiptContent: React.FC<ThermalReceiptContentProps> = ({
             }}
           >
             <span className="shrink">YOU SAVED {savingPercent}%</span>
-            <span className="shrink-0 text-right">{Number(savings).toFixed(2)}</span>
+            <span className="shrink-0 text-right">₹{money(Number(savings))}</span>
           </div>
         )}
       </div>
 
       {renderDivider(true)}
 
-      {/* 8. GRAND TOTAL */}
+      {/* 8. GST SUMMARY (tax invoice) */}
+      {gstRows.length > 0 && (
+        <>
+          <table className="w-full table-fixed border-collapse my-1" style={{ fontSize: `${Math.max(baseSize - 1.5, 8.5)}px` }}>
+            <thead>
+              <tr style={{ fontWeight: boldWeight }}>
+                <th className="text-left">GST</th>
+                <th className="text-right">Taxable</th>
+                <th className="text-right">CGST</th>
+                <th className="text-right">SGST</th>
+              </tr>
+            </thead>
+            <tbody>
+              {gstRows.map(([rate, row]) => (
+                <tr key={rate}>
+                  <td className="text-left">{rate}%</td>
+                  <td className="text-right">{money(row.taxable)}</td>
+                  <td className="text-right">{money(row.tax / 2)}</td>
+                  <td className="text-right">{money(row.tax / 2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="text-neutral-700" style={{ fontSize: `${Math.max(baseSize - 2.5, 8)}px` }}>
+            Prices include GST. Total tax ₹{money(gstRows.reduce((t, [, r]) => t + r.tax, 0))}
+          </div>
+          {renderDivider()}
+        </>
+      )}
+
+      {/* 9. GRAND TOTAL */}
       <div
         className="flex items-center justify-between gap-2 py-1 border-y-2 border-black my-1"
         style={{
@@ -450,11 +528,16 @@ export const ThermalReceiptContent: React.FC<ThermalReceiptContentProps> = ({
           fontWeight: boldWeight,
         }}
       >
-        <span className="shrink">Total bill amount:</span>
-        <span className="shrink-0 text-right">Rs {Number(finalBill).toFixed(2)}</span>
+        <span className="shrink">{isTaxInvoice ? 'Grand Total:' : 'Total bill amount:'}</span>
+        <span className="shrink-0 text-right">₹{money(Number(finalBill))}</span>
       </div>
+      {amountWords && (
+        <p className="leading-tight break-words" style={{ fontSize: `${notesSize}px`, fontStyle: 'italic' }}>
+          {amountWords}
+        </p>
+      )}
 
-      {/* 9. FOOTER CONTENT (Strictly hidden if disabled) */}
+      {/* 10. FOOTER CONTENT (Strictly hidden if disabled) */}
       <div className="mt-2.5 space-y-1">
         {/* Custom Slogan / Tagline */}
         {settings?.footerSlogan?.enabled && settings?.footerSlogan?.text && (
@@ -520,7 +603,10 @@ export const ThermalReceiptContent: React.FC<ThermalReceiptContentProps> = ({
 
         {/* QR Code */}
         {showQr && (
-          <div className={`mt-2 flex ${qrAlignClass}`}>
+          <div className={`mt-2 flex flex-col ${qrAlign === 'left' ? 'items-start' : qrAlign === 'right' ? 'items-end' : 'items-center'}`}>
+            <span className="mb-0.5 uppercase tracking-wide" style={{ fontSize: `${notesSize}px`, fontWeight: boldWeight }}>
+              Scan to pay
+            </span>
             <img
               src={qrUrl}
               alt="QR Code"

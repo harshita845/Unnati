@@ -2,6 +2,7 @@ import {
   PosBillSettings,
   getThermalReceiptFontFamily,
   getThermalReceiptWidthMm,
+  getReceiptPageCss,
   getThermalReceiptBaseFontSizePx,
   getThermalReceiptFontWeightValue,
   getThermalReceiptLineHeight,
@@ -13,6 +14,7 @@ export type { PosBillSettings };
 export {
   getThermalReceiptFontFamily,
   getThermalReceiptWidthMm,
+  getReceiptPageCss,
   getThermalReceiptBaseFontSizePx,
   getThermalReceiptFontWeightValue,
   getThermalReceiptLineHeight,

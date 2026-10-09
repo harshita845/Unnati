@@ -28,7 +28,8 @@ import {
 } from '../../../services/api/seller/sellerPurchaseService';
 import { getAllSuppliers } from '../../../services/api/seller/supplierService';
 import { useSellerPosBillSettings } from '../hooks/useSellerPosBillSettings';
-import { getThermalReceiptFontFamily, getThermalReceiptWidthMm } from '../../../utils/sellerPosBillSettings';
+import { getThermalReceiptFontFamily, getThermalReceiptWidthMm,
+  getReceiptPageCss } from '../../../utils/sellerPosBillSettings';
 import { ThermalReceiptContent } from '../../../components/thermal/ThermalReceiptContent';
 
 import { LocationFilterDropdown, filterItemsByLocation, LocationFilterState } from '../../../components/LocationFilterDropdown';
@@ -6472,13 +6473,15 @@ const SellerPOSOrders = () => {
               compareAtPrice: item.compareAtPrice,
               warrantyType: item.warrantyType,
               warrantyDuration: item.warrantyDuration,
+              hsnCode: item.hsnCode || item.hsn || '',
+              gst: resolveGstPercent(item.gst),
             }));
 
             return (
               <>
                 <style dangerouslySetInnerHTML={{ __html: `
                   @media print {
-                    @page { margin: 0; size: auto; }
+                    ${getReceiptPageCss(posBillSettings?.paperWidth)}
                     html, body {
                       height: auto !important;
                       overflow: visible !important;

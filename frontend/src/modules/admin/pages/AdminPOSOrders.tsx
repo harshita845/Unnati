@@ -38,6 +38,7 @@ import {
   getDefaultPosBillSettings,
   getThermalReceiptFontFamily,
   getThermalReceiptWidthMm,
+  getReceiptPageCss,
 } from '../../../utils/adminPosBillSettings';
 import { ThermalReceiptContent } from '../../../components/thermal/ThermalReceiptContent';
 
@@ -6832,13 +6833,15 @@ const AdminPOSOrders = () => {
               compareAtPrice: item.compareAtPrice,
               warrantyType: item.warrantyType,
               warrantyDuration: item.warrantyDuration,
+              hsnCode: item.hsnCode || item.hsn || '',
+              gst: resolveGstPercent(item.gst),
             }));
 
             return (
               <>
                 <style dangerouslySetInnerHTML={{ __html: `
                   @media print {
-                    @page { margin: 0; size: auto; }
+                    ${getReceiptPageCss(posBillSettings?.paperWidth)}
                     html, body {
                       height: auto !important;
                       overflow: visible !important;

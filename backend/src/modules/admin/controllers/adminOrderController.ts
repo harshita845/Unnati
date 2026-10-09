@@ -354,7 +354,7 @@ export const getOrderById = asyncHandler(
     let order: any = null;
     if (mongoose.Types.ObjectId.isValid(id)) {
       order = await Order.findById(id)
-        .populate("customer", "name email phone")
+        .populate("customer", "name email phone address city state pincode gst")
         .populate("deliveryBoy", "name mobile email")
         .populate({
           path: "items",

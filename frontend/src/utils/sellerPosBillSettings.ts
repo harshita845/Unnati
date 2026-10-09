@@ -57,7 +57,7 @@ export interface PosBillSettings {
   // Spacing & Layout
   lineSpacing?: 'compact' | 'normal' | 'comfortable';
   letterSpacing?: 'tight' | 'normal' | 'wide';
-  paperWidth?: '80mm' | '58mm';
+  paperWidth?: '80mm' | '58mm' | 'A4';
   margins?: {
     top: number; // in mm
     right: number;
@@ -197,7 +197,42 @@ export function getThermalReceiptFontFamily(family?: string): string {
 }
 
 export function getThermalReceiptWidthMm(width?: string): string {
+  if (width === 'A4') return '190mm'; // A4 (210mm) minus 10mm margins each side
   return width === '58mm' ? '48mm' : '72mm';
+}
+
+/**
+ * The print page rule for a bill. Thermal rolls: no page margins and no fixed page size (the
+ * printer driver sets the roll width; the receipt itself is 48/72 mm wide). A4: a real A4 page
+ * with 10 mm margins.
+ */
+export function getReceiptPageCss(width?: string): string {
+  return width === 'A4' ? '@page { size: A4 portrait; margin: 10mm; }' : '@page { margin: 0; size: auto; }';
+}
+
+/** Any bill date ("9/10/2026", ISO, Date) → "09/10/2026" (DD/MM/YYYY). Unreadable text is returned as-is. */
+export function formatBillDate(value?: string | Date | null): string {
+  if (!value) return '';
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime())
+      ? ''
+      : `${String(value.getDate()).padStart(2, '0')}/${String(value.getMonth() + 1).padStart(2, '0')}/${value.getFullYear()}`;
+  }
+  const s = String(value).trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  const dmy = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
+  if (dmy) return `${dmy[1].padStart(2, '0')}/${dmy[2].padStart(2, '0')}/${dmy[3].length === 2 ? `20${dmy[3]}` : dmy[3]}`;
+  return s;
+}
+
+/** "Salt - Default", "Salt (Default)", "Default: Salt" → "Salt" (single-variant products are named "Default") */
+export function cleanBillItemName(name?: string | null): string {
+  return String(name ?? '')
+    .replace(/\s*[-–:]\s*(default|standard)\s*$/i, '')
+    .replace(/\s*\((default|standard)\)\s*$/i, '')
+    .replace(/^(default|standard)\s*:\s*/i, '')
+    .trim();
 }
 
 export function getThermalReceiptBaseFontSizePx(size?: string): number {

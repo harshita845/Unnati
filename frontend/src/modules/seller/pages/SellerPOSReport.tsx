@@ -11,6 +11,7 @@ import {
   SELLER_BILL_SETTINGS_UPDATED_EVENT,
   getThermalReceiptFontFamily,
   getThermalReceiptWidthMm,
+  getReceiptPageCss,
 } from "../../../utils/sellerPosBillSettings";
 import { ThermalReceiptContent } from "../../../components/thermal/ThermalReceiptContent";
 
@@ -1139,13 +1140,15 @@ const SellerPOSReport = () => {
                 compareAtPrice: item.compareAtPrice,
                 warrantyType: item.warrantyType,
                 warrantyDuration: item.warrantyDuration,
+                hsnCode: item.hsnCode || '',
+                gst: item.gst,
               }));
 
               return (
                 <>
                   <style dangerouslySetInnerHTML={{ __html: `
                       @media print {
-                        @page { margin: 0; size: auto; }
+                        ${getReceiptPageCss(posBillSettings?.paperWidth)}
                         html, body { 
                           height: auto !important; 
                           overflow: visible !important; 
@@ -1199,6 +1202,8 @@ const SellerPOSReport = () => {
                               date: new Date(printOrder.createdAt || Date.now()).toLocaleDateString('en-IN'),
                               time: new Date(printOrder.createdAt || Date.now()).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
                               paymentMethod: printOrder.paymentMethod || 'Cash',
+                              // Reprint shows the order's real state (a credit sale paid later prints "Paid")
+                              paymentStatus: printOrder.paymentStatus === 'Pending' ? 'Unpaid' : printOrder.paymentStatus || undefined,
                               customerName: (printOrder as any).customerName || (printOrder as any).customer?.name || 'Walk-in Customer',
                               customerPhone: (printOrder as any).customerPhone || (printOrder as any).customer?.phone || '',
                               sellerName: (printOrder as any).sellerName || (printOrder as any).seller?.name || (printOrder as any).seller?.storeName || (printOrder as any).staffName || posBillSettings?.sellerName || readSellerPosBillSettings()?.sellerName || 'Store Attendant',

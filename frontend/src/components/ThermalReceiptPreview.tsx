@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Printer } from 'lucide-react';
-import { PosBillSettings, getThermalReceiptWidthMm } from '../utils/sellerPosBillSettings';
+import { PosBillSettings, getThermalReceiptWidthMm, getReceiptPageCss } from '../utils/sellerPosBillSettings';
 import { ThermalReceiptContent, ReceiptData } from './thermal/ThermalReceiptContent';
 
 interface ThermalReceiptPreviewProps {
@@ -44,7 +44,7 @@ export const ThermalReceiptPreview: React.FC<ThermalReceiptPreviewProps> = ({
         <div className="flex items-center gap-2">
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
           <span className="text-xs font-bold uppercase tracking-wider text-neutral-700">
-            Live Preview ({settings.paperWidth || '80mm'} / {is58mm ? '2"' : '3"'})
+            Live Preview ({settings.paperWidth === 'A4' ? 'A4 sheet' : `${settings.paperWidth || '80mm'} / ${is58mm ? '2"' : '3"'}`})
           </span>
         </div>
         <button
@@ -68,7 +68,7 @@ export const ThermalReceiptPreview: React.FC<ThermalReceiptPreviewProps> = ({
         <div
           className="bg-white text-black shadow-xl rounded-sm transition-all duration-200 border-t-4 border-neutral-400 relative overflow-hidden"
           style={{
-            width: is58mm ? '240px' : '330px',
+            width: settings.paperWidth === 'A4' ? '560px' : is58mm ? '240px' : '330px',
             maxWidth: '100%',
             boxShadow: '0 12px 30px -6px rgba(0,0,0,0.15), 0 8px 12px -6px rgba(0,0,0,0.1)',
           }}
@@ -102,7 +102,7 @@ export const ThermalReceiptPreview: React.FC<ThermalReceiptPreviewProps> = ({
             dangerouslySetInnerHTML={{
               __html: `
                 @media print {
-                  @page { margin: 0; size: auto; }
+                  ${getReceiptPageCss(settings.paperWidth)}
                   html, body {
                     height: auto !important;
                     overflow: visible !important;
