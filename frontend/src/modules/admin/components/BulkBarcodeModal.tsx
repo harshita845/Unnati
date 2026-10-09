@@ -1,7 +1,18 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { jsPDF } from "jspdf";
 import JSZip from "jszip";
 import { code128DataUrl, loadJsBarcode } from "../../../components/Code128Barcode";
+import { getAppSettings, updateAppSettings } from "../../../services/api/admin/adminSettingsService";
+import {
+  LABEL_SIZE_PRESETS,
+  computeLabelLayout,
+  initialLabelLayout,
+  labelContentScale,
+  labelPageCount,
+  labelSlot,
+  storeLabelLayout,
+  type LabelPageLayout,
+} from "../../../utils/barcodeLabelLayout";
 
 export interface BulkBarcodeProduct {
   _id?: string;
@@ -28,6 +39,19 @@ interface BulkBarcodeModalProps {
   products: BulkBarcodeProduct[];
   initialSelectedIds?: Set<string>;
   barcodeSettings?: any;
+  /** Called after "Save as default" so single-barcode printing uses the new page setup right away */
+  onSettingsSaved?: (barcodeSettings: any) => void;
+}
+
+const PT_TO_MM = 0.3528;
+const escapeHtml = (v: unknown) =>
+  String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
+
+/** One label to place on the page: the product, its barcode value and the rendered barcode image. */
+interface LabelItem {
+  product: BulkBarcodeProduct;
+  barcodeVal: string;
+  barcodeImg: string | null;
 }
 
 export default function BulkBarcodeModal({
@@ -36,12 +60,19 @@ export default function BulkBarcodeModal({
   products,
   initialSelectedIds,
   barcodeSettings,
+  onSettingsSaved,
 }: BulkBarcodeModalProps) {
-  const [columnsCount, setColumnsCount] = useState<1 | 2 | 3>(2);
+  // Page setup (label size, labels per row, margins, gaps) shared by preview, PDFs and print
+  const [layout, setLayout] = useState<LabelPageLayout>(() => initialLabelLayout(barcodeSettings));
+  const computed = useMemo(() => computeLabelLayout(layout), [layout]);
+  const [savingDefault, setSavingDefault] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+  const columnsCount = layout.columns;
+  const setColumnsCount = (columns: number) => setLayout((l) => ({ ...l, columns }));
+  const updateLayout = (patch: Partial<LabelPageLayout>) => setLayout((l) => ({ ...l, ...patch }));
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [searchTerm, setSearchTerm] = useState("");
-  const [labelSize, setLabelSize] = useState<"38x25" | "50x30" | "60x40" | "a4_24">("50x30");
   const [showStoreName, setShowStoreName] = useState(true);
   const [storeName, setStoreName] = useState("UNNATI STORE");
   const [showProductName, setShowProductName] = useState(true);
@@ -71,16 +102,18 @@ export default function BulkBarcodeModal({
         if (id) initialQty[id] = 1;
       });
       setQuantities(initialQty);
-
-      if (barcodeSettings?.width && barcodeSettings?.height) {
-        const w = barcodeSettings.width;
-        const h = barcodeSettings.height;
-        if (w === 38 && h === 25) setLabelSize("38x25");
-        else if (w === 60 && h === 40) setLabelSize("60x40");
-        else setLabelSize("50x30");
-      }
     }
   }, [isOpen, products, initialSelectedIds, barcodeSettings]);
+
+  // Start from the saved page setup each time the modal opens (not on every product refresh)
+  useEffect(() => {
+    if (isOpen) setLayout(initialLabelLayout(barcodeSettings));
+  }, [isOpen, barcodeSettings]);
+
+  // Remember the last setup used on this computer
+  useEffect(() => {
+    if (isOpen) storeLabelLayout(layout);
+  }, [layout, isOpen]);
 
   // Determine preview products based on selection and columnsCount
   const selectedProductsList = products.filter((p) => selectedIds.has(getProductId(p)));
@@ -100,10 +133,10 @@ export default function BulkBarcodeModal({
         try {
           (window as any).JsBarcode(canvas, barcodeValue, {
             format: "CODE128",
-            width: columnsCount === 3 ? 1.4 : columnsCount === 2 ? 1.75 : 2,
-            height: columnsCount === 3 ? 36 : columnsCount === 2 ? 42 : 48,
+            width: columnsCount >= 3 ? 1.4 : columnsCount === 2 ? 1.75 : 2,
+            height: columnsCount >= 3 ? 36 : columnsCount === 2 ? 42 : 48,
             displayValue: showSku,
-            fontSize: columnsCount === 3 ? 10 : 11,
+            fontSize: columnsCount >= 3 ? 10 : 11,
             margin: 2,
           });
         } catch (e) {
@@ -116,7 +149,7 @@ export default function BulkBarcodeModal({
     showSku,
     isOpen,
     columnsCount,
-    labelSize,
+    layout,
     showStoreName,
     storeName,
     showProductName,
@@ -172,126 +205,124 @@ export default function BulkBarcodeModal({
     setQuantities((prev) => ({ ...prev, [id]: Math.max(1, qty) }));
   };
 
-  // Helper to generate PDF document for a single product label
-  const createProductLabelPdf = async (product: BulkBarcodeProduct, copyQty: number) => {
-    let widthMm = 50;
-    let heightMm = 30;
-
-    if (labelSize === "38x25") {
-      widthMm = 38;
-      heightMm = 25;
-    } else if (labelSize === "60x40") {
-      widthMm = 60;
-      heightMm = 40;
-    }
-
-    const doc = new jsPDF({
-      orientation: widthMm > heightMm ? "landscape" : "portrait",
-      unit: "mm",
-      format: [widthMm, heightMm],
-    });
-
+  const barcodeValueOf = (product: BulkBarcodeProduct) => {
     const rawBarcode = Array.isArray(product.barcode) ? product.barcode[0] : product.barcode;
-    const barcodeVal = rawBarcode || product.sku || product.productId || "123456789";
-    const barcodeImg = await code128DataUrl(barcodeVal);
+    return rawBarcode || product.sku || getProductId(product) || "123456789";
+  };
 
-    for (let page = 0; page < copyQty; page++) {
-      if (page > 0) doc.addPage([widthMm, heightMm], widthMm > heightMm ? "landscape" : "portrait");
+  const priceTextOf = (product: BulkBarcodeProduct, rupee: string) => {
+    const sp = product.sellingPrice || product.price || 0;
+    const mrp = product.mrp || product.valueMrp || sp;
+    return showMrp && mrp > sp ? `MRP: ${rupee}${mrp}  SP: ${rupee}${sp}` : `SP: ${rupee}${sp}`;
+  };
 
-      let currentY = 3;
+  /** Every label to print, in order: each selected product repeated by its quantity. */
+  const buildLabelItems = async (list: BulkBarcodeProduct[]): Promise<LabelItem[]> => {
+    const items: LabelItem[] = [];
+    for (const product of list) {
+      const barcodeVal = barcodeValueOf(product);
+      const barcodeImg = await code128DataUrl(barcodeVal);
+      const qty = Math.max(1, quantities[getProductId(product)] || 1);
+      for (let q = 0; q < qty; q++) items.push({ product, barcodeVal, barcodeImg });
+    }
+    return items;
+  };
 
-      // Header Store Name
-      if (showStoreName && storeName) {
-        doc.setFontSize(8);
-        doc.setFont("helvetica", "bold");
-        doc.text(storeName.toUpperCase(), widthMm / 2, currentY + 2, { align: "center" });
-        currentY += 4;
-      }
+  /** Draw one label's content inside its box (x, y = top-left, mm), scaled to the label size. */
+  const drawLabelOnPdf = (doc: jsPDF, item: LabelItem, x: number, y: number, w: number, h: number) => {
+    const s = labelContentScale(w, h);
+    const pad = Math.max(0.8, 1.2 * s);
+    const innerW = w - pad * 2;
+    const cx = x + w / 2;
+    let cy = y + pad;
 
-      // Product Name
-      if (showProductName && product.name) {
-        doc.setFontSize(8);
-        doc.setFont("helvetica", "bold");
-        const wrappedLines: string[] = doc.splitTextToSize(product.name, widthMm - 6);
-        const linesToPrint = wrappedLines.slice(0, 1);
-        doc.text(linesToPrint[0] || "", widthMm / 2, currentY + 2, { align: "center" });
-        currentY += 4;
-      }
-
-      // Barcode Image
-      if (barcodeImg) {
-        const imgWidth = widthMm - 8;
-        const imgHeight = Math.min(heightMm - currentY - 7, 14);
-        doc.addImage(barcodeImg, "PNG", 4, currentY, imgWidth, imgHeight);
-        currentY += imgHeight + 1;
-      }
-
-      // Barcode / SKU text below barcode
-      if (showSku) {
-        doc.setFontSize(7);
-        doc.setFont("courier", "bold");
-        doc.text(barcodeVal, widthMm / 2, currentY + 1, { align: "center" });
-        currentY += 3;
-      }
-
-      // Price / MRP / SP
-      if (showPrice) {
-        doc.setFontSize(7);
-        doc.setFont("helvetica", "bold");
-        const sp = product.sellingPrice || product.price || 0;
-        const mrp = product.mrp || product.valueMrp || sp;
-        let priceStr = `SP: Rs. ${sp}`;
-        if (showMrp && mrp > sp) {
-          priceStr = `MRP: Rs. ${mrp}  SP: Rs. ${sp}`;
-        }
-        doc.text(priceStr, widthMm / 2, currentY + 2, { align: "center" });
-      }
+    if (computed.border) {
+      doc.setDrawColor(148, 163, 184);
+      doc.setLineWidth(0.2);
+      doc.roundedRect(x, y, w, h, 1, 1, "S");
     }
 
+    const line = (text: string, size: number, font: "helvetica" | "courier") => {
+      doc.setFont(font, "bold");
+      doc.setFontSize(size);
+      doc.setTextColor(15, 23, 42);
+      const fitted = (doc.splitTextToSize(text, innerW) as string[])[0] || "";
+      doc.text(fitted, cx, cy + size * PT_TO_MM * 0.85, { align: "center" });
+      cy += size * PT_TO_MM * 1.15;
+    };
+
+    const storeSize = 7.5 * s;
+    const nameSize = 7 * s;
+    const skuSize = 6.5 * s;
+    const priceSize = 7 * s;
+    const bottom = (showSku ? skuSize * PT_TO_MM * 1.15 : 0) + (showPrice ? priceSize * PT_TO_MM * 1.15 : 0);
+
+    if (showStoreName && storeName) line(storeName.toUpperCase(), storeSize, "helvetica");
+    if (showProductName && item.product.name) line(item.product.name, nameSize, "helvetica");
+
+    // The barcode gets whatever height is left between the text above and below
+    const available = y + h - pad - bottom - cy - 0.6;
+    if (item.barcodeImg && available > 2) {
+      const imgH = Math.min(available, 16 * s);
+      doc.addImage(item.barcodeImg, "PNG", x + pad, cy + 0.3, innerW, imgH);
+      cy += imgH + 0.6;
+    }
+    if (showSku) line(item.barcodeVal, skuSize, "courier");
+    if (showPrice) line(priceTextOf(item.product, "Rs. "), priceSize, "helvetica");
+  };
+
+  /** A PDF with the labels placed exactly by the page setup (roll: one row per page; A4: full sheets). */
+  const buildLabelsPdf = (items: LabelItem[]) => {
+    const L = computed;
+    const format: any = L.paper === "a4" ? "a4" : [L.pageWidth, L.pageHeight];
+    const orientation = L.pageWidth > L.pageHeight ? "landscape" : "portrait";
+    const doc = new jsPDF({ unit: "mm", format, orientation });
+    items.forEach((item, i) => {
+      const slot = labelSlot(L, i);
+      if (i > 0 && i % L.perPage === 0) doc.addPage(format, orientation);
+      drawLabelOnPdf(doc, item, slot.x, slot.y, L.labelWidth, L.labelHeight);
+    });
     return doc;
   };
 
-  // 1. Download Bulk ZIP of editable PDF files
+  const selectedProducts = () => products.filter((p) => selectedIds.has(getProductId(p)));
+
+  const blockedByLayout = () => {
+    if (computed.problems.length) {
+      alert(`Page setup problem:\n${computed.problems.join("\n")}`);
+      return true;
+    }
+    return false;
+  };
+
+  // 1. ZIP with one PDF per product (each laid out with the same page setup)
   const handleDownloadZipPDFs = async () => {
-    const selectedList = products.filter((p) => selectedIds.has(getProductId(p)));
+    const selectedList = selectedProducts();
     if (selectedList.length === 0) {
       alert("Please select at least one product.");
       return;
     }
+    if (blockedByLayout()) return;
 
     setIsGenerating(true);
     setGenerationProgress("Initializing ZIP archive...");
-
     try {
       const zip = new JSZip();
-
       for (let i = 0; i < selectedList.length; i++) {
         const product = selectedList[i];
         const prodId = getProductId(product);
-        const qty = quantities[prodId] || 1;
-
         setGenerationProgress(`Generating PDF ${i + 1} of ${selectedList.length}: ${product.name}`);
-
-        const pdfDoc = await createProductLabelPdf(product, qty);
-        const pdfArrayBuffer = pdfDoc.output("arraybuffer");
-
-        const sanitizedName = product.name
-          .replace(/[^a-zA-Z0-9_-]/g, "_")
-          .substring(0, 30);
-        const filename = `Barcode_${sanitizedName}_${product.sku || prodId}.pdf`;
-
-        zip.file(filename, pdfArrayBuffer);
+        const pdfDoc = buildLabelsPdf(await buildLabelItems([product]));
+        const sanitizedName = product.name.replace(/[^a-zA-Z0-9_-]/g, "_").substring(0, 30);
+        zip.file(`Barcode_${sanitizedName}_${product.sku || prodId}.pdf`, pdfDoc.output("arraybuffer"));
       }
-
       setGenerationProgress("Compressing ZIP file...");
       const content = await zip.generateAsync({ type: "blob" });
-
       const link = document.createElement("a");
       link.href = URL.createObjectURL(content);
       link.download = `bulk_barcodes_${new Date().toISOString().slice(0, 10)}.zip`;
       link.click();
       URL.revokeObjectURL(link.href);
-
       setGenerationProgress("Download complete!");
     } catch (err) {
       console.error("Failed to generate ZIP:", err);
@@ -301,157 +332,20 @@ export default function BulkBarcodeModal({
     }
   };
 
-  // 2. Download single compiled Bulk PDF sheet (Customizable 1, 2, or 3 Columns)
+  // 2. One PDF with every label
   const handleDownloadSingleBulkPdf = async () => {
-    const selectedList = products.filter((p) => selectedIds.has(getProductId(p)));
+    const selectedList = selectedProducts();
     if (selectedList.length === 0) {
       alert("Please select at least one product.");
       return;
     }
+    if (blockedByLayout()) return;
 
     setIsGenerating(true);
-    setGenerationProgress(`Generating ${columnsCount}-Column Barcode PDF sheet...`);
-
+    setGenerationProgress(`Generating ${columnsCount}-column barcode PDF...`);
     try {
-      const doc = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      });
-
-      // Dimension calculations based on columnsCount
-      let pageMarginLeft = 10;
-      let pageMarginTop = 10;
-      let colWidth = 92;
-      let rowHeight = 43;
-      let colGap = 6;
-      let rowGap = 3;
-      const colsPerPage = columnsCount;
-      let rowsPerPage = 6;
-
-      if (columnsCount === 1) {
-        pageMarginLeft = 15;
-        pageMarginTop = 12;
-        colWidth = 180;
-        rowHeight = 40;
-        colGap = 0;
-        rowGap = 4;
-        rowsPerPage = 6;
-      } else if (columnsCount === 2) {
-        pageMarginLeft = 10;
-        pageMarginTop = 10;
-        colWidth = 92;
-        rowHeight = 43;
-        colGap = 6;
-        rowGap = 3;
-        rowsPerPage = 6;
-      } else if (columnsCount === 3) {
-        pageMarginLeft = 7;
-        pageMarginTop = 8;
-        colWidth = 62;
-        rowHeight = 37;
-        colGap = 4.5;
-        rowGap = 3;
-        rowsPerPage = 7;
-      }
-
-      const itemsPerPage = colsPerPage * rowsPerPage;
-
-      let itemIndex = 0;
-
-      for (let i = 0; i < selectedList.length; i++) {
-        const product = selectedList[i];
-        const prodId = getProductId(product);
-        const qty = quantities[prodId] || 1;
-        const rawBarcode = Array.isArray(product.barcode) ? product.barcode[0] : product.barcode;
-        const barcodeVal = rawBarcode || product.sku || prodId || "123456789";
-        const barcodeImg = await code128DataUrl(barcodeVal);
-
-        for (let q = 0; q < qty; q++) {
-          if (itemIndex > 0 && itemIndex % itemsPerPage === 0) {
-            doc.addPage("a4", "portrait");
-          }
-
-          const positionOnPage = itemIndex % itemsPerPage;
-          const col = positionOnPage % colsPerPage;
-          const row = Math.floor(positionOnPage / colsPerPage);
-
-          const x = pageMarginLeft + col * (colWidth + colGap);
-          const y = pageMarginTop + row * (rowHeight + rowGap);
-
-          // Draw clean rounded boundary box for each label
-          doc.setDrawColor(209, 213, 219);
-          doc.setFillColor(255, 255, 255);
-          doc.roundedRect(x, y, colWidth, rowHeight, 2, 2, "FD");
-
-          let currentY = y + (columnsCount === 3 ? 3.5 : 4.5);
-          const centerX = x + colWidth / 2;
-
-          // Header Store Name
-          if (showStoreName && storeName) {
-            doc.setFontSize(columnsCount === 3 ? 7.5 : 8.5);
-            doc.setFont("helvetica", "bold");
-            doc.setTextColor(15, 23, 42);
-            doc.text(storeName.toUpperCase(), centerX, currentY, { align: "center" });
-            currentY += columnsCount === 3 ? 3.5 : 4.2;
-          }
-
-          // Product Name (wrapped properly without overlapping)
-          if (showProductName && product.name) {
-            doc.setFontSize(columnsCount === 3 ? 7 : 8);
-            doc.setFont("helvetica", "bold");
-            doc.setTextColor(30, 41, 59);
-
-            const wrappedLines: string[] = doc.splitTextToSize(
-              product.name,
-              colWidth - (columnsCount === 3 ? 6 : 8)
-            );
-            const linesToPrint = wrappedLines.slice(0, columnsCount === 3 ? 1 : 2);
-            linesToPrint.forEach((line: string) => {
-              doc.text(line, centerX, currentY, { align: "center" });
-              currentY += columnsCount === 3 ? 3.2 : 3.6;
-            });
-          }
-
-          // Barcode Image
-          if (barcodeImg) {
-            const imgW = colWidth - (columnsCount === 3 ? 10 : columnsCount === 2 ? 16 : 30);
-            const imgH = columnsCount === 3 ? 12 : 14;
-            const imgX = x + (colWidth - imgW) / 2;
-            doc.addImage(barcodeImg, "PNG", imgX, currentY, imgW, imgH);
-            currentY += imgH + 1.8;
-          }
-
-          // SKU & Barcode Code Text
-          if (showSku) {
-            doc.setFontSize(columnsCount === 3 ? 6.5 : 7.5);
-            doc.setFont("courier", "bold");
-            doc.setTextColor(15, 23, 42);
-            doc.text(barcodeVal, centerX, currentY, { align: "center" });
-            currentY += columnsCount === 3 ? 2.8 : 3.2;
-          }
-
-          // Price / MRP / SP
-          if (showPrice) {
-            doc.setFontSize(columnsCount === 3 ? 6.5 : 7.5);
-            doc.setFont("helvetica", "bold");
-            doc.setTextColor(15, 23, 42);
-            const sp = product.sellingPrice || product.price || 0;
-            const mrp = product.mrp || product.valueMrp || sp;
-            let priceStr = `SP: Rs. ${sp}`;
-            if (showMrp && mrp > sp) {
-              priceStr = `MRP: Rs. ${mrp} | SP: Rs. ${sp}`;
-            }
-            doc.text(priceStr, centerX, currentY, { align: "center" });
-          }
-
-          itemIndex++;
-        }
-      }
-
-      doc.save(
-        `bulk_barcodes_${columnsCount}col_sheet_${new Date().toISOString().slice(0, 10)}.pdf`
-      );
+      const doc = buildLabelsPdf(await buildLabelItems(selectedList));
+      doc.save(`bulk_barcodes_${columnsCount}col_${computed.paper}_${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (err) {
       console.error("Failed to generate PDF sheet:", err);
       alert("Failed to generate PDF sheet.");
@@ -460,13 +354,14 @@ export default function BulkBarcodeModal({
     }
   };
 
-  // 3. Print Barcodes (Customizable 1, 2, or 3 Columns)
+  // 3. Direct print: same positions in millimetres, page size set for the printer
   const handlePrintBarcodes = async () => {
-    const selectedList = products.filter((p) => selectedIds.has(getProductId(p)));
+    const selectedList = selectedProducts();
     if (selectedList.length === 0) {
       alert("Please select at least one product.");
       return;
     }
+    if (blockedByLayout()) return;
 
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
@@ -474,168 +369,99 @@ export default function BulkBarcodeModal({
       return;
     }
 
-    const cardWidthPercent =
-      columnsCount === 1 ? "100%" : columnsCount === 2 ? "48.5%" : "31.8%";
+    const L = computed;
+    const items = await buildLabelItems(selectedList);
+    const s = labelContentScale(L.labelWidth, L.labelHeight);
+    const pad = Math.max(0.8, 1.2 * s);
 
-    let htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Print Bulk Barcodes (${columnsCount} Column${columnsCount > 1 ? "s" : ""})</title>
-        <style>
-          @page {
-            size: A4 portrait;
-            margin: 8mm;
-          }
-          *, *:before, *:after {
-            box-sizing: border-box;
-          }
-          body {
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background: #ffffff;
-            color: #111827;
-          }
-          .print-grid {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-between;
-            width: 100%;
-          }
-          .label-card {
-            width: ${cardWidthPercent};
-            border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            padding: ${columnsCount === 3 ? "6px 6px" : "8px 10px"};
-            margin-bottom: ${columnsCount === 3 ? "4mm" : "5mm"};
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: space-between;
-            text-align: center;
-            background: #ffffff;
-            page-break-inside: avoid;
-            break-inside: avoid;
-            min-height: ${columnsCount === 3 ? "110px" : "125px"};
-          }
-          .store-name {
-            font-size: ${columnsCount === 3 ? "9px" : "10px"};
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #0f172a;
-            margin-bottom: 2px;
-            width: 100%;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            border-bottom: 1px solid #f1f5f9;
-            padding-bottom: 2px;
-          }
-          .product-title {
-            font-size: ${columnsCount === 3 ? "9.5px" : "11px"};
-            font-weight: 600;
-            color: #1e293b;
-            line-height: 1.25;
-            margin-bottom: 3px;
-            width: 100%;
-            max-height: 2.5em;
-            overflow: hidden;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            word-break: break-word;
-          }
-          .barcode-container {
-            width: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin: 2px 0;
-          }
-          .barcode-img {
-            max-width: ${columnsCount === 3 ? "95%" : "88%"};
-            height: ${columnsCount === 3 ? "40px" : "48px"};
-            object-fit: contain;
-          }
-          .sku-code {
-            font-size: ${columnsCount === 3 ? "8.5px" : "10px"};
-            font-family: "Courier New", Courier, monospace;
-            font-weight: 700;
-            color: #0f172a;
-            margin-top: 2px;
-            letter-spacing: 0.5px;
-          }
-          .price-line {
-            font-size: ${columnsCount === 3 ? "8.5px" : "10px"};
-            font-weight: 800;
-            color: #0f172a;
-            margin-top: 3px;
-          }
-          .mrp-strike {
-            font-size: ${columnsCount === 3 ? "8px" : "9px"};
-            font-weight: 400;
-            color: #64748b;
-            text-decoration: line-through;
-            margin-right: 4px;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="print-grid">
-    `;
+    const pages: string[][] = [];
+    items.forEach((item, i) => {
+      const slot = labelSlot(L, i);
+      if (!pages[slot.page]) pages[slot.page] = [];
+      pages[slot.page].push(`
+        <div class="label" style="left:${slot.x}mm;top:${slot.y}mm">
+          ${showStoreName && storeName ? `<div class="store">${escapeHtml(storeName)}</div>` : ""}
+          ${showProductName ? `<div class="name">${escapeHtml(item.product.name)}</div>` : ""}
+          <div class="bc">${item.barcodeImg ? `<img src="${item.barcodeImg}" />` : ""}</div>
+          ${showSku ? `<div class="sku">${escapeHtml(item.barcodeVal)}</div>` : ""}
+          ${showPrice ? `<div class="price">${escapeHtml(priceTextOf(item.product, "₹"))}</div>` : ""}
+        </div>`);
+    });
 
-    for (const product of selectedList) {
-      const prodId = getProductId(product);
-      const qty = quantities[prodId] || 1;
-      const rawBarcode = Array.isArray(product.barcode) ? product.barcode[0] : product.barcode;
-      const barcodeVal = rawBarcode || product.sku || prodId || "123456789";
-      const barcodeImg = await code128DataUrl(barcodeVal);
-
-      const sp = product.sellingPrice || product.price || 0;
-      const mrp = product.mrp || product.valueMrp || sp;
-
-      for (let q = 0; q < qty; q++) {
-        htmlContent += `
-          <div class="label-card">
-            ${showStoreName && storeName ? `<div class="store-name">${storeName}</div>` : ""}
-            ${showProductName ? `<div class="product-title">${product.name}</div>` : ""}
-            ${
-              barcodeImg
-                ? `<div class="barcode-container"><img class="barcode-img" src="${barcodeImg}" /></div>`
-                : ""
-            }
-            ${showSku ? `<div class="sku-code">${barcodeVal}</div>` : ""}
-            ${
-              showPrice
-                ? `<div class="price-line">${
-                    showMrp && mrp > sp ? `<span class="mrp-strike">MRP: ₹${mrp}</span>` : ""
-                  }<span>SP: ₹${sp}</span></div>`
-                : ""
-            }
-          </div>
-        `;
-      }
-    }
-
-    htmlContent += `
-        </div>
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-              window.close();
-            }, 300);
-          };
-        </script>
-      </body>
-      </html>
-    `;
-
-    printWindow.document.write(htmlContent);
+    const pageSize = L.paper === "a4" ? "210mm 297mm" : `${L.pageWidth}mm ${L.pageHeight}mm`;
+    printWindow.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <title>Print Barcodes (${L.columns} per row)</title>
+  <style>
+    @page { size: ${pageSize}; margin: 0; }
+    *, *:before, *:after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #fff; color: #0f172a;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    .page { position: relative; width: ${L.pageWidth}mm; height: ${L.pageHeight}mm; overflow: hidden;
+      page-break-after: always; break-after: page; }
+    .page:last-child { page-break-after: auto; break-after: auto; }
+    .label { position: absolute; width: ${L.labelWidth}mm; height: ${L.labelHeight}mm; padding: ${pad}mm;
+      display: flex; flex-direction: column; align-items: center; text-align: center; overflow: hidden;
+      ${L.border ? "border: 0.2mm solid #94a3b8; border-radius: 1mm;" : ""} }
+    .store { font-size: ${(7.5 * s).toFixed(1)}pt; font-weight: 800; text-transform: uppercase; line-height: 1.15; width: 100%;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .name { font-size: ${(7 * s).toFixed(1)}pt; font-weight: 700; line-height: 1.15; width: 100%;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bc { flex: 1 1 auto; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; padding: 0.3mm 0; }
+    .bc img { width: 100%; height: 100%; max-height: ${(16 * s).toFixed(1)}mm; object-fit: fill; image-rendering: pixelated; }
+    .sku { font-family: "Courier New", Courier, monospace; font-size: ${(6.5 * s).toFixed(1)}pt; font-weight: 700; line-height: 1.15; }
+    .price { font-size: ${(7 * s).toFixed(1)}pt; font-weight: 800; line-height: 1.15; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  ${pages.map((labels) => `<div class="page">${labels.join("")}</div>`).join("")}
+  <script>
+    window.onload = function () { setTimeout(function () { window.print(); window.close(); }, 300); };
+  </script>
+</body>
+</html>`);
     printWindow.document.close();
   };
+
+  /** Save this page setup (and label size) to Barcode Settings so every PC and every print uses it. */
+  const saveLayoutAsDefault = async () => {
+    setSavingDefault(true);
+    setSaveMessage("");
+    try {
+      const res: any = await getAppSettings();
+      const current = res?.data?.barcodeSettings || barcodeSettings || {};
+      const { labelWidth, labelHeight, ...pageSetup } = layout;
+      const next = { ...current, width: labelWidth, height: labelHeight, layout: pageSetup };
+      const saved: any = await updateAppSettings({ barcodeSettings: next } as any);
+      if (saved?.success === false) throw new Error(saved?.message || "Save failed");
+      onSettingsSaved?.(next);
+      setSaveMessage("Saved. Used for all barcode PDFs and prints.");
+    } catch (err: any) {
+      setSaveMessage(err?.response?.data?.message || err?.message || "Could not save");
+    } finally {
+      setSavingDefault(false);
+    }
+  };
+
+  const totalLabels = Array.from(selectedIds).reduce((sum, id) => sum + (quantities[id] || 1), 0);
+  const presetId = LABEL_SIZE_PRESETS.find((p) => p.width === layout.labelWidth && p.height === layout.labelHeight)?.id || "custom";
+  const numberInput = (key: keyof LabelPageLayout, label: string, step = 0.1, min = 0) => (
+    <label className="block">
+      <span className="block text-[10px] font-semibold text-neutral-500 mb-0.5">{label}</span>
+      <div className="flex items-center rounded-lg border border-neutral-300 bg-white focus-within:ring-2 focus-within:ring-[var(--primary-color)]">
+        <input
+          type="number"
+          step={step}
+          min={min}
+          value={layout[key] as number}
+          onChange={(e) => updateLayout({ [key]: e.target.value === "" ? 0 : Number(e.target.value) } as Partial<LabelPageLayout>)}
+          className="w-full px-2 py-1.5 text-xs rounded-lg focus:outline-none"
+        />
+        <span className="pr-2 text-[10px] text-neutral-400">mm</span>
+      </div>
+    </label>
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
@@ -769,14 +595,14 @@ export default function BulkBarcodeModal({
               <div>
                 <label className="block text-[11px] font-semibold text-neutral-700 mb-1.5 flex items-center justify-between">
                   <span>Columns Layout (Per Row)</span>
-                  <span className="text-[10px] text-neutral-400 font-normal">Choose 1, 2 or 3 labels per line</span>
+                  <span className="text-[10px] text-neutral-400 font-normal">Labels across the roll / sheet</span>
                 </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[1, 2, 3].map((col) => (
+                <div className="grid grid-cols-4 gap-2">
+                  {[1, 2, 3, 4].map((col) => (
                     <button
                       key={col}
                       type="button"
-                      onClick={() => setColumnsCount(col as 1 | 2 | 3)}
+                      onClick={() => setColumnsCount(col)}
                       className={`py-2 px-3 rounded-lg text-xs font-semibold border flex items-center justify-center gap-2 transition-all cursor-pointer ${
                         columnsCount === col
                           ? "bg-[var(--primary-color)] text-white border-[var(--primary-color)] shadow-sm scale-[1.02]"
@@ -794,34 +620,15 @@ export default function BulkBarcodeModal({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-1 border-t border-neutral-100">
-                <div>
-                  <label className="block text-[11px] font-semibold text-neutral-600 mb-1">
-                    Label Paper Format
-                  </label>
-                  <select
-                    value={labelSize}
-                    onChange={(e) => setLabelSize(e.target.value as any)}
-                    className="w-full text-xs border border-neutral-300 rounded-lg p-2 bg-white focus:ring-2 focus:ring-[var(--primary-color)]"
-                  >
-                    <option value="50x30">Standard Label (50mm x 30mm)</option>
-                    <option value="38x25">Compact Label (38mm x 25mm)</option>
-                    <option value="60x40">Large Label (60mm x 40mm)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-neutral-600 mb-1">
-                    Store Header Text
-                  </label>
-                  <input
-                    type="text"
-                    value={storeName}
-                    onChange={(e) => setStoreName(e.target.value)}
-                    className="w-full text-xs border border-neutral-300 rounded-lg p-1.5 focus:ring-2 focus:ring-[var(--primary-color)]"
-                    placeholder="Store / Brand Name"
-                  />
-                </div>
+              <div className="pt-1 border-t border-neutral-100">
+                <label className="block text-[11px] font-semibold text-neutral-600 mb-1">Store Header Text</label>
+                <input
+                  type="text"
+                  value={storeName}
+                  onChange={(e) => setStoreName(e.target.value)}
+                  className="w-full text-xs border border-neutral-300 rounded-lg p-1.5 focus:ring-2 focus:ring-[var(--primary-color)]"
+                  placeholder="Store / Brand Name"
+                />
               </div>
 
               {/* Toggles */}
@@ -870,6 +677,161 @@ export default function BulkBarcodeModal({
               </div>
             </div>
 
+            {/* Page Setup: margins, gaps and page size, used by the preview, PDFs and print */}
+            <div className="bg-white border border-neutral-200 rounded-xl p-4 shadow-xs space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-700 border-b border-neutral-100 pb-2 flex items-center justify-between">
+                <span>Page Setup · Margins &amp; Gaps</span>
+                <span className="text-[10px] text-neutral-500 font-mono font-medium normal-case">
+                  Page {computed.pageWidth} × {computed.pageHeight} mm
+                </span>
+              </h3>
+
+              <div className="grid grid-cols-2 gap-2">
+                {(["roll", "a4"] as const).map((paper) => (
+                  <button
+                    key={paper}
+                    type="button"
+                    onClick={() => updateLayout({ paper })}
+                    className={`py-1.5 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                      layout.paper === paper
+                        ? "bg-[var(--primary-color)] text-white border-[var(--primary-color)]"
+                        : "bg-neutral-50 text-neutral-700 border-neutral-300 hover:bg-neutral-100"
+                    }`}
+                  >
+                    {paper === "roll" ? "Label roll (thermal printer)" : "A4 sheet"}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-4 gap-2 items-end">
+                <label className="col-span-2 block">
+                  <span className="block text-[10px] font-semibold text-neutral-500 mb-0.5">Label size</span>
+                  <select
+                    value={presetId}
+                    onChange={(e) => {
+                      const preset = LABEL_SIZE_PRESETS.find((p) => p.id === e.target.value);
+                      if (preset) updateLayout({ labelWidth: preset.width, labelHeight: preset.height });
+                    }}
+                    className="w-full text-xs border border-neutral-300 rounded-lg p-1.5 bg-white focus:ring-2 focus:ring-[var(--primary-color)]"
+                  >
+                    {LABEL_SIZE_PRESETS.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                    <option value="custom">Custom size</option>
+                  </select>
+                </label>
+                {numberInput("labelWidth", "Label width", 0.1, 10)}
+                {numberInput("labelHeight", "Label height", 0.1, 10)}
+              </div>
+
+              {layout.paper === "roll" && (
+                <label className="block w-1/4">
+                  <span className="block text-[10px] font-semibold text-neutral-500 mb-0.5">Rows per page</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={layout.rows}
+                    onChange={(e) => updateLayout({ rows: Number(e.target.value) || 1 })}
+                    className="w-full px-2 py-1.5 text-xs rounded-lg border border-neutral-300 focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]"
+                  />
+                </label>
+              )}
+
+              <div>
+                <p className="text-[11px] font-semibold text-neutral-600 mb-1">Page margins (4 sides)</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {numberInput("marginTop", "Top")}
+                  {numberInput("marginBottom", "Bottom")}
+                  {numberInput("marginLeft", "Left")}
+                  {numberInput("marginRight", "Right")}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[11px] font-semibold text-neutral-600 mb-1">Gap between labels</p>
+                <div className="grid grid-cols-4 gap-2 items-end">
+                  {numberInput("gapX", "Horizontal (side by side)")}
+                  {numberInput("gapY", "Vertical (between rows)")}
+                  <label className="col-span-2 flex items-center gap-2 text-xs pb-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={layout.border}
+                      onChange={(e) => updateLayout({ border: e.target.checked })}
+                      className="rounded text-[var(--primary-color)]"
+                    />
+                    Print a thin border around each label
+                  </label>
+                </div>
+              </div>
+
+              {computed.problems.length > 0 && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                  {computed.problems.map((p) => (
+                    <p key={p}>{p}</p>
+                  ))}
+                  <p className="mt-0.5">Reduce the columns, label width, margins or gaps.</p>
+                </div>
+              )}
+
+              {/* Scaled drawing of one page: grey = page, dashed = margins, green = labels */}
+              <div className="rounded-lg bg-neutral-100 p-2 flex justify-center">
+                <svg
+                  viewBox={`0 0 ${computed.pageWidth} ${computed.pageHeight}`}
+                  className="w-full"
+                  style={{ maxHeight: computed.paper === "a4" ? 240 : 110 }}
+                  preserveAspectRatio="xMidYMid meet"
+                >
+                  <rect x={0} y={0} width={computed.pageWidth} height={computed.pageHeight} fill="#ffffff" stroke="#94a3b8" strokeWidth={computed.pageWidth / 250} />
+                  <rect
+                    x={computed.marginLeft}
+                    y={computed.marginTop}
+                    width={Math.max(0, computed.pageWidth - computed.marginLeft - computed.marginRight)}
+                    height={Math.max(0, computed.pageHeight - computed.marginTop - computed.marginBottom)}
+                    fill="none"
+                    stroke="#f59e0b"
+                    strokeDasharray={`${computed.pageWidth / 80} ${computed.pageWidth / 120}`}
+                    strokeWidth={computed.pageWidth / 400}
+                  />
+                  {Array.from({ length: Math.min(computed.perPage, 80) }, (_, i) => labelSlot(computed, i)).map((slot, i) => (
+                    <rect
+                      key={i}
+                      x={slot.x}
+                      y={slot.y}
+                      width={computed.labelWidth}
+                      height={computed.labelHeight}
+                      rx={Math.min(computed.labelWidth, computed.labelHeight) * 0.08}
+                      fill="#ecfdf5"
+                      stroke="#059669"
+                      strokeWidth={computed.pageWidth / 300}
+                    />
+                  ))}
+                </svg>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[10px] text-neutral-500 font-mono">
+                  Page {computed.pageWidth} × {computed.pageHeight} mm · Label {computed.labelWidth} × {computed.labelHeight} mm ·{" "}
+                  {computed.columns} per row · {computed.rowsPerPage} row{computed.rowsPerPage > 1 ? "s" : ""}/page ·{" "}
+                  {labelPageCount(computed, totalLabels)} page{labelPageCount(computed, totalLabels) === 1 ? "" : "s"} for {totalLabels} labels
+                </p>
+                <div className="flex items-center gap-2">
+                  {saveMessage && <span className="text-[10px] text-neutral-600">{saveMessage}</span>}
+                  <button
+                    type="button"
+                    onClick={saveLayoutAsDefault}
+                    disabled={savingDefault}
+                    className="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-[var(--primary-color)] text-[var(--primary-color)] hover:bg-emerald-50 disabled:opacity-50 cursor-pointer"
+                    title="Save this page setup and label size to Barcode Settings so every PC and every barcode print uses it"
+                  >
+                    {savingDefault ? "Saving…" : "Save as default"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
             {/* Live Preview Card - Dynamically shows 1, 2, or 3 columns */}
             <div className="bg-neutral-100 border border-neutral-300 border-dashed rounded-xl p-3 flex flex-col items-center justify-center min-h-[170px]">
               <div className="flex items-center justify-between w-full mb-2">
@@ -878,20 +840,19 @@ export default function BulkBarcodeModal({
                   Live Barcode Label Preview ({columnsCount} Column{columnsCount > 1 ? "s" : ""})
                 </span>
                 <span className="text-[10px] text-neutral-500 font-mono font-medium">
-                  {columnsCount === 1 ? "1 Column / Row" : columnsCount === 2 ? "2 Columns / Row" : "3 Columns / Row"}
+                  {columnsCount} Column{columnsCount > 1 ? "s" : ""} / Row
                 </span>
               </div>
 
               {/* Grid of Preview Cards */}
               {previewProducts.length > 0 ? (
                 <div
-                  className={`grid gap-2 w-full ${
-                    columnsCount === 1
-                      ? "grid-cols-1 max-w-xs mx-auto"
-                      : columnsCount === 2
-                      ? "grid-cols-2"
-                      : "grid-cols-3"
-                  }`}
+                  className={`grid w-full ${columnsCount === 1 ? "max-w-xs mx-auto" : ""}`}
+                  style={{
+                    gridTemplateColumns: `repeat(${columnsCount}, minmax(0, 1fr))`,
+                    // Follow the horizontal gap setting (1 mm ≈ 3.8 px on screen)
+                    gap: `${Math.min(24, Math.max(2, layout.gapX * 3.8))}px`,
+                  }}
                 >
                   {previewProducts.map((p, idx) => {
                     const prodId = getProductId(p);
@@ -960,7 +921,7 @@ export default function BulkBarcodeModal({
               {/* Option 1: ZIP Archive of PDFs */}
               <button
                 onClick={handleDownloadZipPDFs}
-                disabled={isGenerating || selectedIds.size === 0}
+                disabled={isGenerating || selectedIds.size === 0 || computed.problems.length > 0}
                 className="bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium text-xs px-3 py-2.5 rounded-lg flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                 title="Download ZIP containing editable individual PDF barcodes for selected products"
               >
@@ -975,7 +936,7 @@ export default function BulkBarcodeModal({
               {/* Option 2: Single Bulk Sheet PDF */}
               <button
                 onClick={handleDownloadSingleBulkPdf}
-                disabled={isGenerating || selectedIds.size === 0}
+                disabled={isGenerating || selectedIds.size === 0 || computed.problems.length > 0}
                 className="bg-emerald-700 hover:bg-emerald-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium text-xs px-3 py-2.5 rounded-lg flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                 title={`Download single combined PDF sheet with selected barcodes in ${columnsCount} columns`}
               >
@@ -991,7 +952,7 @@ export default function BulkBarcodeModal({
               {/* Option 3: Direct Print */}
               <button
                 onClick={handlePrintBarcodes}
-                disabled={isGenerating || selectedIds.size === 0}
+                disabled={isGenerating || selectedIds.size === 0 || computed.problems.length > 0}
                 className="bg-neutral-800 hover:bg-neutral-900 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium text-xs px-3 py-2.5 rounded-lg flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                 title={`Direct print selected barcodes in ${columnsCount} columns`}
               >

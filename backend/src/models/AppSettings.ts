@@ -256,6 +256,19 @@ export interface IAppSettings extends Document {
         showName: boolean;
         mrpLabel?: string;
         spLabel?: string;
+        /** Label page setup: labels per row/page, page margins and gaps between labels (mm) */
+        layout?: {
+            paper: "roll" | "a4";
+            columns: number;
+            rows: number;
+            marginTop: number;
+            marginBottom: number;
+            marginLeft: number;
+            marginRight: number;
+            gapX: number;
+            gapY: number;
+            border: boolean;
+        };
     };
 
   // Updated By
@@ -739,7 +752,19 @@ const AppSettingsSchema = new Schema<IAppSettings>(
         showPrice: { type: Boolean, default: true },
         showName: { type: Boolean, default: true },
         mrpLabel: { type: String, default: "MRP" },
-        spLabel: { type: String, default: "SP" }
+        spLabel: { type: String, default: "SP" },
+        layout: {
+            paper: { type: String, enum: ["roll", "a4"], default: "roll" },
+            columns: { type: Number, min: 1, max: 4, default: 2 },
+            rows: { type: Number, min: 1, max: 30, default: 1 },
+            marginTop: { type: Number, min: 0, max: 50, default: 0 },
+            marginBottom: { type: Number, min: 0, max: 50, default: 0 },
+            marginLeft: { type: Number, min: 0, max: 50, default: 1.5 },
+            marginRight: { type: Number, min: 0, max: 50, default: 1.5 },
+            gapX: { type: Number, min: 0, max: 50, default: 2 },
+            gapY: { type: Number, min: 0, max: 50, default: 2 },
+            border: { type: Boolean, default: false }
+        }
     },
 
     // Invoice Settings (Notes & Terms)

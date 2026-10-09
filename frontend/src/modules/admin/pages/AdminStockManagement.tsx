@@ -24,6 +24,7 @@ import { getAppSettings } from "../../../services/api/admin/adminSettingsService
 import VariationDropdown from "../../../components/VariationDropdown";
 import QRScannerModal from "../../../components/QRScannerModal";
 import { openBarcodeScanner } from '../../../utils/scannerPlatform';
+import { computeLabelLayout } from '../../../utils/barcodeLabelLayout';
 
 function fixLikelyMojibake(input: unknown): string {
   let s = String(input ?? "");
@@ -619,17 +620,22 @@ export default function AdminStockManagement() {
           return;
       }
 
+      // Saved page setup (bulk barcode "Save as default"): roll width/A4, margins → same placement as bulk prints
+      const pageSetup = isCustom && customSettings?.layout
+          ? computeLabelLayout({ ...customSettings.layout, labelWidth: customSettings.width, labelHeight: customSettings.height })
+          : null;
       let styleContent = '';
       if (isCustom && customSettings) {
           styleContent = `
               @page {
-                size: ${customSettings.width}mm ${customSettings.height}mm;
+                size: ${pageSetup ? pageSetup.pageWidth : customSettings.width}mm ${pageSetup ? pageSetup.pageHeight : customSettings.height}mm;
                 margin: 0;
               }
               body {
                   margin: 0;
-                  padding: 0;
-                  width: ${customSettings.width}mm;
+                  padding: ${pageSetup ? `${pageSetup.marginTop}mm 0 0 ${pageSetup.marginLeft}mm` : '0'};
+                  box-sizing: border-box;
+                  width: ${pageSetup ? pageSetup.pageWidth : customSettings.width}mm;
               }
                .barcode-container {
                    width: ${customSettings.width}mm;
@@ -825,212 +831,218 @@ export default function AdminStockManagement() {
   };
 
 
-  // Flatten products with variations into individual rows
-  const productVariations = useMemo(() => {
-    const variations: ProductVariation[] = [];
+  const buildProductVariations = (
+  productsList: Product[],
+  categoriesList: Category[],
+  subCategoriesList: SubCategory[]
+): ProductVariation[] => {
+  const variations: ProductVariation[] = [];
 
-    products.forEach((product) => {
-      // Helper to safely get properties
-      const p: any = product;
+  productsList.forEach((product) => {
+    // Helper to safely get properties
+    const p: any = product;
 
-      // Category
-      let categoryName = "Unknown";
-      let categoryId = "";
-      if (typeof product.category === "object" && product.category) {
-        categoryName = product.category.name || "Unknown";
-        categoryId = product.category._id || "";
-      } else if (typeof product.category === "string") {
-         const catObj = categories.find((c) => c._id === product.category);
-         categoryName = catObj?.name || "Unknown";
-         categoryId = product.category;
-      }
+    // Category
+    let categoryName = "Unknown";
+    let categoryId = "";
+    if (typeof product.category === "object" && product.category) {
+      categoryName = product.category.name || "Unknown";
+      categoryId = product.category._id || "";
+    } else if (typeof product.category === "string") {
+      const catObj = categoriesList.find((c) => c._id === product.category);
+      categoryName = catObj?.name || "Unknown";
+      categoryId = product.category;
+    }
 
-      // SubCategory
-      let subCategoryName = "-";
-      if (typeof p.subcategory === "object" && p.subcategory) {
-        subCategoryName = p.subcategory.name || (p.subcategory as any).subcategoryName || "-";
-      } else if (typeof p.subcategory === "string" && p.subcategory && p.subcategory !== "-") {
-         // Attempt lookup in subCategories list
-         const subObj = subCategories.find(sc => sc._id === p.subcategory);
-         subCategoryName = subObj?.name || (subObj as any)?.subcategoryName || p.subcategory;
-      }
-      // SubSubCategory
-      const subSubCategoryName = p.subSubCategory || "-";
-      // Brand
-      const brandName = typeof p.brand === "object" ? p.brand?.name || "-" : "-";
-      // Tax
-      const taxName = typeof p.tax === "object" ? p.tax?.name || "-" : "-";
-      const gstVal = typeof p.tax === "object" ? p.tax?.percentage + "%" || "-" : "-";
+    // SubCategory
+    let subCategoryName = "-";
+    if (typeof p.subcategory === "object" && p.subcategory) {
+      subCategoryName = p.subcategory.name || (p.subcategory as any).subcategoryName || "-";
+    } else if (typeof p.subcategory === "string" && p.subcategory && p.subcategory !== "-") {
+      const subObj = subCategoriesList.find((sc) => sc._id === p.subcategory);
+      subCategoryName = subObj?.name || (subObj as any)?.subcategoryName || p.subcategory;
+    }
+    // SubSubCategory
+    const subSubCategoryName = p.subSubCategory || "-";
+    // Brand
+    const brandName = typeof p.brand === "object" ? p.brand?.name || "-" : "-";
+    // Tax
+    const taxName = typeof p.tax === "object" ? p.tax?.name || "-" : "-";
+    const gstVal = typeof p.tax === "object" ? p.tax?.percentage + "%" || "-" : "-";
 
-      const sellerObj: any = (product as any).seller;
-      const sellerName =
-        typeof sellerObj === "object" && sellerObj
-          ? sellerObj.storeName || sellerObj.sellerName || "Unknown"
-          : "Unknown";
-      const sellerId =
-        typeof sellerObj === "object" && sellerObj
-          ? String(sellerObj._id || "")
-          : String(sellerObj || "");
+    const sellerObj: any = (product as any).seller;
+    const sellerName =
+      typeof sellerObj === "object" && sellerObj
+        ? sellerObj.storeName || sellerObj.sellerName || "Unknown"
+        : "Unknown";
+    const sellerId =
+      typeof sellerObj === "object" && sellerObj
+        ? String(sellerObj._id || "")
+        : String(sellerObj || "");
 
-      // Base fields
-      const baseGallery = Array.isArray(product.galleryImages)
-        ? product.galleryImages
-        : [];
-      const baseMainImg =
-        product.mainImage || baseGallery[0] || (product as any).image || "";
-      const baseBarcodeVal = Array.isArray(p.barcode)
-        ? p.barcode.join(", ")
-        : (p.barcode || "-");
-      const baseUnitPricing =
-        p.variations?.[0]?.tieredPrices ||
-        (p as any).unitPricing ||
-        (product as any).unitPricing ||
-        [];
-      const pFor2 = Array.isArray(baseUnitPricing)
-        ? baseUnitPricing.find((u: any) => Number(u.minQty) === 2)?.price
-        : undefined;
-      const pFor4 = Array.isArray(baseUnitPricing)
-        ? baseUnitPricing.find((u: any) => Number(u.minQty) === 4)?.price
-        : undefined;
-      const baseMfgDate = p.mfgDate || (product as any).mfgDate || "";
-      const baseExpiryDate = p.expiryDate || (product as any).expiryDate || "";
+    // Base fields
+    const baseGallery = Array.isArray(product.galleryImages)
+      ? product.galleryImages
+      : [];
+    const baseMainImg =
+      product.mainImage || baseGallery[0] || (product as any).image || "";
+    const baseBarcodeVal = Array.isArray(p.barcode)
+      ? p.barcode.join(", ")
+      : (p.barcode || "-");
+    const baseUnitPricing =
+      p.variations?.[0]?.tieredPrices ||
+      (p as any).unitPricing ||
+      (product as any).unitPricing ||
+      [];
+    const pFor2 = Array.isArray(baseUnitPricing)
+      ? baseUnitPricing.find((u: any) => Number(u.minQty) === 2)?.price
+      : undefined;
+    const pFor4 = Array.isArray(baseUnitPricing)
+      ? baseUnitPricing.find((u: any) => Number(u.minQty) === 4)?.price
+      : undefined;
+    const baseMfgDate = p.mfgDate || (product as any).mfgDate || "";
+    const baseExpiryDate = p.expiryDate || (product as any).expiryDate || "";
 
-      const baseVariation = {
-        productId: product._id,
-        name: fixLikelyMojibake(product.productName),
-        seller: sellerName,
-        sellerId: sellerId,
-        image: baseMainImg,
-        mainImage: baseMainImg,
-        galleryImage1: baseGallery[0] || "",
-        galleryImage2: baseGallery[1] || "",
-        galleryImage3: baseGallery[2] || "",
-        galleryImages: baseGallery,
-        category: categoryName,
-        categoryId: categoryId,
-        subCategory: subCategoryName,
-        subSubCategory: subSubCategoryName,
-        sku: p.itemCode || p.sku || "", // Item Code (5) (Note: variation might allow specific SKU)
-        rackNumber: p.storageLocation?.rackNumber || p.rackNumber || "-",
-        storageLocation: p.storageLocation ? `${p.storageLocation.city || ""}${p.storageLocation.city && p.storageLocation.warehouse ? " > " : ""}${p.storageLocation.warehouse || ""}${(p.storageLocation.warehouse || p.storageLocation.city) && p.storageLocation.room ? " > " : ""}${p.storageLocation.room || ""}${(p.storageLocation.room || p.storageLocation.warehouse || p.storageLocation.city) && p.storageLocation.rackNumber ? " > " : ""}${p.storageLocation.rackNumber || ""}` : "-",
-        storageCity: p.storageLocation?.city || "-",
-        storageWarehouse: p.storageLocation?.warehouse || "-",
-        storageRoom: p.storageLocation?.room || "-",
-        description: p.smallDescription || p.description || "-",
-        barcode: baseBarcodeVal,
-        hsnCode: p.hsnCode || "-",
-        unit: p.pack || "-", // Unit (10)
-        taxCategory: taxName,
-        gst: gstVal,
-        purchasePrice: Number(p.purchasePrice) || 0,
-        compareAtPrice: Number(p.compareAtPrice) || 0, // MRP (16)
-        price: Number(p.price) || 0, // Selling Price (17)
-        deliveryTime: p.deliveryTime || "-",
-        wholesalePrice: Number((p as any).wholesalePrice) || 0,
-        lowStockQuantity: Number(p.lowStockQuantity) || 5,
-        brand: brandName,
-        unitPriceMinQty2: pFor2 !== undefined ? Number(pFor2) : "-",
-        unitPriceMinQty4: pFor4 !== undefined ? Number(pFor4) : "-",
-        mfgDate: baseMfgDate,
-        expiryDate: baseExpiryDate,
-        publish: product.publish,
-        allVariations: product.variations || [],
-      };
+    const baseVariation = {
+      productId: product._id,
+      name: fixLikelyMojibake(product.productName),
+      seller: sellerName,
+      sellerId: sellerId,
+      image: baseMainImg,
+      mainImage: baseMainImg,
+      galleryImage1: baseGallery[0] || "",
+      galleryImage2: baseGallery[1] || "",
+      galleryImage3: baseGallery[2] || "",
+      galleryImages: baseGallery,
+      category: categoryName,
+      categoryId: categoryId,
+      subCategory: subCategoryName,
+      subSubCategory: subSubCategoryName,
+      sku: p.itemCode || p.sku || "",
+      rackNumber: p.storageLocation?.rackNumber || p.rackNumber || "-",
+      storageLocation: p.storageLocation ? `${p.storageLocation.city || ""}${p.storageLocation.city && p.storageLocation.warehouse ? " > " : ""}${p.storageLocation.warehouse || ""}${(p.storageLocation.warehouse || p.storageLocation.city) && p.storageLocation.room ? " > " : ""}${p.storageLocation.room || ""}${(p.storageLocation.room || p.storageLocation.warehouse || p.storageLocation.city) && p.storageLocation.rackNumber ? " > " : ""}${p.storageLocation.rackNumber || ""}` : "-",
+      storageCity: p.storageLocation?.city || "-",
+      storageWarehouse: p.storageLocation?.warehouse || "-",
+      storageRoom: p.storageLocation?.room || "-",
+      description: p.smallDescription || p.description || "-",
+      barcode: baseBarcodeVal,
+      hsnCode: p.hsnCode || "-",
+      unit: p.pack || "-",
+      taxCategory: taxName,
+      gst: gstVal,
+      purchasePrice: Number(p.purchasePrice) || 0,
+      compareAtPrice: Number(p.compareAtPrice) || 0,
+      price: Number(p.price) || 0,
+      deliveryTime: p.deliveryTime || "-",
+      wholesalePrice: Number((p as any).wholesalePrice) || 0,
+      lowStockQuantity: Number(p.lowStockQuantity) || 5,
+      brand: brandName,
+      unitPriceMinQty2: pFor2 !== undefined ? Number(pFor2) : "-",
+      unitPriceMinQty4: pFor4 !== undefined ? Number(pFor4) : "-",
+      mfgDate: baseMfgDate,
+      expiryDate: baseExpiryDate,
+      publish: product.publish,
+      allVariations: product.variations || [],
+    };
 
-      const variationsList = Array.isArray(product.variations)
-        ? product.variations
-        : [];
+    const variationsList = Array.isArray(product.variations)
+      ? product.variations
+      : [];
 
-      if (variationsList.length > 0) {
-        variationsList.forEach((v: any, index: number) => {
-          const variationType = v.variationType || v.name || "Standard";
-          const variationValue = v.value || v.title || "Default";
-          const currentStock = Number(v.stock) || 0;
-          const isSize = String(variationType).toLowerCase().includes("size");
-          const isColor = String(variationType).toLowerCase().includes("color");
-          const variantBarcodes = Array.isArray(v.barcode)
-            ? v.barcode
-            : v.barcode
-              ? [v.barcode]
-              : [];
-          const variantGallery = Array.isArray(v.galleryImages) && v.galleryImages.length > 0
-            ? v.galleryImages
-            : baseGallery;
-          const variantMainImg =
-            v.mainImage || v.image || baseMainImg || variantGallery[0] || "";
-          const variantUnitPricing =
-            v.tieredPrices || v.unitPricing || baseUnitPricing;
-          const vPriceFor2 = Array.isArray(variantUnitPricing)
-            ? variantUnitPricing.find((u: any) => Number(u.minQty) === 2)?.price
-            : undefined;
-          const vPriceFor4 = Array.isArray(variantUnitPricing)
-            ? variantUnitPricing.find((u: any) => Number(u.minQty) === 4)?.price
-            : undefined;
-          const variantMfgDate = v.mfgDate || baseMfgDate;
-          const variantExpiryDate = v.expiryDate || baseExpiryDate;
+    if (variationsList.length > 0) {
+      variationsList.forEach((v: any, index: number) => {
+        const variationType = v.variationType || v.name || "Standard";
+        const variationValue = v.value || v.title || "Default";
+        const currentStock = Number(v.stock) || 0;
+        const isSize = String(variationType).toLowerCase().includes("size");
+        const isColor = String(variationType).toLowerCase().includes("color");
+        const variantBarcodes = Array.isArray(v.barcode)
+          ? v.barcode
+          : v.barcode
+            ? [v.barcode]
+            : [];
+        const variantGallery = Array.isArray(v.galleryImages) && v.galleryImages.length > 0
+          ? v.galleryImages
+          : baseGallery;
+        const variantMainImg =
+          v.mainImage || v.image || baseMainImg || variantGallery[0] || "";
+        const variantUnitPricing =
+          v.tieredPrices || v.unitPricing || baseUnitPricing;
+        const vPriceFor2 = Array.isArray(variantUnitPricing)
+          ? variantUnitPricing.find((u: any) => Number(u.minQty) === 2)?.price
+          : undefined;
+        const vPriceFor4 = Array.isArray(variantUnitPricing)
+          ? variantUnitPricing.find((u: any) => Number(u.minQty) === 4)?.price
+          : undefined;
+        const variantMfgDate = v.mfgDate || baseMfgDate;
+        const variantExpiryDate = v.expiryDate || baseExpiryDate;
 
-          variations.push({
-            ...baseVariation,
-            id: `${product._id}-${v._id || index}`,
-            variation: `${variationType}: ${variationValue}`,
-            stock: currentStock,
-            price: Number(v.price) || baseVariation.price,
-            compareAtPrice:
-              Number(v.compareAtPrice) || baseVariation.compareAtPrice,
-            offerPrice:
-              Number(v.discPrice) || Number((p as any).discPrice) || 0,
-            status: product.publish ? "Published" : "Unpublished",
-            sku: v.sku || baseVariation.sku,
-            rackNumber: v.rackNumber || baseVariation.rackNumber,
-            image: variantMainImg,
-            mainImage: variantMainImg,
-            galleryImage1: variantGallery[0] || "",
-            galleryImage2: variantGallery[1] || "",
-            galleryImage3: variantGallery[2] || "",
-            galleryImages: variantGallery,
-            unitPriceMinQty2:
-              vPriceFor2 !== undefined
-                ? Number(vPriceFor2)
-                : baseVariation.unitPriceMinQty2,
-            unitPriceMinQty4:
-              vPriceFor4 !== undefined
-                ? Number(vPriceFor4)
-                : baseVariation.unitPriceMinQty4,
-            mfgDate: variantMfgDate,
-            expiryDate: variantExpiryDate,
-            barcode: variantBarcodes.length
-              ? variantBarcodes.join(", ")
-              : (baseVariation.barcode !== "-" ? baseVariation.barcode : "-"),
-            sizeName: isSize ? variationValue : "-",
-            colorName: isColor ? variationValue : "-",
-            attributeName: variationType,
-            valueMrp:
-              (Number(v.compareAtPrice) ||
-                Number(baseVariation.compareAtPrice) ||
-                0) * currentStock,
-            valuePurchase:
-              (Number(baseVariation.purchasePrice) || 0) * currentStock,
-          });
+        variations.push({
+          ...baseVariation,
+          id: `${product._id}-${v._id || index}`,
+          variation: `${variationType}: ${variationValue}`,
+          stock: currentStock,
+          price: Number(v.price) || baseVariation.price,
+          compareAtPrice:
+            Number(v.compareAtPrice) || baseVariation.compareAtPrice,
+          offerPrice:
+            Number(v.discPrice) || Number((p as any).discPrice) || 0,
+          status: product.publish ? "Published" : "Unpublished",
+          sku: v.sku || baseVariation.sku,
+          rackNumber: v.rackNumber || baseVariation.rackNumber,
+          image: variantMainImg,
+          mainImage: variantMainImg,
+          galleryImage1: variantGallery[0] || "",
+          galleryImage2: variantGallery[1] || "",
+          galleryImage3: variantGallery[2] || "",
+          galleryImages: variantGallery,
+          unitPriceMinQty2:
+            vPriceFor2 !== undefined
+              ? Number(vPriceFor2)
+              : baseVariation.unitPriceMinQty2,
+          unitPriceMinQty4:
+            vPriceFor4 !== undefined
+              ? Number(vPriceFor4)
+              : baseVariation.unitPriceMinQty4,
+          mfgDate: variantMfgDate,
+          expiryDate: variantExpiryDate,
+          barcode: variantBarcodes.length
+            ? variantBarcodes.join(", ")
+            : (baseVariation.barcode !== "-" ? baseVariation.barcode : "-"),
+          sizeName: isSize ? variationValue : "-",
+          colorName: isColor ? variationValue : "-",
+          attributeName: variationType,
+          valueMrp:
+            (Number(v.compareAtPrice) ||
+              Number(baseVariation.compareAtPrice) ||
+              0) * currentStock,
+          valuePurchase:
+            (Number(baseVariation.purchasePrice) || 0) * currentStock,
         });
-      } else {
-         const currentStock = Number(product.stock) || 0;
-         variations.push({
-            ...baseVariation,
-             id: product._id,
-             variation: "Default",
-             stock: currentStock,
-             offerPrice: Number(p.discPrice) || 0,
-             status: product.publish ? "Published" : "Unpublished",
-             sizeName: "-",
-             colorName: "-",
-             attributeName: "-",
-             valueMrp: (Number(baseVariation.compareAtPrice) || 0) * currentStock,
-             valuePurchase: (Number(baseVariation.purchasePrice) || 0) * currentStock,
-         });
-      }
-    });
+      });
+    } else {
+      const currentStock = Number(product.stock) || 0;
+      variations.push({
+        ...baseVariation,
+        id: product._id,
+        variation: "Default",
+        stock: currentStock,
+        offerPrice: Number(p.discPrice) || 0,
+        status: product.publish ? "Published" : "Unpublished",
+        sizeName: "-",
+        colorName: "-",
+        attributeName: "-",
+        valueMrp: (Number(baseVariation.compareAtPrice) || 0) * currentStock,
+        valuePurchase: (Number(baseVariation.purchasePrice) || 0) * currentStock,
+      });
+    }
+  });
 
-    return variations;
+  return variations;
+};
+
+  const productVariations = useMemo(() => {
+    return buildProductVariations(products, categories, subCategories);
   }, [products, categories, subCategories]);
 
   const handleSort = (column: string) => {
@@ -1250,118 +1262,207 @@ export default function AdminStockManagement() {
     handleShareProducts(Array.from(selectedProductIdsForShare));
   };
 
-  const handleExport = () => {
-    const headers = [
-      "Category",
-      "Sub Cat",
-      "Sub Sub Cat",
-      "Product Name",
-      "SKU",
-      "Rack",
-      "Desc",
-      "Barcode",
-      "HSN",
-      "Unit",
-      "Size",
-      "Color",
-      "Tax Cat",
-      "GST",
-      "Pur. Price",
-      "MRP",
-      "Sell Price",
-      "Del. Time",
-      "Stock",
-      "Offer Price",
-      "Wholesale Price",
-      "Low Stock",
-      "Brand",
-      "Val (MRP)",
-      "Val (Pur)",
-      "Unit Price (Min Qty 2)",
-      "Unit Price (Min Qty 4)",
-      "Variations",
-      "Main Image",
-      "Gallery Image 1",
-      "Gallery Image 2",
-      "Gallery Image 3",
-      "Mfg Date",
-      "Expiry Date",
-      "Barcode",
-      "City",
-      "Warehouse",
-      "Room",
-      "Status",
-    ];
+  const handleExport = async () => {
+    try {
+      setExporting(true);
 
-    const escapeCsv = (val: any) => {
-        if (val === null || val === undefined) return '';
+      const params: any = {
+        page: 1,
+        limit: 50000,
+      };
+
+      if (debouncedSearchTerm) {
+        params.search = debouncedSearchTerm;
+      }
+      if (filterCategory !== "All Category") {
+        params.category = filterCategory;
+      }
+      if (filterStatus !== "All Products") {
+        params.publish = filterStatus === "Published";
+      }
+      if (filterSeller !== "All Sellers") {
+        params.seller = filterSeller;
+      }
+      if (filterRedundant !== "None") {
+        params.redundant = filterRedundant === "All Redundant" ? "true" : filterRedundant.toLowerCase();
+      }
+
+      const response = await getProducts(params);
+      const allProductsList: Product[] = response.success && Array.isArray(response.data) && response.data.length > 0
+        ? response.data
+        : products;
+
+      const exportVariations = buildProductVariations(allProductsList, categories, subCategories);
+
+      const filteredForExport = exportVariations.filter((product) => {
+        const matchesCategory =
+          filterCategory === "All Category" ||
+          product.categoryId === filterCategory;
+        const matchesSeller =
+          filterSeller === "All Sellers" || product.sellerId === filterSeller;
+        const matchesStatus =
+          filterStatus === "All Products" || product.status === filterStatus;
+        const matchesStock =
+          filterStock === "All Products" ||
+          (filterStock === "Unlimited" && product.stock === "Unlimited") ||
+          (filterStock === "In Stock" &&
+            product.stock !== "Unlimited" &&
+            typeof product.stock === "number" &&
+            product.stock > 0) ||
+          (filterStock === "Out of Stock" &&
+            product.stock !== "Unlimited" &&
+            typeof product.stock === "number" &&
+            product.stock === 0);
+        const term = (searchTerm || "").trim().toLowerCase();
+        const matchesSearch =
+          !term ||
+          (product.name || "").toLowerCase().includes(term) ||
+          (product.seller || "").toLowerCase().includes(term) ||
+          (product.sku || "").toLowerCase().includes(term) ||
+          (product.category || "").toLowerCase().includes(term) ||
+          (product.subCategory || "").toLowerCase().includes(term) ||
+          (product.subSubCategory || "").toLowerCase().includes(term) ||
+          (product.brand || "").toLowerCase().includes(term) ||
+          (product.description || "").toLowerCase().includes(term) ||
+          (product.hsnCode || "").toLowerCase().includes(term) ||
+          (product.rackNumber || "").toLowerCase().includes(term) ||
+          ((product as any).storageLocation || "").toLowerCase().includes(term) ||
+          ((product as any).storageCity || "").toLowerCase().includes(term) ||
+          ((product as any).storageWarehouse || "").toLowerCase().includes(term) ||
+          ((product as any).storageRoom || "").toLowerCase().includes(term) ||
+          (product.unit || "").toLowerCase().includes(term) ||
+          (product.variation || "").toLowerCase().includes(term) ||
+          (product.sizeName || "").toLowerCase().includes(term) ||
+          (product.colorName || "").toLowerCase().includes(term) ||
+          (product.attributeName || "").toLowerCase().includes(term) ||
+          (Array.isArray(product.barcode)
+            ? product.barcode.some((b: string) => String(b).toLowerCase().includes(term))
+            : (product.barcode && String(product.barcode).toLowerCase().includes(term)));
+
+        return (
+          matchesCategory &&
+          matchesSeller &&
+          matchesStatus &&
+          matchesStock &&
+          matchesSearch
+        );
+      });
+
+      const headers = [
+        "Category",
+        "Sub Cat",
+        "Sub Sub Cat",
+        "Product Name",
+        "SKU",
+        "Rack",
+        "Desc",
+        "Barcode",
+        "HSN",
+        "Unit",
+        "Size",
+        "Color",
+        "Tax Cat",
+        "GST",
+        "Pur. Price",
+        "MRP",
+        "Sell Price",
+        "Del. Time",
+        "Stock",
+        "Offer Price",
+        "Wholesale Price",
+        "Low Stock",
+        "Brand",
+        "Val (MRP)",
+        "Val (Pur)",
+        "Unit Price (Min Qty 2)",
+        "Unit Price (Min Qty 4)",
+        "Variations",
+        "Main Image",
+        "Gallery Image 1",
+        "Gallery Image 2",
+        "Gallery Image 3",
+        "Mfg Date",
+        "Expiry Date",
+        "Barcode",
+        "City",
+        "Warehouse",
+        "Room",
+        "Status",
+      ];
+
+      const escapeCsv = (val: any) => {
+        if (val === null || val === undefined) return "";
         const stringVal = String(val);
-        // If value contains comma, double quote or newline, wrap in quotes and escape internal quotes
-        if (stringVal.includes(',') || stringVal.includes('"') || stringVal.includes('\n')) {
-            return `"${stringVal.replace(/"/g, '""')}"`;
+        if (stringVal.includes(",") || stringVal.includes('"') || stringVal.includes("\n")) {
+          return `"${stringVal.replace(/"/g, '""')}"`;
         }
         return stringVal;
-    };
+      };
 
-    const csvContent = [
-      headers.join(","),
-      ...sortedProducts.map((product) =>
-        [
-          escapeCsv(product.category),
-          escapeCsv(product.subCategory),
-          escapeCsv(product.subSubCategory),
-          escapeCsv(product.name),
-          escapeCsv(product.sku),
-          escapeCsv(product.rackNumber),
-          escapeCsv(product.description),
-          escapeCsv(product.barcode),
-          escapeCsv(product.hsnCode),
-          escapeCsv(product.unit),
-          escapeCsv(product.sizeName),
-          escapeCsv(product.colorName),
-          escapeCsv(product.taxCategory),
-          escapeCsv(product.gst),
-          escapeCsv(product.purchasePrice),
-          escapeCsv(product.compareAtPrice),
-          escapeCsv(product.price),
-          escapeCsv(product.deliveryTime),
-          escapeCsv(product.stock),
-          escapeCsv(product.offerPrice),
-          escapeCsv(product.wholesalePrice),
-          escapeCsv(product.lowStockQuantity),
-          escapeCsv(product.brand),
-          escapeCsv(product.valueMrp),
-          escapeCsv(product.valuePurchase),
-          escapeCsv((product as any).unitPriceMinQty2 ?? ""),
-          escapeCsv((product as any).unitPriceMinQty4 ?? ""),
-          escapeCsv((product as any).variation ?? ""),
-          escapeCsv((product as any).mainImage || (product as any).image || ""),
-          escapeCsv((product as any).galleryImage1 || (product as any).galleryImages?.[0] || ""),
-          escapeCsv((product as any).galleryImage2 || (product as any).galleryImages?.[1] || ""),
-          escapeCsv((product as any).galleryImage3 || (product as any).galleryImages?.[2] || ""),
-          escapeCsv((product as any).mfgDate || ""),
-          escapeCsv((product as any).expiryDate || ""),
-          escapeCsv(product.barcode || ""),
-          escapeCsv(product.storageCity && product.storageCity !== "-" ? product.storageCity : ""),
-          escapeCsv(product.storageWarehouse && product.storageWarehouse !== "-" ? product.storageWarehouse : ""),
-          escapeCsv(product.storageRoom && product.storageRoom !== "-" ? product.storageRoom : ""),
-          escapeCsv(product.publish ? "Active" : "Inactive"),
-        ].join(",")
-      ),
-    ].join("\n");
+      const csvContent = [
+        headers.join(","),
+        ...filteredForExport.map((product) =>
+          [
+            escapeCsv(product.category),
+            escapeCsv(product.subCategory),
+            escapeCsv(product.subSubCategory),
+            escapeCsv(product.name),
+            escapeCsv(product.sku),
+            escapeCsv(product.rackNumber),
+            escapeCsv(product.description),
+            escapeCsv(product.barcode),
+            escapeCsv(product.hsnCode),
+            escapeCsv(product.unit),
+            escapeCsv(product.sizeName),
+            escapeCsv(product.colorName),
+            escapeCsv(product.taxCategory),
+            escapeCsv(product.gst),
+            escapeCsv(product.purchasePrice),
+            escapeCsv(product.compareAtPrice),
+            escapeCsv(product.price),
+            escapeCsv(product.deliveryTime),
+            escapeCsv(product.stock),
+            escapeCsv(product.offerPrice),
+            escapeCsv(product.wholesalePrice),
+            escapeCsv(product.lowStockQuantity),
+            escapeCsv(product.brand),
+            escapeCsv(product.valueMrp),
+            escapeCsv(product.valuePurchase),
+            escapeCsv((product as any).unitPriceMinQty2 ?? ""),
+            escapeCsv((product as any).unitPriceMinQty4 ?? ""),
+            escapeCsv((product as any).variation ?? ""),
+            escapeCsv((product as any).mainImage || (product as any).image || ""),
+            escapeCsv((product as any).galleryImage1 || (product as any).galleryImages?.[0] || ""),
+            escapeCsv((product as any).galleryImage2 || (product as any).galleryImages?.[1] || ""),
+            escapeCsv((product as any).galleryImage3 || (product as any).galleryImages?.[2] || ""),
+            escapeCsv((product as any).mfgDate || ""),
+            escapeCsv((product as any).expiryDate || ""),
+            escapeCsv(product.barcode || ""),
+            escapeCsv(product.storageCity && product.storageCity !== "-" ? product.storageCity : ""),
+            escapeCsv(product.storageWarehouse && product.storageWarehouse !== "-" ? product.storageWarehouse : ""),
+            escapeCsv(product.storageRoom && product.storageRoom !== "-" ? product.storageRoom : ""),
+            escapeCsv(product.publish ? "Active" : "Inactive"),
+          ].join(",")
+        ),
+      ].join("\n");
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `stock_export_${new Date().toISOString().split("T")[0]}.csv`
-    );
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute(
+        "download",
+        `stock_export_${new Date().toISOString().split("T")[0]}.csv`
+      );
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Error exporting products:", err);
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -1594,11 +1695,21 @@ export default function AdminStockManagement() {
                 </button>
                 <button
                   onClick={handleExport}
-                  className="bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white px-3 h-[36px] whitespace-nowrap rounded text-xs font-medium flex items-center justify-center gap-1.5 transition-colors shrink-0">
-                  Export
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
+                  disabled={exporting}
+                  className="bg-[var(--primary-color)] hover:bg-[var(--primary-dark)] text-white px-3 h-[36px] whitespace-nowrap rounded text-xs font-medium flex items-center justify-center gap-1.5 transition-colors shrink-0 disabled:opacity-60">
+                  {exporting ? (
+                    <>
+                      <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      <span>Exporting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Export</span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </>
+                  )}
                 </button>
                 <button
                   onClick={() => setShowBulkBarcodeModal(true)}
@@ -2540,6 +2651,7 @@ export default function AdminStockManagement() {
         products={displayedProducts}
         initialSelectedIds={selectedProductIdsForShare}
         barcodeSettings={barcodeSettings}
+        onSettingsSaved={setBarcodeSettings}
       />
     </div>
   );
