@@ -27,6 +27,9 @@ const connectDB = async (): Promise<void> => {
         maxPoolSize: 5,
         minPoolSize: 0,
         maxIdleTimeMS: 10000,
+        // Don't re-send createIndex for every model on each cold start (it delayed the first
+        // request by ~5s). Indexes already exist in Atlas; local dev (autoIndex on) maintains them.
+        autoIndex: false,
       }),
     });
 
