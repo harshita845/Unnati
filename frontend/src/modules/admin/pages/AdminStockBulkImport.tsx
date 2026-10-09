@@ -111,103 +111,83 @@ export default function AdminStockBulkImport({
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
 
+      const isHeaderLikeRow = (r: any) => {
+        if (!r || typeof r !== "object") return true;
+        const vals = Object.values(r).map((v) => String(v ?? "").trim().toLowerCase());
+        return vals.some((v) =>
+          [
+            "1. category",
+            "2. sub cat",
+            "4. product name",
+            "product name",
+            "5. sku",
+            "price (min qty 2)",
+            "26. price (min qty 2)",
+            "26. unit price (min qty 2)",
+            "27. unit price (min qty 4)",
+            "unit pricing rules",
+          ].includes(v)
+        );
+      };
+
       // Initial parse to check header structure
       let json = XLSX.utils.sheet_to_json<any>(sheet);
 
-      // Check if it's the new 2-row header template
-      // In the new template, Row 1 (index 0) has "Unit Pricing Rules", Row 2 has "Price (Min Qty 2)"
-      // sheet_to_json with default options uses Row 1 as keys.
-      // So json[0] would map Row 1 Keys to Row 2 Values.
-      // If we see the value "Price (Min Qty 2)" in the column roughly corresponding to Unit Pricing, we know to skip.
-
-      // Let's check if the first row of data looks like headers
-      if (json.length > 0) {
-        const firstRow = json[0];
-        const values = Object.values(firstRow);
-        const twoRowMarkers = new Set([
-          "Price (Min Qty 2)",
-          "Price (Min Qty 4)",
-          "26. Unit Price (Min Qty 2)",
-          "27. Unit Price (Min Qty 4)",
-          "Unit Price (Min Qty 2)",
-          "Unit Price (Min Qty 4)",
-        ]);
-        const hit = values.some((v) => {
-          if (v == null) return false;
-          return twoRowMarkers.has(String(v).trim());
-        });
-        if (hit) {
-          json = XLSX.utils.sheet_to_json(sheet, { range: 1 });
-        }
+      if (json.length > 0 && isHeaderLikeRow(json[0])) {
+        json = XLSX.utils.sheet_to_json(sheet, { range: 1 });
       }
 
-      setPreviewData(json);
+      // Filter out any leftover header row
+      const cleaned = json.filter((r) => !isHeaderLikeRow(r));
+      setPreviewData(cleaned);
     };
     reader.readAsBinaryString(file);
   };
 
   const mapRowToProduct = (row: Record<string, unknown>): Partial<CreateProductData> => {
-    const findCategory = (name: string) =>
-      categories.find((c) => c.name?.toLowerCase() === name?.toLowerCase())?._id || "";
+    const findCategory = (name: string) => {
+      const trimmed = name.trim().toLowerCase();
+      if (!trimmed || trimmed === "-" || trimmed === "none" || trimmed === "all category") return "";
+      const matched = categories.find((c) => c.name?.trim().toLowerCase() === trimmed);
+      return matched?._id || "";
+    };
 
-    const variations: { name: string; value: string }[] = [];
-    const sizeVal = rowCell(row, ["Size", "11. Size"]);
-    const colorVal = rowCell(row, ["Color", "12. Color"]);
-    if (sizeVal) variations.push({ name: "Size", value: sizeVal });
-    if (colorVal) variations.push({ name: "Color", value: colorVal });
+    const productName = rowCell(row, ["Product Name", "4. Product Name", "Name", "PRODUCT_NAME", "product_name"]) || "";
+    const categoryName = rowCell(row, ["Category", "1. Category", "PRODUCT_CATEGORY", "product_category"]) || "";
+    const skuRaw = rowCell(row, ["SKU", "5. SKU", "PRODUCT_SKU", "product_sku"]) || "";
+    const sku = skuRaw === "0" || skuRaw === "-" ? "" : skuRaw;
 
-    const rawVars = rowCell(row, ["Variations", "28. Variations"]);
-    if (rawVars) {
-      String(rawVars)
-        .split(";")
-        .forEach((v) => {
-          const [name, val] = v.split(":").map((s) => s.trim());
-          if (name && val) variations.push({ name, value: val });
-        });
-    }
-
-    const unitPricing: { minQty: number; price: number }[] = [];
-    try {
-      const priceFor2 = safeNonNegativeNumber(
-        rowCell(row, [
-          "26. Unit Price (Min Qty 2)",
-          "Unit Price (Min Qty 2)",
-          "26. Price (Min Qty 2)",
-          "27. Price (Min Qty 2)",
-          "Price (Min Qty 2)",
-        ]),
-        0
-      );
-      const priceFor4 = safeNonNegativeNumber(
-        rowCell(row, [
-          "27. Unit Price (Min Qty 4)",
-          "Unit Price (Min Qty 4)",
-          "27. Price (Min Qty 4)",
-          "28. Price (Min Qty 4)",
-          "Price (Min Qty 4)",
-        ]),
-        0
-      );
-      if (priceFor2 > 0) unitPricing.push({ minQty: 2, price: priceFor2 });
-      if (priceFor4 > 0) unitPricing.push({ minQty: 4, price: priceFor4 });
-    } catch {
-      console.warn("Failed to parse unit pricing for row", row);
-    }
-
-    const productName = rowCell(row, ["Product Name", "4. Product Name"]) || "";
-    const categoryName = rowCell(row, ["Category", "1. Category"]) || "";
-    const skuRaw = rowCell(row, ["SKU", "5. SKU"]) || "";
-    const sku = skuRaw === "0" ? "" : skuRaw;
     const price = safeNonNegativeNumber(
-      rowCell(row, ["Sell Price", "17. Sell Price", "Selling Price", "Price"]),
+      rowCell(row, ["Sell Price", "17. Sell Price", "Selling Price", "Price", "PRODUCT_PRICE"]),
       0
     );
-    const mrp = safeNonNegativeNumber(rowCell(row, ["MRP", "16. MRP"]), 0);
-    const stock = Math.floor(
-      safeNonNegativeNumber(rowCell(row, ["Stock", "19. Stock"]), 0)
+    const mrp = safeNonNegativeNumber(rowCell(row, ["MRP", "16. MRP", "PRODUCT_MRP"]), 0);
+    const offerPrice = safeNonNegativeNumber(
+      rowCell(row, ["Offer Price", "20. Offer Price", "PRODUCT_OFFER_PRICE", "discPrice"]),
+      0
     );
+    const stock = Math.floor(
+      safeNonNegativeNumber(rowCell(row, ["Stock", "19. Stock", "PRODUCT_STOCK"]), 0)
+    );
+    const purchasePrice = safeNonNegativeNumber(
+      rowCell(row, ["Pur. Price", "15. Pur. Price", "PRODUCT_PURCHASE_PRICE"]),
+      0
+    );
+    const wholesalePrice = safeNonNegativeNumber(
+      rowCell(row, ["Wholesale Price", "21. Wholesale Price", "PRODUCT_WHOLESALE_PRICE"]),
+      0
+    );
+    const lowStockQuantity = Math.floor(
+      safeNonNegativeNumber(rowCell(row, ["Low Stock", "22. Low Stock", "PRODUCT_LOW_STOCK"]), 5)
+    );
+
+    const compareAtPrice = mrp >= price ? mrp : price;
+    const discPrice = offerPrice > 0 && offerPrice <= price ? offerPrice : price;
+
     const barcodeRaw =
       rowCell(row, [
+        "35. Barcode",
+        "35.Barcode",
         "32. Barcode",
         "32.Barcode",
         "Barcode",
@@ -242,6 +222,82 @@ export default function AdminStockBulkImport({
       rowCell(row, ["38. Room", "38.Room", "Room", "room", "STORAGE_ROOM", "storageRoom"]) || "";
     const rackNumber = rowCell(row, ["Rack", "6. Rack"]) || "";
 
+    const sizeVal = rowCell(row, ["Size", "11. Size", "PRODUCT_SIZE"]);
+    const colorVal = rowCell(row, ["Color", "12. Color", "PRODUCT_COLOR"]);
+    const rawVars = rowCell(row, ["Variations", "28. Variations", "PRODUCT_VARIATIONS"]);
+
+    let variations: any[] | undefined = undefined;
+    if (rawVars) {
+      const parsedVars: any[] = [];
+      String(rawVars).split(";").forEach((v) => {
+        const parts = v.split(":").map((s) => s.trim());
+        if (parts.length >= 2 && parts[0] && parts[1]) {
+          parsedVars.push({
+            variationType: parts[0],
+            value: parts[1],
+            name: `${parts[0]}: ${parts[1]}`,
+            price,
+            stock,
+            compareAtPrice,
+            discPrice,
+            purchasePrice,
+            wholesalePrice,
+            sku: sku || undefined,
+            barcode: uniqueBarcodes,
+            rackNumber: rackNumber || undefined,
+          });
+        }
+      });
+      if (parsedVars.length > 0) variations = parsedVars;
+    } else if (sizeVal || colorVal) {
+      const vType = sizeVal ? "Size" : "Color";
+      const vVal = sizeVal || colorVal || "Default";
+      variations = [
+        {
+          variationType: vType,
+          value: vVal,
+          name: sizeVal && colorVal ? `${sizeVal} / ${colorVal}` : vVal,
+          price,
+          stock,
+          compareAtPrice,
+          discPrice,
+          purchasePrice,
+          wholesalePrice,
+          sku: sku || undefined,
+          barcode: uniqueBarcodes,
+          rackNumber: rackNumber || undefined,
+        },
+      ];
+    }
+
+    const unitPricing: { minQty: number; price: number }[] = [];
+    try {
+      const priceFor2 = safeNonNegativeNumber(
+        rowCell(row, [
+          "26. Unit Price (Min Qty 2)",
+          "Unit Price (Min Qty 2)",
+          "26. Price (Min Qty 2)",
+          "27. Price (Min Qty 2)",
+          "Price (Min Qty 2)",
+        ]),
+        0
+      );
+      const priceFor4 = safeNonNegativeNumber(
+        rowCell(row, [
+          "27. Unit Price (Min Qty 4)",
+          "Unit Price (Min Qty 4)",
+          "27. Price (Min Qty 4)",
+          "28. Price (Min Qty 4)",
+          "Price (Min Qty 4)",
+        ]),
+        0
+      );
+      if (priceFor2 > 0) unitPricing.push({ minQty: 2, price: priceFor2 });
+      if (priceFor4 > 0) unitPricing.push({ minQty: 4, price: priceFor4 });
+    } catch {
+      console.warn("Failed to parse unit pricing for row", row);
+    }
+
     const statusVal = rowCell(row, ["39. Status", "39.Status", "Status", "status", "STATUS"]);
     let isPublish = true;
     if (statusVal) {
@@ -258,40 +314,30 @@ export default function AdminStockBulkImport({
       }
     }
 
+    const catId = findCategory(categoryName);
+
     return {
-      category: findCategory(categoryName),
-      subcategory: rowCell(row, ["Sub Cat", "2. Sub Cat"]) || "",
-      subSubCategory: rowCell(row, ["Sub Sub Cat", "3. Sub Sub Cat"]) || "",
+      category: catId || undefined,
+      subSubCategory: rowCell(row, ["Sub Sub Cat", "3. Sub Sub Cat"]) || undefined,
       productName,
       sku: sku || undefined,
       itemCode: sku || undefined,
       rackNumber,
-      description: rowCell(row, ["Desc", "7. Desc"]) || "",
+      description: rowCell(row, ["Desc", "7. Desc", "PRODUCT_DESCRIPTION"]) || "",
       barcode: uniqueBarcodes,
-      hsnCode: rowCell(row, ["HSN", "9. HSN"]) || "",
-      pack: rowCell(row, ["Unit", "10. Unit"]) || "",
-      variations: variations.length > 0 ? variations : undefined,
-      tax: rowCell(row, ["Tax Cat", "13. Tax Cat"]) || "",
-      purchasePrice: safeNonNegativeNumber(
-        rowCell(row, ["Pur. Price", "15. Pur. Price"]),
-        0
-      ),
-      compareAtPrice: mrp,
+      hsnCode: rowCell(row, ["HSN", "9. HSN", "PRODUCT_HSN"]) || "",
+      pack: rowCell(row, ["Unit", "10. Unit", "PRODUCT_UNIT"]) || "",
+      variations: variations && variations.length > 0 ? variations : undefined,
+      tax: rowCell(row, ["Tax Cat", "13. Tax Cat"]) || undefined,
+      purchasePrice,
+      compareAtPrice,
       price,
-      deliveryTime: rowCell(row, ["Del. Time", "18. Del. Time"]) || "",
+      deliveryTime: rowCell(row, ["Del. Time", "18. Del. Time", "PRODUCT_DELIVERY_TIME"]) || "",
       stock,
-      discPrice: safeNonNegativeNumber(
-        rowCell(row, ["Offer Price", "20. Offer Price"]),
-        0
-      ),
-      wholesalePrice: safeNonNegativeNumber(
-        rowCell(row, ["Wholesale Price", "21. Wholesale Price"]),
-        0
-      ),
-      lowStockQuantity: Math.floor(
-        safeNonNegativeNumber(rowCell(row, ["Low Stock", "22. Low Stock"]), 5)
-      ),
-      brand: rowCell(row, ["Brand", "23. Brand"]) || "",
+      discPrice,
+      wholesalePrice,
+      lowStockQuantity,
+      brand: rowCell(row, ["Brand", "23. Brand", "PRODUCT_BRAND"]) || undefined,
       mfgDate:
         rowCell(row, ["33. Mfg Date", "33.Mfg Date", "30. Mfg Date", "30.Mfg Date", "Mfg Date", "29. Mfg Date"]) || "",
       expiryDate:
@@ -334,6 +380,7 @@ export default function AdminStockBulkImport({
     const total = previewData.length;
     let successCount = 0;
     let failedCount = 0;
+    const failureDetails: string[] = [];
     setProgress({ total, current: 0, success: 0, failed: 0 });
     const seenImportKeys = new Set<string>();
 
@@ -352,7 +399,7 @@ export default function AdminStockBulkImport({
           !Number.isFinite(Number(productData.price)) ||
           Number(productData.price) <= 0
         ) {
-           throw new Error("Missing required fields (Name, Price)");
+           throw new Error(`Missing required Name or Price (Name: "${productData.productName}", Price: ${productData.price})`);
         }
 
         const signature = rowSignature(row);
@@ -372,20 +419,27 @@ export default function AdminStockBulkImport({
           err.response.data !== null &&
           "message" in err.response.data
             ? String((err.response.data as { message?: unknown }).message ?? "")
-            : "";
+            : err instanceof Error
+            ? err.message
+            : String(err);
+
         console.error(
           "Failed to import row",
           i + 1,
           row,
           apiMsg || err
         );
+        failureDetails.push(`Row ${i + 1} (${row["4. Product Name"] || row["Product Name"] || "Unnamed"}): ${apiMsg}`);
         failedCount++;
       }
       setProgress(prev => ({ ...prev, current: i + 1, success: successCount, failed: failedCount }));
     }
 
     setUploading(false);
-    alert(`Import Complete! Success: ${successCount}, Failed: ${failedCount}`);
+    const msg = failedCount > 0
+      ? `Import Finished.\nSuccess: ${successCount}\nFailed: ${failedCount}\n\nErrors:\n${failureDetails.slice(0, 5).join("\n")}${failureDetails.length > 5 ? `\n...and ${failureDetails.length - 5} more` : ""}`
+      : `Import Complete! All ${successCount} products imported successfully.`;
+    alert(msg);
     if (successCount > 0) {
         onSuccess();
         onClose();

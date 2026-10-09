@@ -262,33 +262,34 @@ export default function SellerStockBulkImport({
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
 
+      const isHeaderLikeRow = (r: any) => {
+        if (!r || typeof r !== "object") return true;
+        const vals = Object.values(r).map((v) => String(v ?? "").trim().toLowerCase());
+        return vals.some((v) =>
+          [
+            "1. category",
+            "2. sub cat",
+            "4. product name",
+            "product name",
+            "5. sku",
+            "price (min qty 2)",
+            "26. price (min qty 2)",
+            "26. unit price (min qty 2)",
+            "27. unit price (min qty 4)",
+            "unit pricing rules",
+          ].includes(v)
+        );
+      };
+
       // Initial parse to check header structure
       let json = XLSX.utils.sheet_to_json<any>(sheet);
 
-      // Check if it's the new 2-row header template
-      if (json.length > 0) {
-          const firstRow = json[0];
-          const values = Object.values(firstRow);
-          const twoRowMarkers = new Set([
-            "Price (Min Qty 2)",
-            "Price (Min Qty 4)",
-            "26. Unit Price (Min Qty 2)",
-            "27. Unit Price (Min Qty 4)",
-            "Unit Price (Min Qty 2)",
-            "Unit Price (Min Qty 4)",
-          ]);
-          const hit = values.some((v) => {
-            if (v == null) return false;
-            const s = String(v).trim();
-            return twoRowMarkers.has(s);
-          });
-          if (hit) {
-              // Re-parse skipping the first header row (so the second row becomes the header)
-              json = XLSX.utils.sheet_to_json(sheet, { range: 1 });
-          }
+      if (json.length > 0 && isHeaderLikeRow(json[0])) {
+        json = XLSX.utils.sheet_to_json(sheet, { range: 1 });
       }
 
-      setPreviewData(json);
+      const cleaned = json.filter((r) => !isHeaderLikeRow(r));
+      setPreviewData(cleaned);
     };
     reader.readAsBinaryString(file);
   };
