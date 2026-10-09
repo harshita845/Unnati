@@ -183,6 +183,10 @@ import { adminCustomerDisplayRoutes, publicCustomerDisplayRoutes } from "./custo
 router.use("/admin/customer-display", adminCustomerDisplayRoutes);
 router.use("/customer-display", publicCustomerDisplayRoutes);
 
+// Admin POS → Scan Bill (AI bill reading)
+import ocrRoutes from "./ocrRoutes";
+router.use("/admin/pos/ocr", ocrRoutes);
+
 router.use("/admin", adminRoutes);
 
 // Admin Variation Type Routes
