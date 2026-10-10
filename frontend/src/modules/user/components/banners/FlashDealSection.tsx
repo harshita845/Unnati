@@ -117,8 +117,8 @@ export default function FlashDealSection() {
     return () => clearInterval(timer);
   }, [targetDate]);
 
-  // Only hide product block if EXPLICITLY inactive or no products — banners still show above.
-  const hideProductSection = isLoaded && (config.isActive === false || products.length === 0);
+  // Hide section only if explicitly disabled (isActive === false) or when both products and flashDealImage are missing.
+  const hideProductSection = isLoaded && (config.isActive === false || (products.length === 0 && !config.flashDealImage));
 
   const TimerBox = ({ value, label }: { value: number; label: string }) => (
     <div className="flex flex-col items-center min-w-[32px] md:min-w-[36px]">

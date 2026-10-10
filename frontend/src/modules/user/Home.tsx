@@ -503,8 +503,8 @@ export default function Home() {
       {/* LOWEST PRICES EVER Section */}
       <LowestPricesEver activeTab={activeTab} products={homeData.lowestPrices} />
 
-      {/* FLASH DEAL Section - New addition */}
-      {/* Moved inside main content wrapper to respect layout flow and negative margins */}
+      {/* FLASH DEAL Section */}
+      <FlashDealSection />
 
       {/* Main content */}
       <div
@@ -512,6 +512,8 @@ export default function Home() {
         className="-mt-2 pt-1 space-y-5 md:space-y-8 md:pt-4 pb-12"
         style={{ backgroundColor: '#f9fafb' }}
       >
+        {/* Deal of the Day Section */}
+        <DealOfTheDay />
 
         {/* Three Promotional Banners Section */}
         <HomeThreePromoBanners />

@@ -134,18 +134,23 @@ export default function AdminFlashDeal() {
         });
     }
 
-    bannerService.updateDealsConfig({
+    try {
+      await bannerService.updateDealsConfig({
         flashDealTargetDate: config.flashDealTargetDate,
         flashDealImage: imageUrl,
         isActive: config.isActive,
         flashDealProductIds: config.flashDealProductIds
-    });
+      });
 
-    setTimeout(() => {
-        setLoading(false);
-        setMessage('Flash Deal settings updated successfully!');
-        setTimeout(() => setMessage(''), 3000);
-    }, 500);
+      setLoading(false);
+      setMessage('Flash Deal settings updated successfully!');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      console.error("Failed to save flash deal settings:", err);
+      setLoading(false);
+      setMessage('Failed to save settings. Please try again.');
+      setTimeout(() => setMessage(''), 3000);
+    }
   };
 
   return (
