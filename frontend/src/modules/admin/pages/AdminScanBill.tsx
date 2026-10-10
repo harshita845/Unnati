@@ -203,11 +203,37 @@ export default function AdminScanBill() {
     setPages([]);
   };
 
+  /** Rotate/crop/compress each page and upload it (or inline it when the server has no file storage). */
+  const uploadPages = useCallback(
+    async (list: Page[], onProgress?: (pct: number) => void): Promise<ScanFileInput[]> => {
+      const files: ScanFileInput[] = [];
+      let inlineBytes = 0;
+      for (const [i, page] of list.entries()) {
+        const blob = page.pdf ? page.file : await prepareImage(page.file, page.edits);
+        const name = page.pdf ? page.file.name : page.file.name.replace(/\.[^.]+$/, '') + '.jpg';
+        if (config?.storageEnabled) {
+          files.push(await uploadScanFile(blob, name, (pct) => onProgress?.(Math.round(((i + pct / 100) / list.length) * 100))));
+        } else {
+          inlineBytes += blob.size;
+          if (inlineBytes > INLINE_LIMIT_BYTES) throw new Error('These pages are too large to send without file storage. Scan fewer pages at once.');
+          files.push({ mimeType: page.pdf ? 'application/pdf' : 'image/jpeg', dataBase64: await blobToBase64(blob), originalName: name });
+          onProgress?.(Math.round(((i + 1) / list.length) * 100));
+        }
+      }
+      return files;
+    },
+    [config?.storageEnabled]
+  );
+
   const manualEntry = async () => {
     setManualBusy(true);
     try {
-      const scan = await startManualEntry(docType);
-      setOpen({ scan, previews: [] });
+      // Pages already added come along, so the bill photo shows beside the form while typing
+      const attached = pages.slice(0, config?.maxFiles ?? 10);
+      const files = attached.length ? await uploadPages(attached) : [];
+      const scan = await startManualEntry(docType, files);
+      setOpen({ scan, previews: attached.filter((p) => !p.pdf).map((p) => p.url) });
+      if (attached.length) setPages([]);
       setParams((p) => {
         const next = new URLSearchParams(p);
         next.set('id', scan._id);
@@ -228,22 +254,7 @@ export default function AdminScanBill() {
       patchBill(bill.key, { state: 'uploading', progress: 0, error: undefined });
       try {
         // Prepare (rotate/crop/compress) and upload every page
-        const files: ScanFileInput[] = [];
-        let inlineBytes = 0;
-        for (const [i, page] of bill.pages.entries()) {
-          const blob = page.pdf ? page.file : await prepareImage(page.file, page.edits);
-          const name = page.pdf ? page.file.name : page.file.name.replace(/\.[^.]+$/, '') + '.jpg';
-          if (config?.storageEnabled) {
-            files.push(
-              await uploadScanFile(blob, name, (pct) => patchBill(bill.key, { progress: Math.round(((i + pct / 100) / bill.pages.length) * 100) }))
-            );
-          } else {
-            inlineBytes += blob.size;
-            if (inlineBytes > INLINE_LIMIT_BYTES) throw new Error('These pages are too large to send without file storage. Scan fewer pages at once.');
-            files.push({ mimeType: page.pdf ? 'application/pdf' : 'image/jpeg', dataBase64: await blobToBase64(blob), originalName: name });
-            patchBill(bill.key, { progress: Math.round(((i + 1) / bill.pages.length) * 100) });
-          }
-        }
+        const files = await uploadPages(bill.pages, (pct) => patchBill(bill.key, { progress: pct }));
         patchBill(bill.key, { state: 'reading', progress: 100, startedAt: Date.now() });
         const res = await scanBill(files, bill.docType);
         const scan = res.data;
@@ -264,7 +275,7 @@ export default function AdminScanBill() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [config?.storageEnabled, refreshUsage]
+    [uploadPages, refreshUsage]
   );
 
   // One bill at a time: keeps within the per-minute limit and the server's time budget
@@ -374,7 +385,10 @@ export default function AdminScanBill() {
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
           <div>
             <div className="font-semibold">AI reading is off</div>
-            <div className="text-xs">{config?.configError} You can still enter bills manually.</div>
+            <div className="text-xs">
+              {config?.configError?.replace(/\s*Enter the bill manually\.?$/, '') || 'AI scanning is not set up on the server.'} Use <b>Enter manually</b> to type the bill in;
+              any photos you add stay attached so you can read from them.
+            </div>
           </div>
         </div>
       )}
@@ -539,6 +553,11 @@ export default function AdminScanBill() {
                 {manualBusy ? <Loader2 size={15} className="animate-spin" /> : <Keyboard size={15} />} Enter manually
               </button>
               {limitReached && <span className="text-xs text-red-600">Monthly AI limit reached. Enter bills manually.</span>}
+              {aiOff && !limitReached && (
+                <span className="text-xs text-amber-700">
+                  Scan is off until AI is set up on the server.{pages.length > 0 ? ' Enter manually keeps the file you added.' : ''}
+                </span>
+              )}
             </div>
           </section>
 

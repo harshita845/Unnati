@@ -292,8 +292,9 @@ export const scanBill = (files: ScanFileInput[], docType?: ScanDocType) =>
     .post<ApiResponse<ScannedDocument>>(`${BASE}/scan`, { files, ...(docType && docType !== 'unknown' ? { docType } : {}) }, { timeout: SCAN_TIMEOUT_MS })
     .then((r) => r.data);
 
-export const startManualEntry = (docType: ScanDocType) =>
-  api.post<ApiResponse<ScannedDocument>>(`${BASE}/scan`, { manual: true, docType }).then((r) => r.data.data);
+/** Type a bill in by hand. Pages, if given, are kept with it so the photo shows beside the form. */
+export const startManualEntry = (docType: ScanDocType, files: ScanFileInput[] = []) =>
+  api.post<ApiResponse<ScannedDocument>>(`${BASE}/scan`, { manual: true, docType, files }).then((r) => r.data.data);
 
 export const rescanBill = (id: string, docType?: ScanDocType) =>
   api.post<ApiResponse<ScannedDocument>>(`${BASE}/${id}/rescan`, docType && docType !== 'unknown' ? { docType } : {}, { timeout: SCAN_TIMEOUT_MS }).then((r) => r.data);
