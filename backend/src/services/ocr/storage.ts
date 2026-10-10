@@ -45,7 +45,14 @@ export function signedFileUrl(file: { publicId: string; format?: string; mimeTyp
   const isPdf = file.mimeType === "application/pdf";
   const base = { resource_type: "image", type: OCR_DELIVERY_TYPE, sign_url: true, secure: true } as const;
   if (variant === "original" || (variant === "ai" && isPdf)) {
-    return cloudinary.url(file.publicId, { ...base, format: file.format || (isPdf ? "pdf" : undefined) });
+    // Through the Admin download API, not the delivery CDN: Cloudinary blocks delivering PDFs
+    // unless the account allows it (401 "deny or ACL failure"); the API download always works.
+    // Signed with the API secret and valid for an hour.
+    return cloudinary.utils.private_download_url(file.publicId, file.format || (isPdf ? "pdf" : "jpg"), {
+      resource_type: "image",
+      type: OCR_DELIVERY_TYPE,
+      expires_at: Math.round(Date.now() / 1000) + 3600,
+    });
   }
   if (variant === "preview") {
     return cloudinary.url(file.publicId, {

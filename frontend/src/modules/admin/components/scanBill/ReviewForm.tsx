@@ -37,6 +37,7 @@ import {
 import { amountToIndianWords } from '../../../../utils/amountInWords';
 import { inr, inToIso, isoToIN, lineAmount, liveChecks, r2, summarize } from '../../scanBill/billMath';
 import { exportBillPdf } from '../../scanBill/exportPdf';
+import { confirmIssues } from '../../scanBill/confirmChecks';
 import PartyField from './PartyField';
 import ProductPicker, { optionKey } from './ProductPicker';
 import { apiMessage, btn, ConfidenceDot, inputCls, StatusPill } from './scanBillUi';
@@ -49,6 +50,8 @@ interface Props {
   onUpdated: (scan: ScannedDocument) => void;
   onDiscarded: (id: string) => void;
   onOpenScan: (id: string) => void;
+  /** Latest form contents and whether they differ from the saved copy (the page uses it on leave) */
+  onFormChange?: (bill: ReviewBill, dirty: boolean) => void;
 }
 
 const EMPTY_ITEM: BillItem = { name: '', quantity: 1, rate: null, amount: null, action: 'skip' };
@@ -110,11 +113,12 @@ const NumField = ({
   />
 );
 
-export default function ReviewForm({ scan, localPreviews = [], categories, onUpdated, onDiscarded, onOpenScan }: Props) {
+export default function ReviewForm({ scan, localPreviews = [], categories, onUpdated, onDiscarded, onOpenScan, onFormChange }: Props) {
   const { showToast } = useToast();
   const [bill, setBill] = useState<ReviewBill>(() => toBill(scan));
   const [matches, setMatches] = useState(scan.matches || null);
-  const [dirty, setDirty] = useState(false);
+  // "Unsaved changes" means the form differs from the saved copy, not merely that a handler ran
+  const [baseline, setBaseline] = useState(() => JSON.stringify(toBill(scan)));
   const [busy, setBusy] = useState<null | 'save' | 'confirm' | 'ledger' | 'rescan' | 'discard' | 'rematch' | 'csv'>(null);
   const [confirmErrors, setConfirmErrors] = useState<string[]>([]);
   const [dateText, setDateText] = useState(isoToIN(bill.invoiceDate));
@@ -135,7 +139,7 @@ export default function ReviewForm({ scan, localPreviews = [], categories, onUpd
     setBill(b);
     setDateText(isoToIN(b.invoiceDate));
     setMatches(scan.matches || null);
-    setDirty(false);
+    setBaseline(JSON.stringify(b));
     setConfirmErrors([]);
   }, [scan]);
 
@@ -155,7 +159,6 @@ export default function ReviewForm({ scan, localPreviews = [], categories, onUpd
 
   const update = (patch: Partial<ReviewBill>) => {
     setBill((b) => ({ ...b, ...patch }));
-    setDirty(true);
   };
   const updateTotals = (patch: Partial<ReviewBill['totals']>) => update({ totals: { ...bill.totals, ...patch } });
   const updateItem = (i: number, patch: Partial<BillItem>, recalc = false) => {
@@ -166,17 +169,19 @@ export default function ReviewForm({ scan, localPreviews = [], categories, onUpd
       items[i] = next;
       return { ...b, items };
     });
-    setDirty(true);
   };
   const removeItem = (i: number) => {
     setBill((b) => ({ ...b, items: b.items.filter((_, j) => j !== i) }));
     setMatches((m) => (m ? { ...m, items: m.items.filter((_, j) => j !== i) } : m));
-    setDirty(true);
   };
   const addItem = () => {
     setBill((b) => ({ ...b, items: [...b.items, { ...EMPTY_ITEM }] }));
-    setDirty(true);
   };
+
+  const dirty = useMemo(() => JSON.stringify(bill) !== baseline, [bill, baseline]);
+  useEffect(() => {
+    onFormChange?.(bill, dirty);
+  }, [bill, dirty, onFormChange]);
 
   const summary = useMemo(() => summarize(bill), [bill]);
   const live = useMemo(() => liveChecks(bill), [bill]);
@@ -286,8 +291,7 @@ export default function ReviewForm({ scan, localPreviews = [], categories, onUpd
           return it.action === 'skip' && best ? { ...it, action: 'link', productId: best.productId, variationId: best.variationId ?? null } : it;
         }),
       }));
-      setDirty(true);
-      showToast('Items matched again', 'success');
+        showToast('Items matched again', 'success');
     } catch (e) {
       showToast(apiMessage(e, "Couldn't match items"), 'error');
     } finally {
@@ -307,13 +311,17 @@ export default function ReviewForm({ scan, localPreviews = [], categories, onUpd
     }
   };
 
+  const dateTextInvalid = !!dateText.trim() && !inToIso(dateText);
+  const issues = useMemo(() => confirmIssues(bill, { dateTextInvalid }), [bill, dateTextInvalid]);
+  const blockedTitle = issues.length ? `To save this bill:\n• ${issues.join('\n• ')}` : undefined;
+
   const ledgerPending = scan.status === 'confirmed' && scan.docType === 'purchase' && !scan.sync?.supplierId;
   const unlinked = bill.items.filter((i) => i.action === 'skip').length;
   const dupWarning = warnings.find((w) => w.code === 'DUPLICATE');
 
   // ------------------------------------------------------------------ render
   return (
-    <div ref={formRef} className="space-y-4">
+    <div ref={formRef} className="space-y-4 pb-6 [&_input]:scroll-mb-40 [&_select]:scroll-mb-40 [&_textarea]:scroll-mb-40">
       <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         {/* Bill image */}
         <section>
@@ -793,6 +801,12 @@ export default function ReviewForm({ scan, localPreviews = [], categories, onUpd
 
       {/* Actions */}
       <div className="sticky bottom-0 z-20 -mx-1 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur">
+        {!locked && issues.length > 0 && (
+          <p id="scanbill-confirm-issues" className="w-full text-[11px] text-amber-700">
+            To save: {issues.slice(0, 3).join(' · ')}
+            {issues.length > 3 ? ` · +${issues.length - 3} more` : ''}
+          </p>
+        )}
         {!locked && (
           <>
             <button type="button" className={btn.danger} onClick={discard} disabled={busy !== null}>
@@ -817,13 +831,18 @@ export default function ReviewForm({ scan, localPreviews = [], categories, onUpd
               <button type="button" className={btn.secondary} onClick={() => save()} disabled={busy !== null || !dirty}>
                 {busy === 'save' ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save draft
               </button>
-              <button type="button" className={isPurchase ? btn.secondary : btn.primary} onClick={() => confirm(false)} disabled={busy !== null}>
-                {busy === 'confirm' ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} Confirm & Save
-              </button>
-              {isPurchase && (
-                <button type="button" className={btn.primary} onClick={() => confirm(true)} disabled={busy !== null} title="Save stock and the purchase entry, and add the bill to the supplier ledger">
-                  {busy === 'ledger' ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} Confirm & Sync to Ledger
+              {/* Disabled buttons don't show their own tooltip, so the wrapper carries it */}
+              <span title={blockedTitle} className="inline-flex">
+                <button type="button" className={isPurchase ? btn.secondary : btn.primary} onClick={() => confirm(false)} disabled={busy !== null || issues.length > 0} aria-describedby={issues.length ? 'scanbill-confirm-issues' : undefined}>
+                  {busy === 'confirm' ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} Confirm & Save
                 </button>
+              </span>
+              {isPurchase && (
+                <span title={blockedTitle || 'Save stock and the purchase entry, and add the bill to the supplier ledger'} className="inline-flex">
+                  <button type="button" className={btn.primary} onClick={() => confirm(true)} disabled={busy !== null || issues.length > 0} aria-describedby={issues.length ? 'scanbill-confirm-issues' : undefined}>
+                    {busy === 'ledger' ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} Confirm & Sync to Ledger
+                  </button>
+                </span>
               )}
             </>
           )}

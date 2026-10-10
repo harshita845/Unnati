@@ -336,6 +336,31 @@ async function findScan(req: Request, res: Response): Promise<IScannedDocument |
   return scan;
 }
 
+/**
+ * A manual entry nobody filled in: no party, bill no., total or items. The page discards these
+ * when the person leaves; this catches the rest (closed tab, lost connection).
+ */
+const EMPTY_MANUAL_DRAFT = {
+  provider: "manual",
+  status: "draft",
+  partyName: { $in: [null, ""] },
+  invoiceNumber: { $in: [null, ""] },
+  grandTotal: null,
+  $or: [{ "data.items": { $size: 0 } }, { "data.items": { $exists: false } }],
+};
+const EMPTY_DRAFT_TTL_MS = 30 * 60 * 1000;
+
+/** Delete empty manual drafts older than 30 minutes, with their files (best effort, never blocks). */
+async function purgeEmptyDrafts() {
+  const stale = await ScannedDocument.find({ ...EMPTY_MANUAL_DRAFT, createdAt: { $lt: new Date(Date.now() - EMPTY_DRAFT_TTL_MS) } })
+    .select("_id files.publicId")
+    .limit(200)
+    .lean();
+  if (!stale.length) return;
+  await deleteStored(stale.flatMap((d: any) => (d.files || []).map((f: any) => f.publicId).filter(Boolean)));
+  await ScannedDocument.deleteMany({ _id: { $in: stale.map((d: any) => d._id) }, ...EMPTY_MANUAL_DRAFT });
+}
+
 /** GET / — scan history. ?status=&docType=&q=&from=YYYY-MM-DD&to=&page=&limit= */
 export const listScans = asyncHandler(async (req: Request, res: Response) => {
   const page = Math.max(1, Number(req.query.page) || 1);
@@ -344,6 +369,9 @@ export const listScans = asyncHandler(async (req: Request, res: Response) => {
   const status = String(req.query.status || "");
   if (status && status !== "all") filter.status = { $in: status.split(",") };
   else filter.status = { $ne: "discarded" };
+  // Empty manual entries are clutter, not history
+  filter.$nor = [EMPTY_MANUAL_DRAFT];
+  purgeEmptyDrafts().catch(() => undefined);
   if (isDocType(req.query.docType)) filter.docType = req.query.docType;
   const q = String(req.query.q || "").trim();
   if (q) {
@@ -470,6 +498,11 @@ export const discardScan = asyncHandler(async (req: Request, res: Response) => {
   if (scan.status === "confirmed" || scan.status === "syncing") return fail(res, 409, "This bill is saved. Reverse it from Purchase/POS instead.");
   if (scan.status === "discarded") return res.json({ success: true, message: "Already discarded" });
   await deleteStored(scan.files.map((f) => f.publicId).filter(Boolean) as string[]);
+  // An untouched manual entry has nothing worth keeping: remove it outright
+  if (await ScannedDocument.exists({ _id: scan._id, ...EMPTY_MANUAL_DRAFT })) {
+    await ScannedDocument.deleteOne({ _id: scan._id });
+    return res.json({ success: true, message: "Empty entry removed" });
+  }
   scan.set({ status: "discarded", files: scan.files.map((f) => ({ ...((f as any).toObject?.() ?? f), publicId: undefined })) });
   await scan.save();
   return res.json({ success: true, message: "Scan discarded" });

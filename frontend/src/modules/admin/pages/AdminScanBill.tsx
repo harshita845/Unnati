@@ -34,12 +34,15 @@ import {
   scanBill,
   ScanUsage,
   startManualEntry,
+  discardScan,
+  ReviewBill,
   uploadScanFile,
 } from '../../../services/api/admin/scanBillService';
 import { ACCEPTED, isPdf, PageEdits, prepareImage } from '../scanBill/imagePrep';
 import PageEditor from '../components/scanBill/PageEditor';
 import ReviewForm from '../components/scanBill/ReviewForm';
 import ScanHistory from '../components/scanBill/ScanHistory';
+import { isBillEmpty } from '../scanBill/confirmChecks';
 import { apiMessage, btn, EmptyState, ScanningImage, StatusPill, Stepper, StepState } from '../components/scanBill/scanBillUi';
 
 /**
@@ -100,6 +103,9 @@ export default function AdminScanBill() {
   const [manualBusy, setManualBusy] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
   const processingRef = useRef(false);
+  // What's in the open review form right now (for leaving: discard empty manual drafts, warn on unsaved edits)
+  const formRef = useRef<{ bill: ReviewBill | null; dirty: boolean }>({ bill: null, dirty: false });
+  const openRef = useRef<ScannedDocument | null>(null);
 
   // ------------------------------------------------------------------ setup
   const refreshUsage = useCallback(() => {
@@ -120,9 +126,47 @@ export default function AdminScanBill() {
   const urlsRef = useRef<string[]>([]);
   useEffect(() => () => urlsRef.current.forEach((u) => URL.revokeObjectURL(u)), []);
 
+  const onFormChange = useCallback((bill: ReviewBill, dirty: boolean) => {
+    formRef.current = { bill, dirty };
+  }, []);
+
+  /**
+   * Leaving the open scan. An untouched manual entry is deleted (no empty drafts in History);
+   * unsaved edits ask first. Returns false when the person chose to stay.
+   */
+  const leaveOpenScan = useCallback((): boolean => {
+    const scan = openRef.current;
+    if (!scan) return true;
+    const { bill, dirty } = formRef.current;
+    const editable = scan.status === 'draft' || scan.status === 'failed';
+    const emptyManual = scan.provider === 'manual' && scan.status === 'draft' && isBillEmpty(bill ?? scan.data);
+    if (emptyManual) {
+      discardScan(scan._id).catch(() => undefined);
+    } else if (editable && dirty && !window.confirm('You have unsaved changes on this bill. Leave without saving?')) {
+      return false;
+    }
+    openRef.current = null;
+    formRef.current = { bill: null, dirty: false };
+    return true;
+  }, []);
+
+  useEffect(() => {
+    openRef.current = open?.scan ?? null;
+  }, [open]);
+
+  // Leaving the page (route change) also tidies up an untouched manual entry
+  useEffect(() => () => {
+    const scan = openRef.current;
+    if (scan?.provider === 'manual' && scan.status === 'draft' && isBillEmpty(formRef.current.bill ?? scan.data)) {
+      discardScan(scan._id).catch(() => undefined);
+    }
+  }, []);
+
   // Deep link: ?id=<scan> opens it for review
   const openScanById = useCallback(
     async (id: string) => {
+      if (openRef.current?._id === id) return;
+      if (!leaveOpenScan()) return;
       setOpening(true);
       try {
         const scan = await getScan(id);
@@ -140,7 +184,7 @@ export default function AdminScanBill() {
         setOpening(false);
       }
     },
-    [setParams, showToast]
+    [setParams, showToast, leaveOpenScan]
   );
 
   useEffect(() => {
@@ -150,6 +194,7 @@ export default function AdminScanBill() {
   }, []);
 
   const closeReview = () => {
+    if (!leaveOpenScan()) return;
     setOpen(null);
     setParams((p) => {
       const next = new URLSearchParams(p);
@@ -316,6 +361,7 @@ export default function AdminScanBill() {
 
   const openQueueBill = (b: QueueBill) => {
     if (!b.scan) return;
+    if (openRef.current && openRef.current._id !== b.scan._id && !leaveOpenScan()) return;
     setOpen({ scan: b.scan, previews: b.pages.filter((p) => !p.pdf).map((p) => p.url), key: b.key });
     setParams((p) => {
       const next = new URLSearchParams(p);
@@ -332,6 +378,7 @@ export default function AdminScanBill() {
   };
 
   const onDiscarded = (id: string) => {
+    openRef.current = null;
     setQueue((q) => q.filter((b) => b.scan?._id !== id));
     closeReview();
     setHistoryKey((k) => k + 1);
@@ -369,7 +416,7 @@ export default function AdminScanBill() {
           <button type="button" onClick={() => setTab('scan')} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold ${tab === 'scan' ? 'bg-[#6DBB2D] text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
             <ScanLine size={15} /> Scan
           </button>
-          <button type="button" onClick={() => setTab('history')} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold ${tab === 'history' ? 'bg-[#6DBB2D] text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+          <button type="button" onClick={() => { if (open && !leaveOpenScan()) return; if (open) setOpen(null); setTab('history'); setHistoryKey((k) => k + 1); }} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold ${tab === 'history' ? 'bg-[#6DBB2D] text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
             <History size={15} /> History
           </button>
         </div>
@@ -419,6 +466,7 @@ export default function AdminScanBill() {
             onUpdated={onScanUpdated}
             onDiscarded={onDiscarded}
             onOpenScan={openScanById}
+            onFormChange={onFormChange}
           />
         </div>
       ) : (
