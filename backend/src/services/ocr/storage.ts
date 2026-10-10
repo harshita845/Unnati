@@ -68,21 +68,96 @@ export function signedFileUrl(file: { publicId: string; format?: string; mimeTyp
   });
 }
 
-/** Download a stored bill for the AI (image transformed per signedFileUrl, PDF as-is). */
-export async function fetchForOcr(file: { publicId: string; format?: string; mimeType: string }, timeoutMs = 15000): Promise<OcrFile> {
+export type StorageStep = "upload" | "signing" | "fetch";
+
+/** A storage problem, saying which step failed and Cloudinary's reason (never a URL, key or file bytes). */
+export class StorageError extends Error {
+  constructor(readonly step: StorageStep, message: string, readonly status?: number, readonly reason?: string) {
+    super(message);
+    this.name = "StorageError";
+  }
+}
+
+/**
+ * Cloudinary's own reason (x-cld-error header, or the JSON error body), trimmed of the
+ * "String to sign" echo and anything signature-like so it is safe to show and log.
+ */
+async function cloudinaryReason(res: Response): Promise<string> {
+  let reason = res.headers.get("x-cld-error") || "";
+  if (!reason) {
+    try {
+      reason = ((await res.clone().json()) as any)?.error?.message || "";
+    } catch {
+      /* body isn't JSON */
+    }
+  }
+  return reason
+    .replace(/\.?\s*String to sign.*$/is, "")
+    .replace(/\b[0-9a-f]{32,}\b/gi, "…")
+    .trim()
+    .slice(0, 160);
+}
+
+const STEP_LABEL: Record<StorageStep, string> = {
+  upload: "Upload to storage failed",
+  signing: "Couldn't sign the storage link",
+  fetch: "Couldn't download the bill from storage",
+};
+
+const storageMessage = (step: StorageStep, status?: number, reason?: string) =>
+  `${STEP_LABEL[step]}${status || reason ? ` (${[status, reason].filter(Boolean).join(": ")})` : ""}.`;
+
+async function download(url: string, timeoutMs: number): Promise<Buffer> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(signedFileUrl(file, "ai"), { signal: controller.signal });
-    if (!res.ok) throw new Error(`Couldn't read the uploaded file back from storage (${res.status}).`);
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) {
+      const reason = await cloudinaryReason(res);
+      throw new StorageError("fetch", storageMessage("fetch", res.status, reason), res.status, reason);
+    }
     const data = Buffer.from(await res.arrayBuffer());
-    if (data.length > maxFileBytes() * 2) throw new Error("Uploaded file is too large.");
-    return { mimeType: file.mimeType === "application/pdf" ? "application/pdf" : "image/jpeg", data };
+    if (data.length > maxFileBytes() * 2) throw new StorageError("fetch", "The stored file is too large to read.");
+    return data;
   } catch (error: any) {
-    if (error?.name === "AbortError") throw new Error("Timed out reading the uploaded file from storage.");
-    throw error;
+    if (error instanceof StorageError) throw error;
+    if (error?.name === "AbortError") throw new StorageError("fetch", storageMessage("fetch", undefined, "timed out"), undefined, "timed out");
+    throw new StorageError("fetch", storageMessage("fetch", undefined, "network error"), undefined, "network error");
   } finally {
     clearTimeout(timer);
+  }
+}
+
+function sign(file: { publicId: string; format?: string; mimeType: string }, variant: "ai" | "preview", page?: number): string {
+  if (!cloudinaryConfigured()) {
+    throw new StorageError("signing", storageMessage("signing", undefined, "Cloudinary keys are not set on the server"), undefined, "not configured");
+  }
+  try {
+    return signedFileUrl(file, variant, page);
+  } catch (error: any) {
+    throw new StorageError("signing", storageMessage("signing", undefined, String(error?.message || "unknown error").slice(0, 120)));
+  }
+}
+
+/**
+ * Download a stored bill for the AI: images as a resized JPEG (signed delivery URL), PDFs as the
+ * original through the Admin download API. If a PDF can't be downloaded that way, its pages are
+ * sent as JPEG renders instead (the same signed delivery the preview uses).
+ */
+export async function fetchForOcr(file: { publicId: string; format?: string; mimeType: string; pages?: number }, timeoutMs = 15000): Promise<OcrFile[]> {
+  const isPdf = file.mimeType === "application/pdf";
+  if (!isPdf) return [{ mimeType: "image/jpeg", data: await download(sign(file, "ai"), timeoutMs) }];
+  try {
+    return [{ mimeType: "application/pdf", data: await download(sign(file, "ai"), timeoutMs) }];
+  } catch (error) {
+    if (!(error instanceof StorageError) || error.step !== "fetch") throw error;
+    const pages = Math.min(10, Math.max(1, Number(file.pages) || 1));
+    try {
+      const renders = await Promise.all(Array.from({ length: pages }, (_, i) => download(sign(file, "preview", i + 1), timeoutMs)));
+      return renders.map((data) => ({ mimeType: "image/jpeg", data }));
+    } catch {
+      throw error; // report the original (PDF download) failure
+    }
   }
 }
 

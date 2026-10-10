@@ -21,6 +21,7 @@ import {
   maxFileBytes,
   OCR_DELIVERY_TYPE,
   signedFileUrl,
+  StorageError,
   storeInline,
   uploadSignature,
 } from "../../services/ocr/storage";
@@ -43,6 +44,15 @@ async function aiCallsThisMonth(): Promise<number> {
 
 const isDocType = (v: unknown): v is DocType => typeof v === "string" && (DOC_TYPES as readonly string[]).includes(v);
 
+/** A signed link, or null when one can't be made (e.g. storage not configured): previews are optional. */
+function safeLink(make: () => string): string | null {
+  try {
+    return make();
+  } catch {
+    return null;
+  }
+}
+
 /** Scan for the browser: the stored data plus short-lived signed preview links (never the raw bytes). */
 function present(scan: IScannedDocument) {
   const json: any = scan.toObject({ versionKey: false });
@@ -51,9 +61,9 @@ function present(scan: IScannedDocument) {
     return {
       ...f,
       previewUrls: f.publicId
-        ? Array.from({ length: Math.min(pages, 20) }, (_, i) => signedFileUrl(f, "preview", f.mimeType === "application/pdf" ? i + 1 : undefined))
+        ? Array.from({ length: Math.min(pages, 20) }, (_, i) => safeLink(() => signedFileUrl(f, "preview", f.mimeType === "application/pdf" ? i + 1 : undefined))).filter(Boolean)
         : [],
-      originalUrl: f.publicId ? signedFileUrl(f, "original") : null,
+      originalUrl: f.publicId ? safeLink(() => signedFileUrl(f, "original")) : null,
     };
   });
   return json;
@@ -151,7 +161,25 @@ function markFailed(scan: IScannedDocument, error: unknown, docType: DocType) {
 }
 
 async function filesForAi(scan: IScannedDocument): Promise<OcrFile[]> {
-  return Promise.all(scan.files.filter((f) => f.publicId).map((f) => fetchForOcr({ publicId: f.publicId!, format: f.format, mimeType: f.mimeType })));
+  const perFile = await Promise.all(
+    scan.files.filter((f) => f.publicId).map((f) => fetchForOcr({ publicId: f.publicId!, format: f.format, mimeType: f.mimeType, pages: f.pages }))
+  );
+  return perFile.flat();
+}
+
+/**
+ * AI requests that count towards the monthly limit: every request sent, except one the provider
+ * refused before doing any work (bad key / not configured, or rate limited).
+ */
+function billableCalls(sent: number, error?: unknown): number {
+  if (error instanceof OcrProviderError && (error.kind === "config" || error.kind === "rate_limit")) return Math.max(0, sent - 1);
+  return sent;
+}
+
+/** Log a failed scan step (status and reason only: no URLs, keys or file contents). */
+function logScanFailure(scanId: unknown, error: unknown) {
+  if (error instanceof StorageError) console.warn(`[ocr] scan ${scanId}: storage ${error.step} failed`, error.status ?? "", error.reason ?? "");
+  else if (!(error instanceof OcrProviderError)) console.error(`[ocr] scan ${scanId} failed:`, (error as Error)?.message);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -288,15 +316,16 @@ export const scanBill = asyncHandler(async (req: Request, res: Response) => {
   if (manual) return res.status(201).json({ success: true, data: present(scan) });
 
   let aiError: string | null = null;
+  let sent = 0;
   try {
     const files = inline.length ? inline.map(({ mimeType, data }) => ({ mimeType, data })) : await filesForAi(scan);
-    const outcome = await runExtraction(files, { docTypeHint });
+    const outcome = await runExtraction(files, { docTypeHint, onAiCall: () => sent++ });
     await fillFromExtraction(scan, outcome);
   } catch (error) {
     aiError = markFailed(scan, error, docTypeHint || "purchase");
-    if (!(error instanceof OcrProviderError)) console.error("[ocr] scan failed:", (error as Error)?.message);
-    // A provider call happened (and is billed) unless the failure was configuration
-    if (!(error instanceof OcrProviderError && error.kind === "config")) scan.aiCalls = (scan.aiCalls || 0) + 1;
+    logScanFailure(scan._id, error);
+    // Only AI requests actually made count (a storage failure never reached the AI)
+    scan.aiCalls = (scan.aiCalls || 0) + billableCalls(sent, error);
   }
   await scan.save();
   return res.status(201).json({ success: true, data: present(scan), ...(aiError ? { aiError } : {}) });
@@ -311,12 +340,14 @@ export const rescanBill = asyncHandler(async (req: Request, res: Response) => {
   if ((await aiCallsThisMonth()) >= monthlyLimit()) return fail(res, 429, "Monthly scan limit reached.", { code: "MONTHLY_LIMIT" });
   const hint: DocType | null = isDocType(req.body?.docType) ? req.body.docType : scan.docType !== "unknown" ? scan.docType : null;
   let aiError: string | null = null;
+  let sent = 0;
   try {
-    const outcome = await runExtraction(await filesForAi(scan), { docTypeHint: hint });
+    const outcome = await runExtraction(await filesForAi(scan), { docTypeHint: hint, onAiCall: () => sent++ });
     await fillFromExtraction(scan, outcome);
   } catch (error) {
     aiError = markFailed(scan, error, hint || "purchase");
-    if (!(error instanceof OcrProviderError && error.kind === "config")) scan.aiCalls = (scan.aiCalls || 0) + 1;
+    logScanFailure(scan._id, error);
+    scan.aiCalls = (scan.aiCalls || 0) + billableCalls(sent, error);
   }
   await scan.save();
   return res.json({ success: true, data: present(scan), ...(aiError ? { aiError } : {}) });
@@ -399,7 +430,7 @@ export const listScans = asyncHandler(async (req: Request, res: Response) => {
     warningCount: (r.warnings || []).filter((w: any) => w.severity !== "info").length,
     warnings: undefined,
     pages: (r.files || []).reduce((s: number, f: any) => s + (Number(f.pages) || 1), 0),
-    thumbnailUrl: r.files?.[0]?.publicId ? signedFileUrl(r.files[0], "preview", r.files[0].mimeType === "application/pdf" ? 1 : undefined) : null,
+    thumbnailUrl: r.files?.[0]?.publicId ? safeLink(() => signedFileUrl(r.files[0], "preview", r.files[0].mimeType === "application/pdf" ? 1 : undefined)) : null,
     files: undefined,
   }));
   return res.json({ success: true, data, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });

@@ -20,7 +20,10 @@ export const ocrTimeoutMs = () => Math.min(120000, Math.max(5000, Number(process
  * retry (text only, so it's cheap and quick); a second failure is reported to the person, who can
  * re-scan or type the bill in.
  */
-export async function runExtraction(files: OcrFile[], opts: { docTypeHint?: DocType | null; deadline?: number } = {}): Promise<ExtractionOutcome> {
+export async function runExtraction(
+  files: OcrFile[],
+  opts: { docTypeHint?: DocType | null; deadline?: number; /** Called just before each AI request (for the monthly limit) */ onAiCall?: () => void } = {}
+): Promise<ExtractionOutcome> {
   const provider = getOcrProvider();
   const started = Date.now();
   const deadline = opts.deadline ?? started + ocrTimeoutMs();
@@ -31,6 +34,7 @@ export async function runExtraction(files: OcrFile[], opts: { docTypeHint?: DocT
     usage.outputTokens = (usage.outputTokens || 0) + (u.outputTokens || 0);
   };
 
+  opts.onAiCall?.();
   const first = await provider.extract({
     files,
     system: EXTRACTION_SYSTEM_PROMPT,
@@ -49,6 +53,7 @@ export async function runExtraction(files: OcrFile[], opts: { docTypeHint?: DocT
   } catch (error) {
     if (!(error instanceof ExtractionParseError)) throw error;
     if (deadline - Date.now() < 4000) throw new OcrProviderError("The AI answer was unreadable and there's no time left to retry. Re-scan.", "upstream");
+    opts.onAiCall?.();
     const second = await provider.repair({
       system: EXTRACTION_SYSTEM_PROMPT,
       prompt: repairPrompt(first.text, error.message),

@@ -235,10 +235,15 @@ export interface UploadedScanFile {
 
 /** Upload one prepared file straight to Cloudinary (private), signed by the backend. */
 export async function uploadScanFile(file: Blob, originalName: string, onProgress?: (pct: number) => void): Promise<UploadedScanFile> {
-  const { data } = await api.post<ApiResponse<{ uploadUrl: string; apiKey: string; folder: string; type: string; timestamp: number; signature: string }>>(
-    `${BASE}/upload-signature`
-  );
-  const sig = data.data;
+  let sig: { uploadUrl: string; apiKey: string; folder: string; type: string; timestamp: number; signature: string };
+  try {
+    const { data } = await api.post<ApiResponse<typeof sig>>(`${BASE}/upload-signature`);
+    sig = data.data;
+  } catch (e: any) {
+    const status = e?.response?.status;
+    const reason = e?.response?.data?.message || e?.message;
+    throw new Error(`Couldn't sign the upload${status || reason ? ` (${[status, reason].filter(Boolean).join(': ')})` : ''}.`);
+  }
   const form = new FormData();
   form.append('file', file, originalName);
   form.append('api_key', sig.apiKey);
@@ -261,9 +266,9 @@ export async function uploadScanFile(file: Blob, originalName: string, onProgres
         /* handled below */
       }
       if (xhr.status >= 200 && xhr.status < 300 && body?.public_id) resolve(body);
-      else reject(new Error(body?.error?.message || `Upload failed (${xhr.status})`));
+      else reject(new Error(`Upload to storage failed (${[xhr.status, body?.error?.message].filter(Boolean).join(': ')}).`));
     };
-    xhr.onerror = () => reject(new Error('Upload failed. Check your internet connection.'));
+    xhr.onerror = () => reject(new Error('Upload to storage failed (network error). Check your internet connection.'));
     xhr.send(form);
   });
   return {
