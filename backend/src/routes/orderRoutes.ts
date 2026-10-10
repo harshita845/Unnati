@@ -17,13 +17,15 @@ router.use(checkEnabled);
 // Get seller's orders with filters
 router.get("/", getOrders);
 
-// Get order by ID
+// Get order by ID (standard and pos alias)
+router.get("/pos/:id", getOrderById);
 router.get("/:id", getOrderById);
 
 // Update order status
 router.patch("/:id/status", updateOrderStatus);
 
-// Delete order and restore stock
+// Delete order and restore stock (standard and pos alias)
+router.delete("/pos/:id", deleteOrderController.deleteOrder);
 router.delete("/:id", deleteOrderController.deleteOrder);
 
 export default router;

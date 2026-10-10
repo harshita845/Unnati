@@ -206,7 +206,7 @@ export default function DeliveryDashboard() {
             title="Today's Pending Order"
             value={stats?.pendingOrders || 0}
             accentColor="#16a34a"
-            onClick={() => navigate('/delivery/orders/all')} // Should probably link to pending
+            onClick={() => navigate('/delivery/orders/pending')}
           />
           <DashboardCard
             icon={allOrderIcon}
@@ -243,7 +243,7 @@ export default function DeliveryDashboard() {
 
         {/* Today's Pending Order Section */}
         <div className="mt-6">
-          <h2 className="text-neutral-900 text-lg font-semibold mb-4">Todays Pending Order</h2>
+          <h2 className="text-neutral-900 text-lg font-semibold mb-4">Today's Pending Orders</h2>
           {stats?.pendingOrdersList && stats.pendingOrdersList.length > 0 ? (
             <div className="space-y-3">
               {stats.pendingOrdersList.map((order: any) => (
@@ -280,7 +280,7 @@ export default function DeliveryDashboard() {
             </div>
           ) : (
             <div className="bg-white rounded-xl p-8 min-h-[200px] flex items-center justify-center shadow-sm border border-neutral-200">
-              <p className="text-neutral-500 text-sm">No pending orders</p>
+              <p className="text-neutral-500 text-sm">No pending orders for today</p>
             </div>
           )}
         </div>

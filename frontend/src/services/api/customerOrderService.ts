@@ -141,6 +141,22 @@ export const abandonOnlinePayment = async (orderId: string): Promise<OrderRespon
 };
 
 /**
+ * Retry / Resume payment for an existing unpaid pending order
+ */
+export const retryOrderPayment = async (orderId: string): Promise<{ success: boolean; message?: string; alreadyPaid?: boolean; data?: any }> => {
+    const response = await api.post(`/customer/orders/${orderId}/retry-payment`);
+    return response.data;
+};
+
+/**
+ * Switch an unpaid pending online order to Cash on Delivery
+ */
+export const switchToCod = async (orderId: string): Promise<OrderResponse> => {
+    const response = await api.post<OrderResponse>(`/customer/orders/${orderId}/switch-to-cod`);
+    return response.data;
+};
+
+/**
  * Request Return or Replacement
  */
 export const requestReturnOrReplace = async (data: {

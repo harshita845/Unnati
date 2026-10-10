@@ -73,7 +73,7 @@ interface ProductVariation {
 }
 
 const STATUS_OPTIONS = ["All Products", "Published", "Unpublished"];
-const STOCK_OPTIONS = ["All Products", "In Stock", "Out of Stock", "Unlimited"];
+const STOCK_OPTIONS = ["All Products", "In Stock", "Out of Stock", "Low Stock"];
 
 export default function SellerProductList() {
   const navigate = useNavigate();
@@ -802,17 +802,14 @@ export default function SellerProductList() {
         product.categoryId === filterCategory;
       const matchesStatus =
         filterStatus === "All Products" || product.status === filterStatus;
+      const lowStockThreshold = Number(product.lowStockQuantity) || 5;
+      const numStock = typeof product.stock === "number" ? product.stock : Number(product.stock) || 0;
       const matchesStock =
         filterStock === "All Products" ||
-        (filterStock === "Unlimited" && product.stock === "Unlimited") ||
-        (filterStock === "In Stock" &&
-          product.stock !== "Unlimited" &&
-          typeof product.stock === "number" &&
-          product.stock > 0) ||
-        (filterStock === "Out of Stock" &&
-          product.stock !== "Unlimited" &&
-          typeof product.stock === "number" &&
-          product.stock === 0);
+        (filterStock === "In Stock" && numStock > 0) ||
+        (filterStock === "Low Stock" && numStock > 0 && numStock <= lowStockThreshold) ||
+        (filterStock === "Out of Stock" && numStock <= 0) ||
+        (filterStock === "Unlimited" && (product.stock === "Unlimited" || (product as any).isUnlimited));
       const term = (searchTerm || "").trim().toLowerCase();
       const matchesSearch =
         !term ||
@@ -1304,8 +1301,31 @@ export default function SellerProductList() {
                       <td className="p-4 align-middle text-sm text-neutral-800 text-right">{product.purchasePrice}</td>
                       <td className="p-4 align-middle text-sm text-neutral-600 text-right">{product.compareAtPrice}</td>
                       <td className="p-4 align-middle text-sm font-medium text-neutral-800 text-right">{product.price}</td>
-                      <td className="p-4 align-middle text-sm text-neutral-600">{product.deliveryTime}</td>
-                      <td className="p-4 align-middle text-sm font-bold text-neutral-800 text-right">{product.stock}</td>
+                      <td className="p-4 align-middle text-sm text-right whitespace-nowrap">
+                        {(() => {
+                          const num = typeof product.stock === "number" ? product.stock : Number(product.stock) || 0;
+                          const low = Number(product.lowStockQuantity) || 5;
+                          if (num <= 0) {
+                            return (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                                Out of Stock (0)
+                              </span>
+                            );
+                          }
+                          if (num <= low) {
+                            return (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
+                                Low Stock ({num})
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                              In Stock ({num})
+                            </span>
+                          );
+                        })()}
+                      </td>
                       <td className="p-4 align-middle text-sm text-[var(--primary-color)] text-right">{product.offerPrice > 0 ? product.offerPrice : "-"}</td>
                       <td className="p-4 align-middle text-sm text-neutral-800 text-right">{product.wholesalePrice > 0 ? product.wholesalePrice : "-"}</td>
                       <td className="p-4 align-middle text-sm text-neutral-600 text-center">{product.lowStockQuantity}</td>

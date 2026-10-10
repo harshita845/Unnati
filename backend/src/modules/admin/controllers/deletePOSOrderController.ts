@@ -1,16 +1,22 @@
+import mongoose from "mongoose";
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Order from "../../../models/Order";
 import OrderItem from "../../../models/OrderItem";
-import Product from "../../../models/Product";
-import StockLedger from "../../../models/StockLedger";
 
 /**
- * Delete POS Order and Restore Stock
+ * Delete POS Order and Clean up Items
  */
 export const deletePOSOrder = asyncHandler(
   async (req: Request, res: Response) => {
     const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Order ID format"
+      });
+    }
 
     // Find the order with populated items
     const order = await Order.findById(id).populate('items');
@@ -22,29 +28,17 @@ export const deletePOSOrder = asyncHandler(
       });
     }
 
-    // Check if it's a POS order (has adminNotes containing "POS")
-    if (!order.adminNotes?.includes('POS')) {
-      return res.status(400).json({
-        success: false,
-        message: "Only POS orders can be deleted"
-      });
-    }
-
-    // Restriction: Cannot delete orders with customer names
-    if (order.customerName && order.customerName.trim() !== "" && order.customerName.toLowerCase() !== "walk-in customer") {
-      return res.status(403).json({
-        success: false,
-        message: "Orders with registered customer names cannot be deleted to maintain data integrity."
-      });
-    }
-
-    // Note: Stock is intentionally NOT restored when deleting a POS order
-
     // Delete order items
     await OrderItem.deleteMany({ order: order._id });
 
     // Delete the order
     await Order.findByIdAndDelete(id);
+
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("order-deleted", { orderId: id });
+      io.emit("order-updated", { orderId: id, status: "DELETED" });
+    }
 
     return res.status(200).json({
       success: true,

@@ -100,6 +100,7 @@ router.delete("/staff/:id", requireUserType("Admin", "Seller"), staffController.
 
 // ==================== Order Specific Routes (must precede /orders/:id) ====================
 router.get("/orders/pos-report", requireUserType("Admin", "Seller"), orderController.getPOSOrders);
+router.get("/orders/pos/:id", requireUserType("Admin", "Seller"), orderController.getOrderById);
 router.get("/orders/online", requireUserType("Admin", "Seller"), orderController.getOnlineOrders);
 router.get("/orders/export/csv", requireUserType("Admin", "Seller"), orderController.exportOrders);
 router.get("/orders/status/:status", requireUserType("Admin", "Seller"), orderController.getOrdersByStatus);

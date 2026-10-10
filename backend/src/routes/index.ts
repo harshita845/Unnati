@@ -44,6 +44,8 @@ import {
   initiateOnlineOrder,
   verifyOnlinePayment,
   abandonOnlinePayment,
+  retryOrderPayment,
+  switchToCod,
   refreshDeliveryOtp,
   requestReturnOrReplace
 } from "../modules/customer/controllers/customerOrderController";
@@ -104,6 +106,8 @@ router.post(
 router.post("/customer/orders/initiate", authenticate, requireUserType("Customer"), initiateOnlineOrder);
 router.post("/customer/orders/verify-payment", authenticate, requireUserType("Customer"), verifyOnlinePayment);
 router.post("/customer/orders/:id/abandon-payment", authenticate, requireUserType("Customer"), abandonOnlinePayment);
+router.post("/customer/orders/:id/retry-payment", authenticate, requireUserType("Customer"), retryOrderPayment);
+router.post("/customer/orders/:id/switch-to-cod", authenticate, requireUserType("Customer"), switchToCod);
 router.get("/customer/orders", authenticate, requireUserType("Customer"), getMyOrders);
 router.get("/customer/orders/:id", authenticate, requireUserType("Customer"), getOrderById);
 router.post("/customer/orders/:id/cancel", authenticate, requireUserType("Customer"), cancelOrder);

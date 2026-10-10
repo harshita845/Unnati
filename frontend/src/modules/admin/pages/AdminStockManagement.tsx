@@ -118,7 +118,7 @@ interface ProductVariation {
 }
 
 const STATUS_OPTIONS = ["All Products", "Published", "Unpublished"];
-const STOCK_OPTIONS = ["All Products", "In Stock", "Out of Stock", "Unlimited"];
+const STOCK_OPTIONS = ["All Products", "In Stock", "Out of Stock", "Low Stock"];
 
 const PRODUCTS_CACHE_TTL_MS = 5 * 60 * 1000;
 const productsCache = new Map<
@@ -1083,17 +1083,14 @@ export default function AdminStockManagement() {
         filterSeller === "All Sellers" || product.sellerId === filterSeller;
       const matchesStatus =
         filterStatus === "All Products" || product.status === filterStatus;
+      const lowStockThreshold = Number(product.lowStockQuantity) || 5;
+      const numStock = typeof product.stock === "number" ? product.stock : Number(product.stock) || 0;
       const matchesStock =
         filterStock === "All Products" ||
-        (filterStock === "Unlimited" && product.stock === "Unlimited") ||
-        (filterStock === "In Stock" &&
-          product.stock !== "Unlimited" &&
-          typeof product.stock === "number" &&
-          product.stock > 0) ||
-        (filterStock === "Out of Stock" &&
-          product.stock !== "Unlimited" &&
-          typeof product.stock === "number" &&
-          product.stock === 0);
+        (filterStock === "In Stock" && numStock > 0) ||
+        (filterStock === "Low Stock" && numStock > 0 && numStock <= lowStockThreshold) ||
+        (filterStock === "Out of Stock" && numStock <= 0) ||
+        (filterStock === "Unlimited" && (product.stock === "Unlimited" || (product as any).isUnlimited));
       const term = (searchTerm || "").trim().toLowerCase();
       const matchesSearch =
         !term ||
@@ -1302,17 +1299,14 @@ export default function AdminStockManagement() {
           filterSeller === "All Sellers" || product.sellerId === filterSeller;
         const matchesStatus =
           filterStatus === "All Products" || product.status === filterStatus;
+        const lowStockThreshold = Number(product.lowStockQuantity) || 5;
+        const numStock = typeof product.stock === "number" ? product.stock : Number(product.stock) || 0;
         const matchesStock =
           filterStock === "All Products" ||
-          (filterStock === "Unlimited" && product.stock === "Unlimited") ||
-          (filterStock === "In Stock" &&
-            product.stock !== "Unlimited" &&
-            typeof product.stock === "number" &&
-            product.stock > 0) ||
-          (filterStock === "Out of Stock" &&
-            product.stock !== "Unlimited" &&
-            typeof product.stock === "number" &&
-            product.stock === 0);
+          (filterStock === "In Stock" && numStock > 0) ||
+          (filterStock === "Low Stock" && numStock > 0 && numStock <= lowStockThreshold) ||
+          (filterStock === "Out of Stock" && numStock <= 0) ||
+          (filterStock === "Unlimited" && (product.stock === "Unlimited" || (product as any).isUnlimited));
         const term = (searchTerm || "").trim().toLowerCase();
         const matchesSearch =
           !term ||
@@ -1871,9 +1865,30 @@ export default function AdminStockManagement() {
                       <td className="p-4 align-middle text-sm font-medium text-neutral-800 text-right">
                         {product.price}
                       </td>
-                      <td className="p-4 align-middle text-sm text-neutral-600">{product.deliveryTime}</td>
-                      <td className="p-4 align-middle text-sm font-bold text-neutral-800 text-right">
-                        {product.stock}
+                      <td className="p-4 align-middle text-sm text-right whitespace-nowrap">
+                        {(() => {
+                          const num = typeof product.stock === "number" ? product.stock : Number(product.stock) || 0;
+                          const low = Number(product.lowStockQuantity) || 5;
+                          if (num <= 0) {
+                            return (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                                Out of Stock (0)
+                              </span>
+                            );
+                          }
+                          if (num <= low) {
+                            return (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
+                                Low Stock ({num})
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                              In Stock ({num})
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="p-4 align-middle text-sm text-[var(--primary-color)] text-right">
                         {product.offerPrice > 0 ? product.offerPrice : "-"}
@@ -2161,9 +2176,17 @@ export default function AdminStockManagement() {
                         </div>
                         <div className="flex flex-col border-l border-neutral-200 pl-1">
                           <span className="text-[7px] text-neutral-500 font-bold uppercase leading-none mb-0.5">Stock</span>
-                          <span className={`${typeof product.stock === 'number' && product.stock <= (product.lowStockQuantity || 5) ? 'text-red-600' : 'text-[var(--primary-dark)]'} text-[10px] font-black leading-none`}>
-                            {product.stock}
-                          </span>
+                          {(() => {
+                            const num = typeof product.stock === "number" ? product.stock : Number(product.stock) || 0;
+                            const low = Number(product.lowStockQuantity) || 5;
+                            if (num <= 0) {
+                              return <span className="text-red-600 text-[9px] font-black leading-none">Out of Stock (0)</span>;
+                            }
+                            if (num <= low) {
+                              return <span className="text-amber-600 text-[9px] font-black leading-none">Low: {num}</span>;
+                            }
+                            return <span className="text-emerald-700 text-[9px] font-black leading-none">In Stock: {num}</span>;
+                          })()}
                         </div>
                       </div>
 

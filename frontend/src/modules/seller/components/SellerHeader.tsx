@@ -139,7 +139,7 @@ export default function SellerHeader({ onMenuClick, isSidebarOpen }: SellerHeade
         </div>
 
         {/* Action Icons */}
-        <div className="hidden sm:flex items-center gap-2 md:gap-4 relative">
+        <div className="flex items-center gap-1 sm:gap-2 md:gap-4 relative">
           {/* Settings Button with Dropdown */}
           <div className="relative" ref={settingsRef}>
             <button
@@ -165,7 +165,10 @@ export default function SellerHeader({ onMenuClick, isSidebarOpen }: SellerHeade
               </svg>
             </button>
             {showSettingsDropdown && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-neutral-200 py-2 z-50">
+              <div
+                className="absolute right-0 mt-2 bg-white rounded-xl shadow-2xl border border-neutral-200 py-2 z-50"
+                style={{ minWidth: '200px', maxWidth: 'calc(100vw - 32px)' }}
+              >
                 <button
                   onClick={() => {
                     setShowSettingsDropdown(false);
@@ -175,7 +178,6 @@ export default function SellerHeader({ onMenuClick, isSidebarOpen }: SellerHeade
                 >
                   Account Settings
                 </button>
-
               </div>
             )}
           </div>
@@ -205,14 +207,16 @@ export default function SellerHeader({ onMenuClick, isSidebarOpen }: SellerHeade
               </svg>
             </button>
             {showLocationDropdown && (
-              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-neutral-200 py-2 z-50">
-                <div className="px-4 py-2 border-b border-neutral-200">
-                  <p className="text-xs text-neutral-500 mb-1">Store Location</p>
-                  <p className="text-sm font-medium text-neutral-900">
-                    {user?.city ? `${user.city}${user.address ? `, ${user.address}` : ''}` : 'No location set'}
-                  </p>
+              <div
+                className="absolute right-0 mt-2 bg-white rounded-xl shadow-2xl border border-neutral-200 p-3 z-50"
+                style={{ minWidth: '240px', maxWidth: 'calc(100vw - 32px)' }}
+              >
+                <div className="border-b border-neutral-100 pb-1.5 mb-1.5">
+                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Store Location</p>
                 </div>
-
+                <p className="text-xs sm:text-sm font-medium text-neutral-800 leading-snug break-words">
+                  {user?.city ? `${user.city}${user.address ? `, ${user.address}` : ''}` : 'No location set'}
+                </p>
               </div>
             )}
           </div>

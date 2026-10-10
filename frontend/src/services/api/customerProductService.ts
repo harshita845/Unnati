@@ -100,16 +100,17 @@ export const getSearchSuggestions = async (q: string, latitude?: number, longitu
  * Location (latitude/longitude) is required to verify product availability
  */
 export const getProductById = async (id: string, latitude?: number, longitude?: number): Promise<ProductDetailResponse> => {
+    const cleanId = id ? id.trim().replace(/\.+$/, "") : "";
     const params: any = {};
     if (latitude !== undefined && longitude !== undefined) {
         params.latitude = latitude;
         params.longitude = longitude;
     }
-    const cacheKey = buildCacheKey(`customer-product:${id}`, params);
+    const cacheKey = buildCacheKey(`customer-product:${cleanId}`, params);
     return apiCache.getOrFetch(
         cacheKey,
         async () => {
-            const response = await api.get<ProductDetailResponse>(`/customer/products/${id}`, { params });
+            const response = await api.get<ProductDetailResponse>(`/customer/products/${cleanId}`, { params });
             return response.data;
         },
         2 * 60 * 1000

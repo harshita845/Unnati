@@ -176,14 +176,29 @@ export const getTodayOrders = asyncHandler(async (req: Request, res: Response) =
  */
 export const getPendingOrders = asyncHandler(async (req: Request, res: Response) => {
     const deliveryId = req.user?.userId;
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
 
     // Unassigned offers: only ones this partner was offered (dispatch is by distance to the store)
     // and has not declined. Orders dispatched while no partner was online are open to all.
     const riderId = new mongoose.Types.ObjectId(String(deliveryId));
-    const pendingQuery: any = riderVisibleOrdersFilter(deliveryId, {
-        'dispatch.rejectedDeliveryBoys': { $ne: riderId },
-        $or: [{ 'dispatch.notifiedDeliveryBoys.0': { $exists: false } }, { 'dispatch.notifiedDeliveryBoys': riderId }],
-    });
+    const pendingQuery: any = {
+        $and: [
+            riderVisibleOrdersFilter(deliveryId, {
+                'dispatch.rejectedDeliveryBoys': { $ne: riderId },
+                $or: [{ 'dispatch.notifiedDeliveryBoys.0': { $exists: false } }, { 'dispatch.notifiedDeliveryBoys': riderId }],
+            }),
+            {
+                $or: [
+                    { createdAt: { $gte: todayStart, $lte: todayEnd } },
+                    { updatedAt: { $gte: todayStart, $lte: todayEnd } }
+                ]
+            }
+        ]
+    };
 
     const orders = await Order.find(pendingQuery)
         .populate("items")

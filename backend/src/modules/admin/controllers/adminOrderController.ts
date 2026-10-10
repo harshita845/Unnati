@@ -95,6 +95,41 @@ function tryParseSearchDate(searchStr: string): { start: Date; end: Date } | nul
   return null;
 }
 
+export function parseBoundDate(val: any, isEnd = false): Date | null {
+  if (!val) return null;
+  const str = String(val).trim();
+  if (!str) return null;
+  const parsed = tryParseSearchDate(str);
+  if (parsed) {
+    return isEnd ? parsed.end : parsed.start;
+  }
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    if (isEnd) {
+      d.setHours(23, 59, 59, 999);
+    } else {
+      d.setHours(0, 0, 0, 0);
+    }
+    return d;
+  }
+  return null;
+}
+
+export function buildDateFilterCondition(dateFrom?: any, dateTo?: any) {
+  const start = parseBoundDate(dateFrom, false);
+  const end = parseBoundDate(dateTo, true);
+
+  if (!start && !end) return null;
+
+  const dateFilter: any = {};
+  if (start) dateFilter.$gte = start;
+  if (end) dateFilter.$lte = end;
+
+  return {
+    $or: [{ createdAt: dateFilter }, { orderDate: dateFilter }]
+  };
+}
+
 function buildSearchCondition(searchStr: string) {
   const trimmed = searchStr.trim();
   if (!trimmed) return null;
@@ -147,22 +182,10 @@ export const getAllOrders = asyncHandler(
 
     if (status) conditions.push({ status });
     if (paymentStatus) conditions.push({ paymentStatus });
-    if (dateFrom || dateTo) {
-      const dateFilter: any = {};
-      if (dateFrom) {
-        const start = new Date(dateFrom as string);
-        start.setHours(0, 0, 0, 0);
-        dateFilter.$gte = start;
-      }
-      if (dateTo) {
-        const end = new Date(dateTo as string);
-        end.setHours(23, 59, 59, 999);
-        dateFilter.$lte = end;
-      }
-      conditions.push({
-        $or: [{ createdAt: dateFilter }, { orderDate: dateFilter }]
-      });
-    }
+
+    const dateCond = buildDateFilterCondition(dateFrom, dateTo);
+    if (dateCond) conditions.push(dateCond);
+
     if (search) {
       const searchCond = buildSearchCondition(search as string);
       if (searchCond) conditions.push(searchCond);
@@ -230,15 +253,16 @@ export const getOnlineOrders = asyncHandler(
     if (paymentStatus) query.paymentStatus = paymentStatus;
     if (paymentMethod) query.paymentMethod = paymentMethod;
 
-    if (dateFrom || dateTo) {
-      query.orderDate = {};
-      if (dateFrom) query.orderDate.$gte = new Date(dateFrom as string);
-      if (dateTo) query.orderDate.$lte = new Date(dateTo as string);
+    const dateCond = buildDateFilterCondition(dateFrom, dateTo);
+    if (dateCond) {
+      query.$and = query.$and || [];
+      query.$and.push(dateCond);
     }
 
     if (search) {
       const searchCond = buildSearchCondition(search as string);
       if (searchCond) {
+        query.$and = query.$and || [];
         query.$and.push(searchCond);
       }
     }
@@ -300,14 +324,15 @@ export const getPOSOrders = asyncHandler(
     if (status) query.status = status;
     if (paymentMethod && paymentMethod !== "All Methods") query.paymentMethod = paymentMethod;
 
-    if (dateFrom || dateTo) {
-      query.orderDate = {};
-      if (dateFrom) query.orderDate.$gte = new Date(dateFrom as string);
-      if (dateTo) query.orderDate.$lte = new Date(dateTo as string);
+    const dateCond = buildDateFilterCondition(dateFrom, dateTo);
+    if (dateCond) {
+      query.$and = query.$and || [];
+      query.$and.push(dateCond);
     }
 
     if (search) {
       const searchRegex = { $regex: search as string, $options: "i" };
+      query.$and = query.$and || [];
       query.$and.push({
         $or: [
           { orderNumber: searchRegex },
@@ -1037,7 +1062,14 @@ export const assignDeliveryBoy = asyncHandler(
 export const getOrdersByStatus = asyncHandler(
   async (req: Request, res: Response) => {
     const { status } = req.params;
-    const { page = 1, limit = 10 } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      dateFrom,
+      dateTo,
+      search,
+      seller,
+    } = req.query;
 
     const validStatuses = [
       "Received",
@@ -1058,17 +1090,34 @@ export const getOrdersByStatus = asyncHandler(
       });
     }
 
+    const conditions: any[] = [{ status }];
+
+    const dateCond = buildDateFilterCondition(dateFrom, dateTo);
+    if (dateCond) conditions.push(dateCond);
+
+    if (search) {
+      const searchCond = buildSearchCondition(search as string);
+      if (searchCond) conditions.push(searchCond);
+    }
+
+    const query: any = conditions.length > 0 ? { $and: conditions } : { status };
+
+    if (seller) {
+      const orderItems = await OrderItem.find({ seller }).distinct("order");
+      query._id = { $in: orderItems };
+    }
+
     const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
 
     const [orders, total] = await Promise.all([
-      Order.find({ status })
+      Order.find(query)
         .populate("customer", "name email phone")
         .populate("deliveryBoy", "name mobile")
         .populate("items")
         .sort({ orderDate: -1 })
         .skip(skip)
         .limit(parseInt(limit as string)),
-      Order.countDocuments({ status }),
+      Order.countDocuments(query),
     ]);
 
     return res.status(200).json({
@@ -2227,6 +2276,13 @@ export const deletePOSOrder = asyncHandler(
   async (req: Request, res: Response) => {
     const { id } = req.params;
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Order ID format"
+      });
+    }
+
     // Find the order with populated items
     const order = await Order.findById(id).populate('items');
 
@@ -2237,21 +2293,17 @@ export const deletePOSOrder = asyncHandler(
       });
     }
 
-    // Check if it's a POS order (has adminNotes containing "POS")
-    if (!order.adminNotes?.includes('POS')) {
-      return res.status(400).json({
-        success: false,
-        message: "Only POS orders can be deleted"
-      });
-    }
-
-    // Note: Stock is intentionally NOT restored when deleting a POS order
-
     // Delete order items
     await OrderItem.deleteMany({ order: order._id });
 
     // Delete the order
     await Order.findByIdAndDelete(id);
+
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("order-deleted", { orderId: id });
+      io.emit("order-updated", { orderId: id, status: "DELETED" });
+    }
 
     return res.status(200).json({
       success: true,

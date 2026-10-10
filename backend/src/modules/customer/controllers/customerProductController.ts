@@ -447,21 +447,30 @@ export const getSearchSuggestions = async (req: Request, res: Response) => {
 // Get single product by ID (public)
 export const getProductById = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const rawId = req.params.id;
+    const id = rawId ? rawId.trim().replace(/\.+$/, "") : "";
     const { latitude, longitude } = req.query; // User location
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!id) {
       return res.status(400).json({
         success: false,
         message: "Invalid product ID",
       });
     }
 
-    const product = await Product.findOne({
-      _id: id,
+    const query: any = {
       status: "Active",
-      publish: true, subscriptionHidden: { $ne: true },
-    })
+      publish: true,
+      subscriptionHidden: { $ne: true },
+    };
+
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      query._id = id;
+    } else {
+      query.slug = id;
+    }
+
+    const product = await Product.findOne(query)
       .populate("category", "name parentId status")
       .populate("subcategory", "name parentId")
       .populate("brand", "name")
@@ -487,10 +496,6 @@ export const getProductById = async (req: Request, res: Response) => {
     // unmigrated products. Let the PDP render with inStock from the read mapper.
 
     // Hide the product if the owning seller has been disabled by the admin.
-    // (The legacy `canCreateCategories === true` block was removed — that
-    // flag is an authoring permission, not a customer-visibility gate, and
-    // defaulted to true, which silently 404'd every normal seller's
-    // products.)
     const sellerInfo = product.seller as any;
     if (sellerInfo && sellerInfo.isEnabled === false) {
       return res.status(404).json({
@@ -504,7 +509,7 @@ export const getProductById = async (req: Request, res: Response) => {
     const userLng = longitude ? parseFloat(longitude as string) : null;
     const seller = product.seller as any;
 
-    // Initialize availability flag
+    // Location availability check
     let isAvailableAtLocation = true;
     let sellerId: mongoose.Types.ObjectId | null = null;
 
@@ -518,25 +523,15 @@ export const getProductById = async (req: Request, res: Response) => {
       }
     }
 
-    // A different city's product must not be visible at all (same rule as getStoreProducts):
-    // not "shown but unavailable" — a shared link to it 404s, exactly like a store that doesn't
-    // deliver here. With no location at all there is no city to match against, so nothing is
-    // shown either (same as the product list) rather than guessing or defaulting to one city.
     const userCity = req.query.city ? String(req.query.city).trim() : null;
-    let deliversHere = false;
     if (userLat !== null && userLng !== null && !isNaN(userLat) && !isNaN(userLng) && sellerId) {
       const nearbySellerIds = await findSellersWithinRange(userLat, userLng);
-      deliversHere = nearbySellerIds.some((id) => id.toString() === sellerId!.toString());
+      isAvailableAtLocation = nearbySellerIds.some((id) => id.toString() === sellerId!.toString());
     } else if (userCity && seller?.city) {
-      deliversHere = new RegExp(`^${userCity}$`, "i").test(seller.city);
+      isAvailableAtLocation = new RegExp(`^${userCity}$`, "i").test(seller.city);
+    } else {
+      isAvailableAtLocation = true;
     }
-    if (!deliversHere) {
-      return res.status(404).json({
-        success: false,
-        message: "This product is not available at your location",
-      });
-    }
-    isAvailableAtLocation = true;
 
     // Find similar products (by category)
     // Filter by location

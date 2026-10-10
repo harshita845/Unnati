@@ -170,14 +170,14 @@ export default function SellerReturnRequests() {
         }
 
         const response = await getReturnRequests(params);
-        if (response.success && response.data && response.data.length > 0) {
+        if (response.success && response.data) {
           setRequests(response.data);
         } else {
-          setRequests(DUMMY_RETURN_REQUESTS);
+          setRequests([]);
         }
       } catch (err: any) {
-        console.warn('Could not load live return requests, using dummy fallback data:', err);
-        setRequests(DUMMY_RETURN_REQUESTS);
+        console.error('Failed to load return requests:', err);
+        setRequests([]);
       } finally {
         setLoading(false);
       }

@@ -37,7 +37,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 
 export default function ProductDetail() {
-  const { id } = useParams<{ id: string }>();
+  const { id: rawId } = useParams<{ id: string }>();
+  const id = rawId ? rawId.trim().replace(/\.+$/, "") : "";
   const navigate = useNavigate();
   const routerLocation = useRouterLocation();
   const { cart, addToCart, updateQuantity } = useCart();

@@ -764,7 +764,7 @@ export default function DeliveryOrderDetail() {
 
             {/* OTP Section (when order is Picked up or Out for Delivery) */}
             {(order.status === 'Picked up' || order.status === 'Out for Delivery') && !showOtpInput && (
-                <div className="fixed bottom-24 left-6 right-6 z-30">
+                <div className="fixed bottom-24 left-4 right-4 max-w-lg mx-auto z-30">
                     <button
                         onClick={handleSendOtp}
                         className="w-full py-4 rounded-2xl bg-[var(--primary-dark)] backdrop-blur-md border border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] text-white font-bold text-lg transition-transform active:scale-[0.98] flex items-center justify-center gap-3 overflow-hidden group"
@@ -776,46 +776,69 @@ export default function DeliveryOrderDetail() {
                 </div>
             )}
 
-            {/* OTP Input Section */}
+            {/* OTP Input Section Modal */}
             {showOtpInput && (
-                <div className="fixed bottom-24 left-6 right-6 z-30 bg-white rounded-2xl p-4 shadow-2xl border border-neutral-200">
-                    <p className="text-sm font-semibold text-neutral-900 mb-3">Enter Delivery OTP</p>
-                    <input
-                        type="text"
-                        value={otpValue}
-                        onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                        placeholder="Enter 6-digit OTP"
-                        className="w-full px-4 py-3 border border-neutral-300 rounded-xl text-lg font-semibold text-center mb-3 focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]"
-                        maxLength={6}
-                    />
-                    <p className="text-xs text-neutral-500 text-center mb-3">
-                        Ask the customer for the OTP shown in their app.{' '}
-                        <button
-                            type="button"
-                            onClick={handleSendOtp}
-                            disabled={otpSending}
-                            className="font-semibold text-[var(--primary-dark)] underline disabled:opacity-50"
-                        >
-                            {otpSending ? 'Sending…' : 'Resend OTP'}
-                        </button>
-                    </p>
-                    <div className="flex gap-3">
-                        <button
-                            onClick={() => {
-                                setShowOtpInput(false);
-                                setOtpValue('');
-                            }}
-                            className="flex-1 py-3 rounded-xl bg-neutral-200 text-neutral-700 font-semibold hover:bg-neutral-300 transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleVerifyOtp}
-                            className="flex-1 py-3 rounded-xl bg-[var(--primary-dark)] text-white font-semibold hover:bg-[var(--primary-darker)] transition-colors"
-                            disabled={otpVerifying || otpValue.length !== 6}
-                        >
-                            {otpVerifying ? 'Verifying...' : 'Verify OTP'}
-                        </button>
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl p-6 shadow-2xl border border-neutral-100 w-full max-w-sm flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
+                        {/* Lock / OTP Icon */}
+                        <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-[var(--primary-dark)] flex items-center justify-center mb-4 border border-emerald-100 shadow-inner">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                        </div>
+
+                        <h3 className="text-xl font-bold text-neutral-900 mb-1">Enter Delivery OTP</h3>
+                        <p className="text-xs text-neutral-500 mb-5 leading-relaxed">
+                            Ask the customer for the 6-digit verification code shown in their app to confirm delivery.
+                        </p>
+
+                        <div className="w-full mb-3">
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                value={otpValue}
+                                onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                placeholder="------"
+                                className="w-full px-4 py-3.5 border-2 border-neutral-200 rounded-2xl text-2xl font-bold font-mono text-center tracking-[0.5em] text-neutral-900 focus:outline-none focus:border-[var(--primary-dark)] focus:ring-4 focus:ring-emerald-500/10 transition-all bg-neutral-50/50"
+                                maxLength={6}
+                                autoFocus
+                            />
+                        </div>
+
+                        <div className="text-xs text-neutral-500 mb-6 flex items-center justify-center gap-1.5">
+                            <span>Didn't get code?</span>
+                            <button
+                                type="button"
+                                onClick={handleSendOtp}
+                                disabled={otpSending}
+                                className="font-bold text-[var(--primary-dark)] hover:underline disabled:opacity-50"
+                            >
+                                {otpSending ? 'Sending…' : 'Resend OTP'}
+                            </button>
+                        </div>
+
+                        <div className="flex gap-3 w-full">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowOtpInput(false);
+                                    setOtpValue('');
+                                }}
+                                className="flex-1 py-3.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold text-sm transition-colors active:scale-95"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleVerifyOtp}
+                                className="flex-1 py-3.5 rounded-xl bg-[var(--primary-dark)] hover:bg-[var(--primary-darker)] text-white font-bold text-sm transition-all shadow-md shadow-emerald-900/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                                disabled={otpVerifying || otpValue.length !== 6}
+                            >
+                                {otpVerifying ? 'Verifying...' : 'Verify OTP'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -823,12 +846,12 @@ export default function DeliveryOrderDetail() {
             {/* Floating Glassmorphic Action Button Dock - Order Taken button or status update */}
             {/* "Delivered" is only reachable through the OTP section above */}
             {waitingForStore && (
-                <div className="fixed bottom-24 left-6 right-6 z-30 py-4 px-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-semibold text-center shadow-lg">
+                <div className="fixed bottom-24 left-4 right-4 max-w-lg mx-auto z-30 py-4 px-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-semibold text-center shadow-lg">
                     {order.status === 'Processed' ? 'Store is packing this order' : 'Waiting for the store to accept this order'}
                 </div>
             )}
             {!waitingForStore && nextStatus && nextStatus !== 'Delivered' && order.status !== 'Picked up' && !showOtpInput && (
-                <div className="fixed bottom-24 left-6 right-6 z-30 flex gap-3">
+                <div className="fixed bottom-24 left-4 right-4 max-w-lg mx-auto z-30 flex gap-3">
                     {/* Scan Button (Visible when Out for Delivery or Ready for Pickup / Processed) */}
                    {(order.status === 'Out for Delivery' || order.status === 'Ready for pickup' || order.status === 'Processed') && (
                         <button

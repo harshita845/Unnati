@@ -158,16 +158,15 @@ export default function SellerOutForDeliveryOrders() {
           params.search = searchQuery;
         }
         const response = await getOrders(params);
-        if (response.success && response.data && response.data.length > 0) {
+        if (response.success && response.data) {
           setOrders(response.data);
         } else {
-          // Use realistic dummy fallback data if backend has no orders for this seller yet
-          setOrders(DUMMY_OUT_FOR_DELIVERY_ORDERS);
+          setOrders([]);
         }
       } catch (err: any) {
-        // Fallback gracefully to dummy data so seller view is always rich
-        console.warn('Could not load live out for delivery orders, displaying mock dataset:', err);
-        setOrders(DUMMY_OUT_FOR_DELIVERY_ORDERS);
+        console.error('Failed to load out for delivery orders:', err);
+        setError(err.message || 'Failed to load out for delivery orders');
+        setOrders([]);
       } finally {
         setLoading(false);
       }

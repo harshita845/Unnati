@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
-  deletePOSOrder,
+  deleteOrder,
   getAllOrders,
   type Order,
 } from "../../../services/api/admin/adminOrderService";
@@ -27,7 +27,10 @@ export default function AdminAllOrders() {
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
-  const [dateRange, setDateRange] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [seller, setSeller] = useState("All Sellers");
   const [status, setStatus] = useState(initialStatus);
 
@@ -68,57 +71,32 @@ export default function AdminAllOrders() {
           params.status = status;
         }
 
-        if (searchQuery) {
-          params.search = searchQuery;
+        if (searchQuery && searchQuery.trim()) {
+          params.search = searchQuery.trim();
         }
 
-        // Parse date range or single date if provided
-        if (dateRange && dateRange.trim()) {
-          const parseSingleDate = (dStr: string) => {
-            const trimmed = dStr.trim();
-            if (!trimmed) return "";
-            if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-            const parts = trimmed.split(/[/.-]/);
-            if (parts.length === 3) {
-              if (parts[0].length === 4) {
-                return `${parts[0]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`;
-              }
-              let year = parts[2];
-              if (year.length === 2 && year !== "20") {
-                year = "20" + year;
-              } else if (year.length !== 4) {
-                return "";
-              }
-              const p0 = parseInt(parts[0], 10);
-              const p1 = parseInt(parts[1], 10);
-              let day: string;
-              let month: string;
-              if (p1 > 12) {
-                month = parts[0].padStart(2, "0");
-                day = parts[1].padStart(2, "0");
-              } else {
-                day = parts[0].padStart(2, "0");
-                month = parts[1].padStart(2, "0");
-              }
-              return `${year}-${month}-${day}`;
-            }
-            return trimmed;
-          };
-
-          if (dateRange.includes(" - ")) {
-            const [d1, d2] = dateRange.split(" - ");
-            params.dateFrom = parseSingleDate(d1);
-            params.dateTo = parseSingleDate(d2 || d1);
-          } else {
-            const parsed = parseSingleDate(dateRange);
-            params.dateFrom = parsed;
-            params.dateTo = parsed;
-          }
+        // Apply date filter
+        if (startDate && endDate) {
+          params.dateFrom = startDate;
+          params.dateTo = endDate;
+        } else if (startDate) {
+          params.dateFrom = startDate;
+          params.dateTo = startDate;
+        } else if (endDate) {
+          params.dateFrom = endDate;
+          params.dateTo = endDate;
         }
 
         const response = await getAllOrders(params);
         if (response.success) {
-          setOrders(response.data);
+          setOrders(response.data || []);
+          if (response.pagination) {
+            setTotalOrders(response.pagination.total ?? 0);
+            setTotalPages(response.pagination.pages ?? 1);
+          } else {
+            setTotalOrders(response.data?.length || 0);
+            setTotalPages(1);
+          }
         }
       } catch (err: any) {
         console.error("Error fetching orders:", err);
@@ -139,11 +117,13 @@ export default function AdminAllOrders() {
     entriesPerPage,
     status,
     searchQuery,
-    dateRange,
+    startDate,
+    endDate,
   ]);
 
   const handleClearDate = () => {
-    setDateRange("");
+    setStartDate("");
+    setEndDate("");
     setCurrentPage(1);
   };
 
@@ -257,12 +237,7 @@ export default function AdminAllOrders() {
     return filtered;
   }, [orders, sortField, sortDirection]);
 
-  const totalPages = Math.ceil(
-    filteredAndSortedOrders.length / parseInt(entriesPerPage)
-  );
-  const startIndex = (currentPage - 1) * parseInt(entriesPerPage);
-  const endIndex = startIndex + parseInt(entriesPerPage);
-  const paginatedOrders = filteredAndSortedOrders.slice(startIndex, endIndex);
+  const paginatedOrders = filteredAndSortedOrders;
 
   const selectedSet = useMemo(() => new Set(selectedRowIds), [selectedRowIds]);
   const allSelected =
@@ -305,7 +280,7 @@ export default function AdminAllOrders() {
 
       for (const id of idsToDelete) {
         try {
-          await deletePOSOrder(id);
+          await deleteOrder(id);
         } catch (e: any) {
           // If it's already missing on server, treat as deleted.
           if (e?.response?.status !== 404) failed.push(id);
@@ -408,7 +383,7 @@ export default function AdminAllOrders() {
                 <label className="text-xs sm:text-sm font-medium text-neutral-700 whitespace-nowrap">
                   From - To Order Date
                 </label>
-                <div className="flex items-center gap-2 bg-white border border-neutral-300 rounded px-2 sm:px-3 py-1.5 sm:py-2 w-full sm:w-auto">
+                <div className="flex items-center gap-1.5 bg-white border border-neutral-300 rounded px-2.5 py-1.5 w-full sm:w-auto shadow-sm hover:border-neutral-400 transition-colors">
                   <svg
                     width="16"
                     height="16"
@@ -425,20 +400,33 @@ export default function AdminAllOrders() {
                     />
                   </svg>
                   <input
-                    type="text"
-                    value={dateRange}
+                    type="date"
+                    value={startDate}
                     onChange={(e) => {
-                      setDateRange(e.target.value);
+                      setStartDate(e.target.value);
                       setCurrentPage(1);
                     }}
-                    className="flex-1 sm:w-48 text-xs sm:text-sm text-neutral-600 bg-transparent focus:outline-none placeholder:text-neutral-400"
-                    placeholder="DD/MM/YYYY or YYYY-MM-DD"
+                    className="text-xs sm:text-sm text-neutral-700 bg-transparent focus:outline-none cursor-pointer"
+                    title="Start Date"
                   />
-                  {dateRange && (
+                  <span className="text-xs font-semibold text-neutral-400 px-0.5">to</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    min={startDate || undefined}
+                    onChange={(e) => {
+                      setEndDate(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="text-xs sm:text-sm text-neutral-700 bg-transparent focus:outline-none cursor-pointer"
+                    title="End Date"
+                  />
+                  {(startDate || endDate) && (
                     <button
                       onClick={handleClearDate}
-                      className="ml-2 px-2 py-1 text-xs font-medium text-neutral-700 bg-neutral-200 hover:bg-neutral-300 rounded transition-colors flex-shrink-0">
-                      Clear
+                      title="Clear date filter"
+                      className="ml-1 px-1.5 py-0.5 text-xs font-medium text-neutral-600 bg-neutral-100 hover:bg-neutral-200 rounded transition-colors flex-shrink-0">
+                      ✕
                     </button>
                   )}
                 </div>
@@ -985,9 +973,12 @@ export default function AdminAllOrders() {
           <div className="px-4 sm:px-6 py-3 bg-neutral-50 border-t border-neutral-200 flex flex-col sm:flex-row items-center justify-between gap-2">
             <div className="text-xs sm:text-sm text-neutral-700">
               Showing{" "}
-              {filteredAndSortedOrders.length === 0 ? 0 : startIndex + 1} to{" "}
-              {Math.min(endIndex, filteredAndSortedOrders.length)} of{" "}
-              {filteredAndSortedOrders.length} entries
+              {totalOrders === 0
+                ? 0
+                : (currentPage - 1) * parseInt(entriesPerPage) + 1}{" "}
+              to{" "}
+              {Math.min(currentPage * parseInt(entriesPerPage), totalOrders)} of{" "}
+              {totalOrders} entries
             </div>
             <div className="flex items-center gap-1">
               <button

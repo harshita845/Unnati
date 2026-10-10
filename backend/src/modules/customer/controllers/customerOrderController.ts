@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import Order from "../../../models/Order";
 import OrderItem from "../../../models/OrderItem";
 import Return from "../../../models/Return";
+import Customer from "../../../models/Customer";
 import mongoose from "mongoose";
 import { notifySellersOfOrderUpdate } from "../../../services/sellerNotificationService";
 import { notifyAdminsOfNewOrder } from "../../../services/adminNotificationService";
@@ -441,6 +442,125 @@ export const abandonOnlinePayment = async (req: Request, res: Response) => {
         return res.status(200).json({ success: true, message: "Order released", data: { id: order._id, status: order.status } });
     } catch (error: any) {
         return sendOrderError(res, error, "Failed to release order.");
+    }
+};
+
+/**
+ * Retry / Resume online payment for an existing unpaid pending order
+ */
+export const retryOrderPayment = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user!.userId;
+
+        const order: any = await Order.findOne({ _id: id, customer: userId });
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
+
+        if (order.paymentStatus === "Paid") {
+            return res.status(200).json({ success: true, message: "Order is already paid", alreadyPaid: true });
+        }
+
+        if (order.status === "Cancelled" || order.status === "Rejected") {
+            return res.status(400).json({ success: false, message: `Cannot pay for a ${order.status.toLowerCase()} order` });
+        }
+
+        const customer = await Customer.findById(userId).select('name email phone');
+        const orderId = String(order._id);
+
+        const method = order.paymentGateway || order.paymentMethod || 'Razorpay';
+        if (method === 'Razorpay' || method === 'Online') {
+            const razorpayOrder = await createRazorpayOrder(order.total, order.orderNumber, orderId);
+            await Order.updateOne({ _id: order._id }, { $set: { gatewayOrderId: razorpayOrder.id } });
+
+            return res.status(200).json({
+                success: true,
+                data: {
+                    gateway: 'Razorpay',
+                    orderId: order._id,
+                    razorpayOrderId: razorpayOrder.id,
+                    amount: order.total,
+                    key: process.env.RAZORPAY_KEY_ID,
+                    customer: {
+                        name: customer?.name || order.customerName || "",
+                        email: customer?.email || order.customerEmail || "",
+                        contact: customer?.phone || order.customerPhone || ""
+                    }
+                }
+            });
+        }
+
+        const cashfreeOrder = await createCashfreeOrder({
+            amount: order.total,
+            orderId,
+            customerId: String(userId),
+            email: customer?.email || order.customerEmail || "",
+            phone: customer?.phone || order.customerPhone || "",
+        });
+        await Order.updateOne({ _id: order._id }, { $set: { gatewayOrderId: cashfreeOrder.cfOrderId } });
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                gateway: 'Cashfree',
+                orderId: order._id,
+                paymentSessionId: cashfreeOrder.paymentSessionId,
+                amount: order.total,
+                isSandbox: process.env.CASHFREE_MODE !== 'production'
+            }
+        });
+    } catch (error: any) {
+        console.error("Error retrying order payment:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to initiate payment for this order",
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Switch an unpaid pending online order to Cash on Delivery (Pay to Delivery Partner)
+ */
+export const switchToCod = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user!.userId;
+
+        const order: any = await Order.findOne({ _id: id, customer: userId });
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
+
+        if (order.paymentStatus === "Paid") {
+            return res.status(400).json({ success: false, message: "Order is already paid" });
+        }
+
+        if (order.status === "Cancelled" || order.status === "Rejected") {
+            return res.status(400).json({ success: false, message: `Cannot change payment method for a ${order.status.toLowerCase()} order` });
+        }
+
+        order.status = "Received";
+        order.paymentMethod = "Cash on Delivery";
+        order.paymentStatus = "Pending";
+        order.paymentExpiresAt = undefined;
+        await order.save();
+
+        await notifyNewOrder(req, order._id);
+
+        return res.status(200).json({
+            success: true,
+            message: "Switched to Cash on Delivery successfully",
+            data: order
+        });
+    } catch (error: any) {
+        console.error("Error switching to COD:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to switch to Cash on Delivery",
+            error: error.message
+        });
     }
 };
 

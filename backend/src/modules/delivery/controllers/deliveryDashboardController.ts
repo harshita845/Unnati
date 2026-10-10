@@ -59,10 +59,20 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
         {
             $group: {
                 _id: null,
-                // Pending: Active statuses
+                // Today's Pending: Active statuses received/created today
                 pendingOrders: {
                     $sum: {
-                        $cond: [{ $in: ["$status", RIDER_ACTIVE_STATUSES] }, 1, 0]
+                        $cond: [
+                            {
+                                $and: [
+                                    { $in: ["$status", RIDER_ACTIVE_STATUSES] },
+                                    { $gte: ["$createdAt", todayStart] },
+                                    { $lte: ["$createdAt", todayEnd] }
+                                ]
+                            },
+                            1,
+                            0
+                        ]
                     }
                 },
                 // All Orders Today: Created today OR Updated today
@@ -91,18 +101,17 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
                             {
                                 $and: [
                                     { $eq: ["$status", "Delivered"] },
-                                    { $eq: ["$paymentMethod", "COD"] }, // Assuming 'COD' string for Cash on Delivery
+                                    { $eq: ["$paymentMethod", "COD"] },
                                     { $gte: ["$deliveredAt", todayStart] },
                                     { $lte: ["$deliveredAt", todayEnd] }
                                 ]
                             },
-                            "$total", // Sum the order total
+                            "$total",
                             0
                         ]
                     }
                 },
-                // Today's Earning: Commission earned today (Mock calculation: 40 per order)
-                // In real app, this should come from a Commission model or field on Order
+                // Today's Earning: Commission earned today
                 todayDeliveredCount: {
                     $sum: {
                         $cond: [
@@ -122,7 +131,6 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
                         $cond: [{ $eq: ["$status", "Delivered"] }, 1, 0]
                     }
                 }
-
             }
         }
     ]);
@@ -137,14 +145,24 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
     };
 
     // Calculate Earnings (Mock logic: 40 per delivery)
-    // You should replace this with real commission logic stored in DB
     const COMMISSION_PER_ORDER = 40;
     const todayEarning = result.todayDeliveredCount * COMMISSION_PER_ORDER;
     const totalEarning = result.totalDeliveredCount * COMMISSION_PER_ORDER;
 
-    // Fetch list of Pending Orders for the "Today's Pending Order" section
-    const pendingOrdersList = await Order.find(riderVisibleOrdersFilter(deliveryId))
-        .select("orderNumber customerName deliveryAddress status total estimatedDeliveryDate") // Select necessary fields
+    // Fetch list of Pending Orders for the "Today's Pending Order" section (only from today)
+    const pendingQuery: any = {
+        $and: [
+            riderVisibleOrdersFilter(deliveryId),
+            {
+                $or: [
+                    { createdAt: { $gte: todayStart, $lte: todayEnd } },
+                    { updatedAt: { $gte: todayStart, $lte: todayEnd } }
+                ]
+            }
+        ]
+    };
+    const pendingOrdersList = await Order.find(pendingQuery)
+        .select("orderNumber customerName deliveryAddress status total estimatedDeliveryDate createdAt")
         .sort({ createdAt: -1 })
         .limit(5);
 
@@ -153,8 +171,8 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
         id: order._id,
         orderId: order.orderNumber,
         customerName: order.customerName,
-        status: order.status, // Map backend status to frontend status if needed
-        address: `${order.deliveryAddress.address}, ${order.deliveryAddress.city}`, // Simplify address
+        status: order.status,
+        address: `${order.deliveryAddress?.address || ''}, ${order.deliveryAddress?.city || ''}`,
         totalAmount: order.total,
         estimatedDeliveryTime: order.estimatedDeliveryDate ? new Date(order.estimatedDeliveryDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'
     }));
@@ -163,11 +181,11 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
         success: true,
         data: {
             dailyCollection: result.dailyCollection,
-            cashBalance: deliveryPartner.cashCollected, // This field stores total cash holding
+            cashBalance: deliveryPartner.cashCollected,
             pendingOrders: result.pendingOrders,
             allOrders: result.allOrdersToday,
             returnOrders: activeReturnTasksCount,
-            returnItems: 0, // Need 'OrderItem' logic for this, keeping 0 for now
+            returnItems: 0,
             todayEarning: todayEarning,
             totalEarning: totalEarning,
             pendingOrdersList: formattedPendingList

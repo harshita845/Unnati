@@ -105,14 +105,14 @@ export default function SellerReplaceRequests() {
         if (searchQuery) { params.search = searchQuery; }
 
         const response = await getReturnRequests(params);
-        if (response.success && response.data && response.data.length > 0) {
+        if (response.success && response.data) {
           setRequests(response.data);
         } else {
-          setRequests(DUMMY_REPLACE_REQUESTS);
+          setRequests([]);
         }
       } catch (err: any) {
-        console.warn('Could not load replacement requests, using fallback dataset:', err);
-        setRequests(DUMMY_REPLACE_REQUESTS);
+        console.error('Failed to load replacement requests:', err);
+        setRequests([]);
       } finally {
         setLoading(false);
       }

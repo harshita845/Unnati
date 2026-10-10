@@ -7,9 +7,10 @@ import { OrderStatus } from "../../types/order";
 import GoogleMapsTracking from "../../components/GoogleMapsTracking";
 import { useDeliveryTracking } from "../../hooks/useDeliveryTracking";
 import DeliveryPartnerCard from "../../components/DeliveryPartnerCard";
-import { cancelOrder, updateOrderNotes, getSellerLocationsForOrder, refreshDeliveryOtp, requestReturnOrReplace } from "../../services/api/customerOrderService";
+import { cancelOrder, updateOrderNotes, getSellerLocationsForOrder, refreshDeliveryOtp, requestReturnOrReplace, retryOrderPayment, verifyOnlinePayment, switchToCod } from "../../services/api/customerOrderService";
 import { uploadImage } from "../../services/api/uploadService";
 import { useAppContext } from "../../context/AppContext";
+import { useToast } from "../../context/ToastContext";
 
 // Icon Components
 const ArrowLeftIcon = ({ className }: { className?: string }) => (
@@ -464,7 +465,10 @@ export default function OrderDetail() {
     durationValue: number;
     distanceValue: number;
   } | null>(null);
+  const { showToast } = useToast();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [isSwitchingCod, setIsSwitchingCod] = useState(false);
 
   // Modal states
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -617,6 +621,157 @@ export default function OrderDetail() {
     }
     // Add a small delay for the animation
     setTimeout(() => setIsRefreshing(false), 500);
+  };
+
+  const loadScript = (src: string) => {
+    return new Promise<boolean>((resolve) => {
+      if (document.querySelector(`script[src="${src}"]`)) {
+        resolve(true);
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = src;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  const handlePayNow = async () => {
+    if (!id || isProcessingPayment) return;
+    setIsProcessingPayment(true);
+
+    try {
+      const res = await retryOrderPayment(id);
+      if (!res.success) {
+        showToast(res.message || "Unable to initiate payment", "error");
+        setIsProcessingPayment(false);
+        return;
+      }
+
+      if (res.alreadyPaid) {
+        showToast("Order is already paid!", "success");
+        const refreshed = await fetchOrderById(id);
+        if (refreshed) {
+          setOrder(refreshed);
+          setOrderStatus(refreshed.status);
+        }
+        setIsProcessingPayment(false);
+        return;
+      }
+
+      const { gateway, orderId, amount, key, razorpayOrderId, customer, paymentSessionId, isSandbox } = res.data || {};
+
+      if (gateway === 'Razorpay') {
+        const loaded = await loadScript("https://checkout.razorpay.com/v1/checkout.js");
+        if (!loaded) {
+          showToast("Razorpay SDK failed to load. Please check your internet connection.", "error");
+          setIsProcessingPayment(false);
+          return;
+        }
+
+        const options = {
+          key: key,
+          amount: Math.round((amount || order?.totalAmount || 0) * 100),
+          currency: "INR",
+          name: "Unnati",
+          description: "Order Payment",
+          order_id: razorpayOrderId,
+          handler: async function (response: any) {
+            try {
+              const verifyRes = await verifyOnlinePayment({
+                orderId: orderId || id,
+                paymentId: response.razorpay_payment_id,
+                razorpayOrderId: response.razorpay_order_id,
+                razorpaySignature: response.razorpay_signature,
+              });
+              if (verifyRes.success) {
+                showToast("Payment successful! Your order is confirmed.", "success");
+                const refreshed = await fetchOrderById(id);
+                if (refreshed) {
+                  setOrder(refreshed);
+                  setOrderStatus(refreshed.status);
+                }
+              } else {
+                showToast(verifyRes.message || "Payment verification failed", "error");
+              }
+            } catch (err: any) {
+              showToast(err?.response?.data?.message || err.message || "Payment verification error", "error");
+            } finally {
+              setIsProcessingPayment(false);
+            }
+          },
+          prefill: {
+            name: customer?.name || order?.customerName || "",
+            email: customer?.email || order?.customerEmail || "",
+            contact: customer?.contact || order?.customerPhone || ""
+          },
+          theme: {
+            color: "#16a34a"
+          },
+          modal: {
+            ondismiss: function () {
+              setIsProcessingPayment(false);
+            }
+          }
+        };
+
+        const rzp1 = new (window as any).Razorpay(options);
+        rzp1.on('payment.failed', function (response: any) {
+          console.error('Razorpay Payment Failed:', response.error);
+          showToast(response.error?.description || 'Payment failed. Please try again.', 'error');
+          setIsProcessingPayment(false);
+        });
+        rzp1.open();
+      } else if (gateway === 'Cashfree') {
+        const loaded = await loadScript("https://sdk.cashfree.com/js/v3/cashfree.js");
+        if (!loaded) {
+          showToast("Cashfree SDK failed to load", "error");
+          setIsProcessingPayment(false);
+          return;
+        }
+        const cashfree = new (window as any).Cashfree({
+          mode: isSandbox ? "sandbox" : "production"
+        });
+        cashfree.checkout({
+          paymentSessionId: paymentSessionId,
+          redirectTarget: "_modal"
+        }).then(async () => {
+          const refreshed = await fetchOrderById(id);
+          if (refreshed) {
+            setOrder(refreshed);
+            setOrderStatus(refreshed.status);
+          }
+          setIsProcessingPayment(false);
+        });
+      }
+    } catch (err: any) {
+      console.error("Pay now error:", err);
+      showToast(err?.response?.data?.message || err.message || "Failed to process payment", "error");
+      setIsProcessingPayment(false);
+    }
+  };
+
+  const handleSwitchToCod = async () => {
+    if (!id || isSwitchingCod) return;
+    setIsSwitchingCod(true);
+    try {
+      const res = await switchToCod(id);
+      if (res.success) {
+        showToast("Switched to Cash on Delivery! Order is now placed.", "success");
+        const refreshed = await fetchOrderById(id);
+        if (refreshed) {
+          setOrder(refreshed);
+          setOrderStatus(refreshed.status);
+        }
+      } else {
+        showToast(res.message || "Failed to switch to Cash on Delivery", "error");
+      }
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || err.message || "Error switching payment method", "error");
+    } finally {
+      setIsSwitchingCod(false);
+    }
   };
 
   const handleRefreshOtp = async () => {
@@ -1067,22 +1222,42 @@ export default function OrderDetail() {
         {/* Payment Pending - Only show if payment is NOT completed */}
         {order?.paymentStatus !== 'Paid' && order?.paymentStatus !== 'COMPLETED' && order?.paymentStatus !== 'Success' && (
           <motion.div
-            className="bg-white rounded-xl p-4 shadow-sm"
+            className="bg-white rounded-xl p-4 shadow-sm border border-amber-100"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <p className="font-semibold text-gray-900">
+                <p className="font-semibold text-gray-900 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
                   Payment of ₹{order.totalAmount?.toFixed(2) || "0.00"} pending
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
-                  Pay now, or pay to the delivery partner using Cash/UPI
+                  Pay now to confirm your order, or choose Pay on Delivery.
                 </p>
               </div>
-              <Button className="bg-gray-900 hover:bg-gray-800 text-white rounded-full px-6">
-                Pay now <ChevronRightIcon className="w-4 h-4 ml-1" />
-              </Button>
+              <div className="flex items-center gap-2 flex-wrap">
+                {order?.paymentMethod !== 'Cash on Delivery' && order?.status === 'Pending' && (
+                  <Button
+                    onClick={handleSwitchToCod}
+                    disabled={isSwitchingCod || isProcessingPayment}
+                    className="border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs sm:text-sm rounded-full px-4 py-2 font-medium"
+                  >
+                    {isSwitchingCod ? "Switching..." : "Pay on Delivery"}
+                  </Button>
+                )}
+                <Button
+                  onClick={handlePayNow}
+                  disabled={isProcessingPayment || isSwitchingCod}
+                  className="bg-gray-900 hover:bg-gray-800 text-white rounded-full px-6 py-2 text-sm font-semibold flex items-center justify-center min-w-[120px]"
+                >
+                  {isProcessingPayment ? "Processing..." : (
+                    <>
+                      Pay now <ChevronRightIcon className="w-4 h-4 ml-1" />
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </motion.div>
         )}
