@@ -1,4 +1,8 @@
 import { Request, Response } from 'express';
+import { findSellersWithinRange } from "../utils/locationHelper";
+import Seller from "../models/Seller";
+import Product from "../models/Product";
+import mongoose from "mongoose";
 import { Banner } from '../models/Banner';
 import AppSettings from '../models/AppSettings';
 import { asyncHandler } from '../utils/asyncHandler';
@@ -114,6 +118,37 @@ export const getFlashDeals = asyncHandler(async (req: Request, res: Response) =>
      settings = await AppSettings.getSettings();
   }
 
+  let flashDealProductIds: string[] = (settings.flashDeal?.productIds || []).map(String);
+  let dealOfTheDayProductIds: string[] = (settings.dealOfTheDay?.productIds || []).map(String);
+  let featuredDealProductIds: string[] = (settings.featuredDeal?.productIds || []).map(String);
+
+  // The customer app (scope=customer) only gets deal products from stores that deliver to the
+  // user's location; with no location, none. Admin screens get the full lists to edit.
+  if (req.query.scope === 'customer') {
+    const lat = parseFloat(String(req.query.latitude ?? ''));
+    const lng = parseFloat(String(req.query.longitude ?? ''));
+    let allowed = new Set<string>();
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      const nearby = await findSellersWithinRange(lat, lng);
+      const visible = await Seller.find({ _id: { $in: nearby }, isEnabled: true }).select('_id').lean();
+      const ids = Array.from(new Set([...flashDealProductIds, ...dealOfTheDayProductIds, ...featuredDealProductIds])).filter((id) =>
+        mongoose.isValidObjectId(id)
+      );
+      const products = await Product.find({
+        _id: { $in: ids },
+        seller: { $in: visible.map((v: any) => v._id) },
+        status: 'Active',
+        publish: true,
+      })
+        .select('_id')
+        .lean();
+      allowed = new Set(products.map((p: any) => String(p._id)));
+    }
+    flashDealProductIds = flashDealProductIds.filter((id) => allowed.has(id));
+    dealOfTheDayProductIds = dealOfTheDayProductIds.filter((id) => allowed.has(id));
+    featuredDealProductIds = featuredDealProductIds.filter((id) => allowed.has(id));
+  }
+
   const data = {
     flashDealTargetDate: settings.flashDeal?.targetDate
       ? new Date(settings.flashDeal.targetDate).toISOString()
@@ -121,11 +156,11 @@ export const getFlashDeals = asyncHandler(async (req: Request, res: Response) =>
     flashDealImage: settings.flashDeal?.image || '',
     isActive: settings.flashDeal?.active ?? true,
     // Flash Deal Products (separate from Deal of the Day)
-    flashDealProductIds: settings.flashDeal?.productIds || [],
+    flashDealProductIds,
     // Deal of the Day
-    dealOfTheDayProductIds: settings.dealOfTheDay?.productIds || [],
+    dealOfTheDayProductIds,
     // Featured Deal
-    featuredDealProductIds: settings.featuredDeal?.productIds || [],
+    featuredDealProductIds,
   };
 
   res.status(200).json({

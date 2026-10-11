@@ -2,8 +2,10 @@ import { Server as SocketIOServer } from 'socket.io';
 import { cancelOrderAndRestoreStock } from "./orderLifecycleService";
 import Delivery from '../models/Delivery';
 import Order from '../models/Order';
+import OrderItem from '../models/OrderItem';
 import Seller from '../models/Seller';
 import DeliveryTracking from '../models/DeliveryTracking';
+import { PICKUP_READY_STATUSES, riderCanServeOrder } from "./orderFlowService";
 import mongoose from 'mongoose';
 import { notifySellersOfOrderUpdate } from './sellerNotificationService';
 
@@ -58,7 +60,9 @@ export async function findAvailableDeliveryBoys(): Promise<mongoose.Types.Object
 export async function findDeliveryBoysNearLocation(
     latitude: number,
     longitude: number,
-    radiusKm: number = 10
+    radiusKm: number = 10,
+    /** Riders with no known position are only included if they're in this city */
+    city?: string
 ): Promise<{ deliveryBoyId: mongoose.Types.ObjectId; distance: number }[]> {
     try {
         // 1. Try to find delivery boys using the new GeoJSON location field in Delivery model
@@ -106,6 +110,17 @@ export async function findDeliveryBoysNearLocation(
                 }
             }
 
+            // Riders in the store's city whose position isn't known yet can take it too
+            if (city) {
+                const cityRx = new RegExp(`^\\s*${city.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
+                const noGps = await Delivery.find({
+                    isOnline: true,
+                    status: 'Active',
+                    city: cityRx,
+                    $or: [{ 'location.coordinates.1': { $exists: false } }, { location: null }],
+                }).select('_id');
+                for (const db of noGps) nearbyDeliveryBoys.push({ deliveryBoyId: db._id as mongoose.Types.ObjectId, distance: radiusKm / 2 });
+            }
             console.log(`📍 Found ${nearbyDeliveryBoys.length} delivery boys using live location within ${radiusKm}km of seller`);
             return nearbyDeliveryBoys.sort((a, b) => a.distance - b.distance);
         }
@@ -167,16 +182,18 @@ export async function findDeliveryBoysNearLocation(
             }
         }
 
-        // Also include delivery boys who don't have tracking data yet (they might be new)
-        // but give them a default distance
+        // Riders with no known position yet: only those registered in the store's own city
+        // (never every rider everywhere — a Hyderabad order must not reach Indore riders)
         const trackedIds = new Set(trackingRecords.map(r => r._id.toString()));
-        for (const db of allDeliveryBoys) {
-            if (!trackedIds.has(db._id.toString())) {
-                // Include untracked delivery boys with a default distance
-                nearbyDeliveryBoys.push({
-                    deliveryBoyId: db._id as mongoose.Types.ObjectId,
-                    distance: radiusKm / 2, // Default to half the radius
-                });
+        const cityRx = city ? new RegExp(`^\\s*${city.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i') : null;
+        if (cityRx) {
+            const untracked = await Delivery.find({
+                _id: { $in: allDeliveryBoys.map((d) => d._id).filter((id) => !trackedIds.has(String(id))) },
+                city: cityRx,
+                $or: [{ 'location.coordinates.1': { $exists: false } }, { location: null }],
+            }).select('_id');
+            for (const db of untracked) {
+                nearbyDeliveryBoys.push({ deliveryBoyId: db._id as mongoose.Types.ObjectId, distance: radiusKm / 2 });
             }
         }
 
@@ -199,90 +216,65 @@ export async function findDeliveryBoysNearSellerLocations(
     order: any
 ): Promise<mongoose.Types.ObjectId[]> {
     try {
-        // Get unique seller IDs from order items
-        const sellerIds = [...new Set(
-            order.items
-                ?.map((item: any) => item.seller?.toString())
-                .filter((id: string) => id) || []
-        )];
-
+        // The order's stores, read from its items (the order passed in usually has item ids only)
+        const sellerIds = (await OrderItem.distinct('seller', { order: order._id, status: { $nin: ['Cancelled', 'Returned'] } }))
+            .filter(Boolean)
+            .map(String);
         if (sellerIds.length === 0) {
-            console.log('No sellers found in order, falling back to all available delivery boys');
-            return findAvailableDeliveryBoys();
+            console.log('No stores found on order; nobody offered');
+            return [];
         }
 
-        // Get seller locations
-        const sellers = await Seller.find({
-            _id: { $in: sellerIds },
-        }).select('latitude longitude location serviceRadiusKm storeName');
-
-        if (sellers.length === 0) {
-            console.log('No seller data found, falling back to all available delivery boys');
-            return findAvailableDeliveryBoys();
-        }
-
-        // Find delivery boys near each seller location
+        const sellers = await Seller.find({ _id: { $in: sellerIds } }).select('latitude longitude location serviceRadiusKm storeName city');
         const nearbyDeliveryBoyMap = new Map<string, { distance: number }>();
 
         for (const seller of sellers) {
-            let lat: number | null = null;
-            let lng: number | null = null;
-
-            // Prioritize GeoJSON location field
-            if (seller.location && seller.location.coordinates) {
-                lng = seller.location.coordinates[0];
-                lat = seller.location.coordinates[1];
-            } else {
-                // Fallback to legacy fields
-                lat = seller.latitude ? parseFloat(seller.latitude) : null;
-                lng = seller.longitude ? parseFloat(seller.longitude) : null;
-            }
-
-            if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+            const point = storePoint(seller);
+            if (!point) {
                 console.log(`Seller ${seller.storeName} has no valid location, skipping`);
                 continue;
             }
-
             const radius = seller.serviceRadiusKm || 10; // Default 10km
-            const nearbyBoys = await findDeliveryBoysNearLocation(lat, lng, radius);
-
+            const nearbyBoys = await findDeliveryBoysNearLocation(point.lat, point.lng, radius, seller.city);
             for (const boy of nearbyBoys) {
                 const boyId = boy.deliveryBoyId.toString();
-                // Keep the smallest distance if same delivery boy is near multiple sellers
                 if (!nearbyDeliveryBoyMap.has(boyId) || nearbyDeliveryBoyMap.get(boyId)!.distance > boy.distance) {
                     nearbyDeliveryBoyMap.set(boyId, { distance: boy.distance });
                 }
             }
         }
 
-        if (nearbyDeliveryBoyMap.size === 0) {
-            console.log('No delivery boys found near seller locations, falling back to all available');
-            return findAvailableDeliveryBoys();
-        }
-
-        // Sort by distance and return IDs
+        // Nobody near the stores: offer it to nobody rather than to riders in other cities. The
+        // order then shows only to riders near its stores (see riderCanServeOrder).
         const sortedBoys = Array.from(nearbyDeliveryBoyMap.entries())
             .sort((a, b) => a[1].distance - b[1].distance)
             .map(([id]) => new mongoose.Types.ObjectId(id));
-
         console.log(`📍 Found ${sortedBoys.length} delivery boys near seller locations`);
         return sortedBoys;
     } catch (error) {
         console.error('Error finding delivery boys near seller locations:', error);
-        return findAvailableDeliveryBoys();
+        return [];
     }
 }
+
+const storePoint = (seller: any): { lat: number; lng: number } | null => {
+    const c = seller?.location?.coordinates;
+    if (Array.isArray(c) && c.length === 2 && (c[0] !== 0 || c[1] !== 0)) return { lat: Number(c[1]), lng: Number(c[0]) };
+    const lat = parseFloat(seller?.latitude || '');
+    const lng = parseFloat(seller?.longitude || '');
+    return Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0) ? { lat, lng } : null;
+};
 
 /**
  * Emit new order notification to delivery boys near seller locations
  * Prioritizes delivery boys within the seller's service radius
  */
 export async function notifyDeliveryBoysOfNewOrder(
-    io: SocketIOServer,
+    io: SocketIOServer | null | undefined,
     order: any
 ): Promise<void> {
     try {
-        // Find delivery boys near seller locations (within service radius)
+        // Delivery partners near the order's store(s) (within each store's service radius)
         let nearbyDeliveryBoyIds = await findDeliveryBoysNearSellerLocations(order);
 
         if (nearbyDeliveryBoyIds.length === 0) {
@@ -290,33 +282,15 @@ export async function notifyDeliveryBoysOfNewOrder(
             return;
         }
 
-        // --- FILTER BUSY DELIVERY BOYS ---
-        // Check if any of these delivery boys already have an active order
-        // Active = deliveryBoyStatus is Assigned, Picked Up, or In Transit
+        // Partners already busy with another active order don't get a live alert, but can still
+        // see and take the offer once they're free (so an order is never stranded with one rider)
         const busyDeliveryBoys = await Order.find({
             deliveryBoy: { $in: nearbyDeliveryBoyIds },
             deliveryBoyStatus: { $in: ['Assigned', 'Picked Up', 'In Transit'] },
-            // Double check status to be sure we don't count completed/cancelled ones just in case statuses are out of sync
             status: { $nin: ['Delivered', 'Cancelled', 'Rejected', 'Returned'] }
         }).distinct('deliveryBoy');
+        const busyIdsSet = new Set(busyDeliveryBoys.map((id: any) => id.toString()));
 
-        if (busyDeliveryBoys.length > 0) {
-            const busyIdsSet = new Set(busyDeliveryBoys.map(id => id.toString()));
-
-            const originalCount = nearbyDeliveryBoyIds.length;
-            nearbyDeliveryBoyIds = nearbyDeliveryBoyIds.filter(id => !busyIdsSet.has(id.toString()));
-
-            console.log(`ℹ️ Filtered out ${originalCount - nearbyDeliveryBoyIds.length} busy delivery boys. Active: ${nearbyDeliveryBoyIds.length}`);
-
-            if (nearbyDeliveryBoyIds.length === 0) {
-                console.log('⚠️ All nearby delivery boys are currently busy with other orders.');
-                // Optionally: could emit to admin or retry later
-                return;
-            }
-        }
-        // ---------------------------------
-
-        // Prepare order data for notification
         const orderData = {
             orderId: order._id.toString(),
             orderNumber: order.orderNumber,
@@ -334,50 +308,22 @@ export async function notifyDeliveryBoysOfNewOrder(
             createdAt: order.createdAt,
         };
 
-        // Initialize notification state
-        const orderId = order._id.toString();
-        const notifiedIds = new Set<string>();
-
-        // Only add delivery boys who are actually connected to the notification room
-        for (const id of nearbyDeliveryBoyIds) {
-            const idString = id.toString().trim();
-            const roomName = `delivery-${idString}`;
-            const room = io.sockets.adapter.rooms.get(roomName);
-
-            if (room && room.size > 0) {
-                notifiedIds.add(idString);
-                io.to(roomName).emit('new-order', orderData);
-                console.log(`📤 Emitted new-order to connected delivery boy room: ${roomName}`);
-            } else {
-                console.log(`⏩ Skipping disconnected delivery boy: ${idString}`);
-            }
-        }
-
-        if (notifiedIds.size === 0) {
-            console.log('⚠️ No connected delivery boys found to notify');
-            // We might still want to emit to the general room as a fallback
-            io.to('delivery-notifications').emit('new-order', orderData);
-            // But we can't track rejection state accurately if we don't know who is connected
-            return;
-        }
-
+        // Record who was offered the order. This is what limits the offer to partners near the
+        // store(s) — it also works without a live socket (e.g. on serverless hosting), where
+        // partners see the offer in their Pending list instead of a push.
+        const offeredIds = nearbyDeliveryBoyIds.map((id) => new mongoose.Types.ObjectId(String(id)));
         await Order.updateOne(
-            { _id: order._id },
-            {
-                $set: {
-                    dispatch: {
-                        notifiedDeliveryBoys: Array.from(notifiedIds).map((id) => new mongoose.Types.ObjectId(id)),
-                        rejectedDeliveryBoys: [],
-                        notifiedAt: new Date(),
-                    },
-                },
-            }
+            { _id: order._id, deliveryBoy: null },
+            { $set: { dispatch: { notifiedDeliveryBoys: offeredIds, rejectedDeliveryBoys: [], notifiedAt: new Date() } } }
         );
 
-        // Also emit to general room for any others who might have joined
-        io.to('delivery-notifications').emit('new-order', orderData);
-
-        console.log(`📢 Notified ${notifiedIds.size} connected delivery boys near seller locations about order ${order.orderNumber}`);
+        // Live push to the free partners connected right now
+        if (io) {
+            for (const id of offeredIds) {
+                if (!busyIdsSet.has(String(id))) io.to(`delivery-${String(id)}`).emit('new-order', orderData);
+            }
+        }
+        console.log(`📢 Offered order ${order.orderNumber} to ${offeredIds.length} delivery partner(s) near its store(s)`);
     } catch (error) {
         console.error('Error notifying delivery boys:', error);
     }
@@ -389,7 +335,7 @@ export async function notifyDeliveryBoysOfNewOrder(
  * same moment cannot both get it, and the result survives server restarts.
  */
 export async function handleOrderAcceptance(
-    io: SocketIOServer,
+    io: SocketIOServer | null | undefined,
     orderId: string,
     deliveryBoyId: string
 ): Promise<{ success: boolean; message: string }> {
@@ -400,12 +346,19 @@ export async function handleOrderAcceptance(
         }
         const riderId = new mongoose.Types.ObjectId(normalizedDeliveryBoyId);
 
+        // An order offered to nobody specifically (no rider was near when it was dispatched) can
+        // only be taken by a rider near its stores — never by a rider in another city
+        const offer: any = await Order.findById(orderId).select('deliveryBoy dispatch').lean();
+        if (offer && !offer.deliveryBoy && !offer.dispatch?.notifiedDeliveryBoys?.length && !(await riderCanServeOrder(riderId, orderId))) {
+            return { success: false, message: 'This order is too far from you' };
+        }
+
         const order: any = await Order.findOneAndUpdate(
             {
                 _id: orderId,
                 deliveryBoy: null,
-                // Riders can only take an order every store has finished packing
-                status: 'Ready for pickup',
+                // Riders can take an order once every store has accepted it
+                status: { $in: PICKUP_READY_STATUSES },
                 'dispatch.rejectedDeliveryBoys': { $ne: riderId },
                 // Only partners who were offered the order (if the offer list was recorded)
                 $or: [
@@ -431,9 +384,6 @@ export async function handleOrderAcceptance(
             if (existing.status === 'Received' || existing.status === 'Pending') {
                 return { success: false, message: 'The store has not accepted this order yet' };
             }
-            if (existing.status === 'Processed') {
-                return { success: false, message: 'The store is still packing this order' };
-            }
             if (existing.dispatch?.rejectedDeliveryBoys?.some((id: any) => String(id) === normalizedDeliveryBoyId)) {
                 return { success: false, message: 'You have already rejected this order' };
             }
@@ -442,7 +392,7 @@ export async function handleOrderAcceptance(
 
         // Assignment does not change the order status: the store accepted it already
         // Emit order-accepted event to stop notifications for all delivery boys
-        io.to('delivery-notifications').emit('order-accepted', {
+        io?.to('delivery-notifications').emit('order-accepted', {
             orderId,
             acceptedBy: normalizedDeliveryBoyId,
         });
@@ -450,14 +400,14 @@ export async function handleOrderAcceptance(
             ? order.dispatch.notifiedDeliveryBoys
             : [riderId];
         for (const notifiedId of notifiedIds) {
-            io.to(`delivery-${String(notifiedId)}`).emit('order-accepted', {
+            io?.to(`delivery-${String(notifiedId)}`).emit('order-accepted', {
                 orderId,
                 acceptedBy: normalizedDeliveryBoyId,
             });
         }
 
         // Emit delivery-boy-accepted event to customer for tracking
-        io.to(`order-${orderId}`).emit('delivery-boy-accepted', {
+        io?.to(`order-${orderId}`).emit('delivery-boy-accepted', {
             orderId,
             deliveryBoyId: normalizedDeliveryBoyId,
             message: 'Delivery boy accepted your order. Tracking started.',
@@ -477,7 +427,7 @@ export async function handleOrderAcceptance(
  * rejected and its stock released.
  */
 export async function handleOrderRejection(
-    io: SocketIOServer,
+    io: SocketIOServer | null | undefined,
     orderId: string,
     deliveryBoyId: string
 ): Promise<{ success: boolean; message: string; allRejected: boolean }> {
@@ -517,7 +467,7 @@ export async function handleOrderRejection(
 
         if (allRejected) {
             // Emit order-rejected-by-all event
-            io.to('delivery-notifications').emit('order-rejected-by-all', {
+            io?.to('delivery-notifications').emit('order-rejected-by-all', {
                 orderId,
             });
 
@@ -533,19 +483,19 @@ export async function handleOrderRejection(
                 await Order.updateOne({ _id: orderId }, { $set: { deliveryBoyStatus: 'Failed' } });
 
                 // Notify customer via socket
-                io.to(`order-${orderId}`).emit('order-rejected', {
+                io?.to(`order-${orderId}`).emit('order-rejected', {
                     orderId,
                     message: 'Unfortunately, no delivery partner is available at the moment. Your order has been rejected.',
                 });
 
                 // Notify sellers/restaurants
-                notifySellersOfOrderUpdate(io, rejectedOrder, 'STATUS_UPDATE');
+                if (io) notifySellersOfOrderUpdate(io, rejectedOrder, 'STATUS_UPDATE');
 
                 console.log(`✅ All delivery boys rejected order ${orderId}. Order status updated to Rejected.`);
             }
         } else {
             // Emit rejection acknowledgment to the specific delivery boy
-            io.to(`delivery-${normalizedDeliveryBoyId}`).emit('order-rejection-acknowledged', {
+            io?.to(`delivery-${normalizedDeliveryBoyId}`).emit('order-rejection-acknowledged', {
                 orderId,
             });
         }

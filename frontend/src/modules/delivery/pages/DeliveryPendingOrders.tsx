@@ -23,6 +23,11 @@ export default function DeliveryPendingOrders() {
     };
 
     fetchOrders();
+    // New offers also arrive here without a live socket (e.g. on serverless hosting): refresh
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchOrders();
+    }, 15000);
+    return () => clearInterval(timer);
   }, []);
 
   const getStatusColor = (status: string) => {

@@ -11,7 +11,16 @@ import {
     TERMINAL_ORDER_STATUSES,
     markOrderDelivered,
 } from "../../../services/orderLifecycleService";
-import { PICKUP_READY_STATUSES, riderVisibleOrdersFilter, transitionOrderStatus } from "../../../services/orderFlowService";
+import {
+    PICKUP_READY_STATUSES,
+    getOrderStoreStops,
+    riderVisibleOrdersFilter,
+    transitionOrderStatus,
+    verifyStorePickup,
+    riderCanServeOrder,
+    StoreStop,
+} from "../../../services/orderFlowService";
+import { handleOrderAcceptance, handleOrderRejection } from "../../../services/orderNotificationService";
 import { OrderPlacementError } from "../../../services/orderPlacementService";
 import { restoreOrderItemStock } from "../../../services/orderStockService";
 import Refund from "../../../models/Refund";
@@ -22,18 +31,23 @@ import { sendNotification } from "../../../services/notificationService";
 // ("Ready for pickup" is set by the store once it has packed the order)
 const DELIVERY_PARTNER_STATUSES = ['Picked up', 'Out for Delivery'];
 
-/** Short code the store reads out / prints for pickup: last 6 characters of the order number. */
-export const pickupCodeFor = (orderNumber: string) => String(orderNumber || '').slice(-6);
-
 /**
- * Pickup verification: the scanned barcode / typed value must be this order's number,
- * its 6-digit pickup code, or its id. Prevents a rider collecting the wrong package.
+ * Where the rider goes next: the next store still to collect from (packed ones first, in the
+ * order the stores appear), then the customer once every store is collected.
  */
-const matchesPickupCode = (order: any, raw: unknown) => {
-    const code = String(raw ?? '').trim().replace(/^#/, '').toUpperCase();
-    if (!code) return false;
-    const orderNumber = String(order.orderNumber || '').toUpperCase();
-    return code === orderNumber || code === String(order._id).toUpperCase() || (code.length === 6 && code === pickupCodeFor(orderNumber));
+const nextStopFor = (order: any, stores: StoreStop[]) => {
+    const remaining = stores.filter((s) => !s.pickedUp);
+    if (remaining.length === 0) {
+        return {
+            type: 'customer' as const,
+            name: order.customerName,
+            address: `${order.deliveryAddress?.address || ''}, ${order.deliveryAddress?.city || ''}`,
+            latitude: order.deliveryAddress?.latitude ?? null,
+            longitude: order.deliveryAddress?.longitude ?? null,
+        };
+    }
+    const next = remaining.find((s) => s.ready) || remaining[0];
+    return { type: 'store' as const, ...next };
 };
 import DeliveryAssignment from "../../../models/DeliveryAssignment";
 import Return from "../../../models/Return";
@@ -200,9 +214,16 @@ export const getPendingOrders = asyncHandler(async (req: Request, res: Response)
         ]
     };
 
-    const orders = await Order.find(pendingQuery)
+    const candidates = await Order.find(pendingQuery)
         .populate("items")
         .sort({ createdAt: -1 });
+    // Offers made to nobody specifically (no rider was near at dispatch): only riders near the
+    // order's stores see them, never riders in another city
+    const orders = [];
+    for (const o of candidates) {
+        const openOffer = !o.deliveryBoy && !((o as any).dispatch?.notifiedDeliveryBoys?.length);
+        if (!openOffer || (await riderCanServeOrder(deliveryId, o._id))) orders.push(o);
+    }
 
     const formattedOrders = orders.map(order => ({
         id: order._id,
@@ -248,13 +269,13 @@ export const getOrderDetails = asyncHandler(async (req: Request, res: Response) 
         !order.deliveryBoy &&
         PICKUP_READY_STATUSES.includes(order.status) &&
         !rejected.includes(deliveryId) &&
-        (notified.length === 0 || notified.includes(deliveryId));
+        (notified.includes(deliveryId) || (notified.length === 0 && (await riderCanServeOrder(deliveryId, order._id))));
     if (!isMine && !isOffer) {
         return res.status(403).json({
             success: false,
             message: order.deliveryBoy
                 ? "This order is assigned to another delivery partner"
-                : "This order isn't available to you yet — the store hasn't finished packing it",
+                : "This order isn't available to you",
         });
     }
 
@@ -273,10 +294,22 @@ export const getOrderDetails = asyncHandler(async (req: Request, res: Response) 
         createdAt: order.createdAt,
         distance: null
     };
+    // Each store on the order with its own progress (packed / collected) and map coordinates,
+    // and where to go next. Pickup codes are never sent to the rider: the store gives it.
+    const stores = await getOrderStoreStops(order);
 
     return res.status(200).json({
         success: true,
-        data: formattedOrder
+        data: {
+            ...formattedOrder,
+            stores,
+            storesPickedUp: stores.filter((s) => s.pickedUp).length,
+            totalStores: stores.length,
+            nextStop: nextStopFor(order, stores),
+            deliveryOtpSent: !!order.deliveryOtp && !order.deliveryOtpVerified,
+            // Already mine, or still an offer I can accept
+            assignedToMe: isMine,
+        }
     });
 });
 
@@ -321,45 +354,29 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
     let from: string[];
 
     if (status === 'Picked up') {
-        if (order.status === 'Received' || order.status === 'Pending') {
+        // Collecting is per store: the code says which store's part was handed over
+        const { pickupCode } = req.body;
+        if (!pickupCode) {
             return res.status(400).json({
                 success: false,
-                message: "The store has not accepted this order yet. Wait for the store to accept and pack it.",
+                message: "Enter the store's pickup code (or scan it from the store's bill) to collect its items.",
             });
         }
-        if (order.status === 'Processed') {
-            return res.status(400).json({
-                success: false,
-                message: "The store is still packing this order. Wait for it to be marked ready for pickup.",
-            });
-        }
-        // Collecting the package requires proving it is this order (barcode on the bill or pickup code)
-        if (order.status !== 'Picked up') {
-            const { pickupCode } = req.body;
-            if (!pickupCode) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Verify the package first: scan the barcode on the bill or enter the order number / pickup code.",
-                });
-            }
-            if (!matchesPickupCode(order, pickupCode)) {
-                return res.status(400).json({
-                    success: false,
-                    message: `This package is not order #${order.orderNumber}. Check the order number on the bill and try again.`,
-                });
-            }
-        }
-        from = PICKUP_READY_STATUSES;
-        extra.deliveryBoyStatus = 'Picked Up';
-        extra.pickupVerifiedAt = new Date();
-    } else {
-        // Out for Delivery: only once the package has been collected
-        if (order.status !== 'Picked up' && order.status !== 'Out for Delivery') {
-            return res.status(400).json({ success: false, message: "Collect the package from the store (Picked up) first." });
-        }
-        from = ['Picked up'];
-        extra.deliveryBoyStatus = 'In Transit';
+        return respondToPickup(req, res, id, deliveryId, pickupCode);
     }
+    // Out for Delivery: only once every store's part has been collected
+    if (order.status !== 'Picked up' && order.status !== 'Out for Delivery') {
+        const stores = await getOrderStoreStops(order);
+        const left = stores.filter((s) => !s.pickedUp).map((s) => s.storeName);
+        return res.status(400).json({
+            success: false,
+            message: left.length
+                ? `Collect from every store first. Still to collect: ${left.join(', ')}.`
+                : "Collect the package from the store (Picked up) first.",
+        });
+    }
+    from = ['Picked up'];
+    extra.deliveryBoyStatus = 'In Transit';
 
     const previousStatus = order.status;
     let updated: any;
@@ -375,27 +392,105 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
         throw err;
     }
 
+    // Heading to the customer: send their delivery OTP now (shown in their app, and by SMS when set up)
+    let otpSent = false;
+    if (status === 'Out for Delivery' && previousStatus !== 'Out for Delivery') {
+        try {
+            await generateDeliveryOtp(id, updated.customerPhone);
+            otpSent = true;
+        } catch (err: any) {
+            console.error('Could not send delivery OTP:', err.message);
+        }
+    }
+
     // Emit socket events for status changes
     const io = (req.app as any).get("io");
     if (io) {
-        if (status === 'Picked up' && previousStatus !== 'Picked up') {
-            // Emit order-taken event
-            io.to(`order-${id}`).emit('order-taken', {
-                orderId: id,
-                message: 'Order has been picked up from seller',
-            });
-        }
-
         io.to(`order-${id}`).emit('order-status-updated', { orderId: id, status });
-
+        if (otpSent) {
+            const fresh = await Order.findById(id).select('deliveryOtp deliveryOtpExpiresAt');
+            io.to(`order-${id}`).emit('delivery-otp-refreshed', { orderId: id, deliveryOtp: fresh?.deliveryOtp, expiresAt: fresh?.deliveryOtpExpiresAt });
+        }
         notifySellersOfOrderUpdate(io, updated, 'STATUS_UPDATE');
     }
 
     return res.status(200).json({
         success: true,
-        message: `Order status updated to ${status}`,
-        data: updated
+        message: otpSent ? `Order is out for delivery. The customer's delivery OTP has been sent.` : `Order status updated to ${status}`,
+        data: updated,
+        otpSent,
     });
+});
+
+/** Shared by POST /orders/:id/pickup and the older PUT status "Picked up". */
+async function respondToPickup(req: Request, res: Response, orderId: string, riderId: string | undefined, pickupCode: unknown) {
+    if (!riderId) return res.status(401).json({ success: false, message: "Login required" });
+    try {
+        const result = await verifyStorePickup(orderId, riderId, pickupCode);
+        const io = (req.app as any).get("io");
+        if (io && !result.alreadyPickedUp) {
+            io.to(`order-${orderId}`).emit('store-picked-up', { orderId, sellerId: result.store.sellerId, storeName: result.store.storeName });
+            if (result.orderPickedUp) {
+                io.to(`order-${orderId}`).emit('order-taken', { orderId, message: 'Collected from every store' });
+                io.to(`order-${orderId}`).emit('order-status-updated', { orderId, status: 'Picked up' });
+            }
+            notifySellersOfOrderUpdate(io, result.order, 'STATUS_UPDATE');
+        }
+        const left = result.stores.filter((s) => !s.pickedUp);
+        const message = result.alreadyPickedUp
+            ? `${result.store.storeName} was already collected.`
+            : result.allPickedUp
+                ? `Collected from ${result.store.storeName}. All stores collected: head to the customer.`
+                : `Collected from ${result.store.storeName}. Next: ${left.map((s) => s.storeName).join(', ')}.`;
+        return res.status(200).json({
+            success: true,
+            message,
+            data: {
+                orderId,
+                status: result.order.status,
+                store: result.store,
+                stores: result.stores,
+                storesPickedUp: result.stores.filter((s) => s.pickedUp).length,
+                totalStores: result.stores.length,
+                alreadyPickedUp: result.alreadyPickedUp,
+                allPickedUp: result.allPickedUp,
+                nextStop: nextStopFor(result.order, result.stores),
+            },
+        });
+    } catch (err: any) {
+        if (err instanceof OrderPlacementError) return res.status(err.statusCode).json({ success: false, message: err.message });
+        throw err;
+    }
+}
+
+/**
+ * The rider is at a store: verify that store's own pickup code and collect only its part.
+ * POST /delivery/orders/:id/pickup { pickupCode }
+ */
+export const verifyStorePickupController = asyncHandler(async (req: Request, res: Response) => {
+    return respondToPickup(req, res, req.params.id, req.user?.userId, req.body?.pickupCode);
+});
+
+/**
+ * Accept an offered order over HTTP (works without a socket connection, e.g. on serverless hosting).
+ * POST /delivery/orders/:id/accept
+ */
+export const acceptOrderController = asyncHandler(async (req: Request, res: Response) => {
+    const io = (req.app as any).get("io");
+    const result = await handleOrderAcceptance(io || null, req.params.id, String(req.user?.userId || ''));
+    if (result.success) return res.status(200).json(result);
+    const status = /another delivery|already accepted/i.test(result.message) ? 409 : /not found/i.test(result.message) ? 404 : 400;
+    return res.status(status).json(result);
+});
+
+/**
+ * Decline an offered order over HTTP.
+ * POST /delivery/orders/:id/reject
+ */
+export const rejectOrderController = asyncHandler(async (req: Request, res: Response) => {
+    const io = (req.app as any).get("io");
+    const result: any = await handleOrderRejection(io || null, req.params.id, String(req.user?.userId || ''));
+    return res.status(result?.success === false ? 400 : 200).json(result || { success: true });
 });
 
 /**
@@ -450,29 +545,11 @@ export const getSellerLocationsForOrder = asyncHandler(async (req: Request, res:
         return res.status(403).json({ success: false, message: "This order is assigned to another delivery partner" });
     }
 
-    // Get all unique seller IDs from order items
-    const orderItems = await OrderItem.find({ order: id });
-    const sellerIds = [...new Set(orderItems.map(item => item.seller.toString()))];
-
-    // Get seller details including locations
-    const sellers = await Seller.find({ _id: { $in: sellerIds } })
-        .select('storeName address city latitude longitude location');
-
-    // Format seller locations: map location (GeoJSON) first, legacy latitude/longitude text as fallback
-    const sellerLocations = sellers
-        .map((seller: any) => {
-            const coords = seller.location?.coordinates;
-            const hasGeo = Array.isArray(coords) && coords.length === 2 && (coords[0] !== 0 || coords[1] !== 0);
-            return {
-                sellerId: seller._id.toString(),
-                storeName: seller.storeName,
-                address: seller.address,
-                city: seller.city,
-                latitude: hasGeo ? Number(coords[1]) : parseFloat(seller.latitude || ''),
-                longitude: hasGeo ? Number(coords[0]) : parseFloat(seller.longitude || ''),
-            };
-        })
-        .filter((s) => Number.isFinite(s.latitude) && Number.isFinite(s.longitude));
+    // Each store with its own progress, so the map can route to the stores still to collect from
+    const stores = await getOrderStoreStops(order);
+    const sellerLocations = stores
+        .filter((s) => s.latitude !== null && s.longitude !== null)
+        .map((s) => ({ ...s, latitude: s.latitude as number, longitude: s.longitude as number }));
 
     return res.status(200).json({
         success: true,

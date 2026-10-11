@@ -85,7 +85,23 @@ export const bannerService = {
   // but ensure no type errors.
   getDealsConfig: async (): Promise<DealsConfig> => {
     try {
-      const res = await api.get<{success: boolean, data: DealsConfig}>('/flash-deals');
+      // The customer app only gets deal products from stores that deliver to the user's saved
+      // location (the server filters them); admin screens get the full lists to edit.
+      const isAdmin = typeof window !== 'undefined' && window.location.pathname.startsWith('/admin');
+      let params: Record<string, string | number> | undefined;
+      if (!isAdmin) {
+        params = { scope: 'customer' };
+        try {
+          const saved = JSON.parse(localStorage.getItem('userLocation') || 'null');
+          if (saved && Number.isFinite(Number(saved.latitude)) && Number.isFinite(Number(saved.longitude))) {
+            params.latitude = Number(saved.latitude);
+            params.longitude = Number(saved.longitude);
+          }
+        } catch {
+          /* no saved location: the server returns no deal products */
+        }
+      }
+      const res = await api.get<{success: boolean, data: DealsConfig}>('/flash-deals', { params });
       if (res.data.success && res.data.data) {
           return res.data.data;
       }

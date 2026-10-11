@@ -8,6 +8,7 @@ import { notifySellersOfOrderUpdate } from "../../../services/sellerNotification
 import { OrderPlacementError } from "../../../services/orderPlacementService";
 import {
   getSellerOrderProgress,
+  ensurePickupCodes,
   sellerAcceptOrder,
   sellerCancelOrder,
   sellerMarkReady,
@@ -304,8 +305,14 @@ export const getOrders = asyncHandler(
       paymentMethod: order.paymentMethod || 'N/A',
       paymentStatus: order.paymentStatus || 'Pending',
       deliveryAddress: order.deliveryAddress || {},
-      // This store's part of the flow (accept -> ready); other stores in the same order are counted
-      sellerProgress: isTheirPOSOrder ? null : await getSellerOrderProgress(order, sellerId),
+      // This store's part of the flow (accept -> ready -> handed over) and its own pickup code;
+      // other stores in the same order are only counted
+      sellerProgress: isTheirPOSOrder
+        ? null
+        : await (async () => {
+            await ensurePickupCodes(order._id);
+            return getSellerOrderProgress(await Order.findById(order._id).select("sellerProgress status").lean(), sellerId);
+          })(),
       // The invoice header shows the store's own details
       store: await Seller.findById(sellerId).select("storeName sellerName mobile email address city taxName taxNumber fssaiLicNo logo").lean(),
       pickupVerifiedAt: order.pickupVerifiedAt || null,
@@ -357,7 +364,7 @@ export const updateOrderStatus = asyncHandler(
     let progress: any = null;
     try {
       if (action === 'accept') {
-        ({ order: updatedOrder, progress } = await sellerAcceptOrder(id, sellerId));
+        ({ order: updatedOrder, dispatchNow, progress } = await sellerAcceptOrder(id, sellerId));
       } else if (action === 'ready') {
         ({ order: updatedOrder, dispatchNow, progress } = await sellerMarkReady(id, sellerId));
       } else if (action === 'reject') {
@@ -376,12 +383,13 @@ export const updateOrderStatus = asyncHandler(
     if (io) {
       io.to(`order-${id}`).emit('order-status-updated', { orderId: id, status: updatedOrder.status });
       notifySellersOfOrderUpdate(io, updatedOrder, action === 'cancel' || action === 'reject' ? 'ORDER_CANCELLED' : 'STATUS_UPDATE');
-      // Every store has packed and marked ready: only now are delivery partners offered the order
-      if (dispatchNow) {
-        notifyDeliveryBoysOfNewOrder(io, updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder).catch((err: any) =>
-          console.error('Error dispatching accepted order to riders:', err)
-        );
-      }
+    }
+    // Every store has accepted: offer the order to delivery partners near the stores. Awaited
+    // (not fire-and-forget) so it also completes on serverless hosting, where there's no socket.
+    if (dispatchNow) {
+      await notifyDeliveryBoysOfNewOrder(io || null, updatedOrder.toObject ? updatedOrder.toObject() : updatedOrder).catch((err: any) =>
+        console.error('Error dispatching accepted order to riders:', err)
+      );
     }
 
     return res.status(200).json({

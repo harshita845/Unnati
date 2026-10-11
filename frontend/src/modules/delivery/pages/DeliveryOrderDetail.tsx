@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getOrderDetails, updateOrderStatus, getSellerLocationsForOrder, sendDeliveryOtp, verifyDeliveryOtp, updateDeliveryLocation } from '../../../services/api/delivery/deliveryService';
+import { getOrderDetails, updateOrderStatus, sendDeliveryOtp, verifyDeliveryOtp, updateDeliveryLocation, acceptOfferedOrder, verifyStorePickup } from '../../../services/api/delivery/deliveryService';
 import deliveryIcon from '@assets/deliveryboy/deliveryIcon.png';
 import GoogleMapsTracking from '../../../components/GoogleMapsTracking';
 import QRScannerModal from '../../../components/QRScannerModal';
@@ -89,13 +89,28 @@ const Icons = {
 
 type DeliveryOrderStatus = 'Pending' | 'Ready for pickup' | 'Picked up' | 'Out for Delivery' | 'Delivered' | 'Cancelled' | 'Returned';
 
+/** One store on the order, as the backend reports it (its own packing / collection progress). */
+interface StoreStop {
+    sellerId: string;
+    storeName: string;
+    address: string;
+    city: string;
+    phone?: string;
+    latitude: number | null;
+    longitude: number | null;
+    accepted: boolean;
+    ready: boolean;
+    pickedUp: boolean;
+    pickedUpAt: string | null;
+    itemCount: number;
+}
+
 export default function DeliveryOrderDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
     const [order, setOrder] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [sellerLocations, setSellerLocations] = useState<any[]>([]);
     const [showOtpInput, setShowOtpInput] = useState(false);
     const [otpValue, setOtpValue] = useState('');
     const [otpSending, setOtpSending] = useState(false);
@@ -106,6 +121,8 @@ export default function DeliveryOrderDetail() {
     const [routeInfo, setRouteInfo] = useState<{ distance: string; duration: string } | null>(null);
     const [locationError, setLocationError] = useState<string | null>(null);
     const [showScanner, setShowScanner] = useState(false);
+    const [actionBusy, setActionBusy] = useState(false);
+    const [pickupNotice, setPickupNotice] = useState<string | null>(null);
     const [copiedOrderId, setCopiedOrderId] = useState(false);
 
     const handleCopyOrderId = () => {
@@ -137,23 +154,6 @@ export default function DeliveryOrderDetail() {
         return () => clearInterval(timer);
     }, [id]);
 
-    // Fetch seller locations when order is assigned
-    useEffect(() => {
-        const fetchSellerLocations = async () => {
-            if (!id || !order) return;
-            // Only fetch if order has delivery boy assigned and status is before "Picked up"
-            if (order.status && order.status !== 'Picked up' && order.status !== 'Delivered') {
-                try {
-                    const locations = await getSellerLocationsForOrder(id);
-                    setSellerLocations(locations || []);
-                } catch (err) {
-                    console.error('Failed to fetch seller locations:', err);
-                }
-            }
-        };
-        fetchSellerLocations();
-    }, [id, order?.status]);
-
     // Clean up when component unmounts
     useEffect(() => {
         return () => {
@@ -167,26 +167,47 @@ export default function DeliveryOrderDetail() {
         setShowScanner(false);
         if (!order || !id) return;
         const code = decodedText.trim();
-
-        // At the customer's door the package is confirmed with the customer's OTP
-        if (order.status === 'Out for Delivery') {
-            await handleSendOtp();
-            return;
-        }
-
-        // At the store: the backend checks the code belongs to this order before marking it picked up
+        // At the store: the code identifies the store; only that store's items are marked collected
         try {
-            setLoading(true);
-            await updateOrderStatus(id, 'Picked up', { pickupCode: code });
+            setActionBusy(true);
+            const result = await verifyStorePickup(id, code);
+            setPickupNotice(result.message);
             await fetchOrder(true);
-            alert(`Package verified for order #${order.orderId}. Marked as picked up.`);
         } catch (err: any) {
-            alert(err.message || 'Could not verify this package. Please try again.');
+            alert(err.message || 'Could not verify this pickup code. Please try again.');
         } finally {
-            setLoading(false);
+            setActionBusy(false);
         }
     };
 
+    const handleAcceptOffer = async () => {
+        if (!id) return;
+        try {
+            setActionBusy(true);
+            await acceptOfferedOrder(id);
+            await fetchOrder(true);
+        } catch (err: any) {
+            alert(err.message || 'Could not accept the order');
+            await fetchOrder(true);
+        } finally {
+            setActionBusy(false);
+        }
+    };
+
+    /** All stores collected: head to the customer. The backend sends the customer's delivery OTP. */
+    const handleStartDelivery = async () => {
+        if (!id) return;
+        try {
+            setActionBusy(true);
+            const res = await updateOrderStatus(id, 'Out for Delivery');
+            await fetchOrder(true);
+            setPickupNotice(res?.message || 'Out for delivery. The customer has been sent their delivery OTP.');
+        } catch (err: any) {
+            alert(err.message || 'Could not start the delivery');
+        } finally {
+            setActionBusy(false);
+        }
+    };
 
     const handleSendOtp = async () => {
         if (!id) return;
@@ -361,69 +382,49 @@ export default function DeliveryOrderDetail() {
     const getSocket = useCallback(() => socketRef.current, []);
 
 
-    // Update delivery boy location from geolocation updates (Socket)
+    // Live location while working on the order. The rider's own map always follows the GPS; the
+    // position reaches the server (customer tracking) over the socket when it's connected, and
+    // over HTTP otherwise (the backend has no socket server on serverless hosting).
+    const lastHttpPushRef = useRef(0);
     useEffect(() => {
         if (!id || !order) return;
+        const active = order.assignedToMe && !['Delivered', 'Cancelled', 'Returned', 'Rejected'].includes(order.status);
+        if (!active) return;
 
-        const shouldTrack = order.status && order.status !== 'Delivered' && order.status !== 'Cancelled' && order.status !== 'Returned';
-        const socket = socketRef.current;
-
-        if (shouldTrack && socketConnected && socket) {
-            const updateLocation = async () => {
-                if (!navigator.geolocation) return;
-                if (locationPermissionDeniedRef.current) return;
-
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        const newLocation = {
-                            lat: position.coords.latitude,
-                            lng: position.coords.longitude,
-                        };
-                        setDeliveryBoyLocation(newLocation);
-                        setLastUpdate(new Date());
-                        setLocationError(null);
-
-                        // Emit via Socket
-                        socket.emit('update-location', {
-                            orderId: id,
-                            latitude: position.coords.latitude,
-                            longitude: position.coords.longitude
-                        });
-
-                        locationPermissionDeniedRef.current = false;
-                    },
-                    (error: GeolocationPositionError) => {
-                        // ... error handling ...
-                         if (error.code === error.PERMISSION_DENIED) {
-                            if (!locationPermissionDeniedRef.current) {
-                                locationPermissionDeniedRef.current = true;
-                                console.warn('Location permission denied.');
-                            }
-                        }
-                    },
-                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-                );
-            };
-
-            // Initial update
-            updateLocation();
-
-            // Interval (4 seconds)
-            locationIntervalRef.current = setInterval(updateLocation, 4000);
-
-            return () => {
-                if (locationIntervalRef.current) {
-                    clearInterval(locationIntervalRef.current);
-                    locationIntervalRef.current = null;
-                }
-            };
-        } else {
+        const updateLocation = () => {
+            if (!navigator.geolocation || locationPermissionDeniedRef.current) return;
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const { latitude, longitude } = position.coords;
+                    setDeliveryBoyLocation({ lat: latitude, lng: longitude });
+                    setLastUpdate(new Date());
+                    setLocationError(null);
+                    const socket = socketRef.current;
+                    if (socket && socketConnected) {
+                        socket.emit('update-location', { orderId: id, latitude, longitude });
+                    } else if (Date.now() - lastHttpPushRef.current > 10000) {
+                        lastHttpPushRef.current = Date.now();
+                        updateDeliveryLocation(id, latitude, longitude).catch(() => undefined);
+                    }
+                },
+                (error: GeolocationPositionError) => {
+                    if (error.code === error.PERMISSION_DENIED && !locationPermissionDeniedRef.current) {
+                        locationPermissionDeniedRef.current = true;
+                        setLocationError('Location permission denied. Please enable location access in your browser settings to track delivery.');
+                    }
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 3000 }
+            );
+        };
+        updateLocation();
+        locationIntervalRef.current = setInterval(updateLocation, 5000);
+        return () => {
             if (locationIntervalRef.current) {
                 clearInterval(locationIntervalRef.current);
                 locationIntervalRef.current = null;
             }
-        }
-    }, [id, order?.status, socketConnected]);
+        };
+    }, [id, order?.status, order?.assignedToMe, socketConnected]);
 
 
     if (loading) {
@@ -448,51 +449,41 @@ export default function DeliveryOrderDetail() {
         );
     }
 
-    const statusFlow: DeliveryOrderStatus[] = ['Pending', 'Ready for pickup', 'Picked up', 'Out for Delivery', 'Delivered'];
+    // Each store's own progress, from the backend (packed / collected), and where to go next
+    const stores: StoreStop[] = order.stores || [];
+    const remainingStores = stores.filter((s) => !s.pickedUp);
+    const collectedCount = stores.length - remainingStores.length;
+    const nextStop: any = order.nextStop || null;
+    const isOffer = !order.assignedToMe;
+    const terminal = ['Delivered', 'Cancelled', 'Returned', 'Rejected'].includes(order.status);
+    const waitingForStores = ['Received', 'Pending'].includes(order.status);
+    const collecting = order.assignedToMe && !terminal && !waitingForStores && remainingStores.length > 0;
+    const readyToStart = order.assignedToMe && order.status === 'Picked up';
+    const outForDelivery = order.assignedToMe && order.status === 'Out for Delivery';
 
-    // Received / Pending: the store has not accepted yet, so there is nothing to collect.
-    // Processed: the store accepted and is packing; the rider can collect once they're there.
-    const getNormalizedStatus = (status: string): DeliveryOrderStatus => {
-        // Received/Pending (store hasn't accepted) and Processed (store is still packing) both
-        // mean "nothing for the rider to do yet" — riders aren't even offered the order until
-        // it reaches Ready for pickup, so none of those show as progress here.
-        if (['Received', 'Pending', 'Processed'].includes(status)) return 'Pending';
-        return status as DeliveryOrderStatus;
-    };
-    // Riders aren't offered an order until the store has finished packing it (Ready for pickup)
-    const waitingForStore = ['Received', 'Pending', 'Processed'].includes(order.status);
+    // Progress shown to the rider: accepted -> collected from every store -> out for delivery -> delivered
+    const steps = [
+        { label: 'Accepted', done: !isOffer || ['Picked up', 'Out for Delivery', 'Delivered'].includes(order.status) },
+        { label: stores.length > 1 ? `Picked up ${collectedCount}/${stores.length}` : 'Picked up', done: stores.length > 0 && remainingStores.length === 0 },
+        { label: 'On the way', done: ['Out for Delivery', 'Delivered'].includes(order.status) },
+        { label: 'Delivered', done: order.status === 'Delivered' },
+    ];
+    const currentStep = steps.filter((st) => st.done).length;
 
-    const normalizedStatus = getNormalizedStatus(order.status);
-    let currentStatusIndex = statusFlow.indexOf(normalizedStatus);
-    // Handle cases where status might not be in the flow (e.g. Cancelled)
-    if (currentStatusIndex === -1 && (order.status === 'Cancelled' || order.status === 'Returned')) {
-        currentStatusIndex = -1;
-    }
-
-    const handleStatusChange = async (newStatus: DeliveryOrderStatus) => {
-        if (!id) return;
-        try {
-            setLoading(true); // Or use a separate loading state for the action
-            await updateOrderStatus(id, newStatus);
-            await fetchOrder(true);
-        } catch (err: any) {
-            alert(err.message || "Failed to update status");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const getNextStatus = () => {
-        if (currentStatusIndex !== -1 && currentStatusIndex < statusFlow.length - 1) {
-            return statusFlow[currentStatusIndex + 1];
-        }
-        return null;
-    };
-
-    const nextStatus = getNextStatus();
-    const isMapVisible = order.status === 'Picked up' || (sellerLocations.length > 0 && order.status !== 'Delivered');
-    const showSellerLocations = sellerLocations.length > 0 && order.status !== 'Picked up' && order.status !== 'Delivered';
-    const showCustomerLocation = order.status === 'Picked up';
+    // Map: route from the rider to the next stop only (the next store still to collect from, then
+    // the customer). Collected stores drop off the map.
+    const custLat = order.latitude || order.deliveryAddress?.latitude || 0;
+    const custLng = order.longitude || order.deliveryAddress?.longitude || 0;
+    const hasCustomerCoords = !!custLat && !!custLng;
+    const headingToCustomer = !!nextStop && nextStop.type === 'customer';
+    const destination =
+        nextStop && Number.isFinite(nextStop.latitude) && Number.isFinite(nextStop.longitude) && nextStop.latitude !== null
+            ? { lat: Number(nextStop.latitude), lng: Number(nextStop.longitude) }
+            : headingToCustomer && hasCustomerCoords
+                ? { lat: custLat, lng: custLng }
+                : undefined;
+    const mapStores = remainingStores.filter((s) => s.latitude !== null && s.longitude !== null);
+    const isMapVisible = !terminal && (mapStores.length > 0 || (headingToCustomer && hasCustomerCoords));
 
     return (
         <div className="min-h-screen bg-neutral-50 pb-32 relative">
@@ -513,7 +504,7 @@ export default function DeliveryOrderDetail() {
                             order.status === 'Ready for pickup' ? 'bg-yellow-100 text-yellow-700' :
                                 'bg-orange-100 text-orange-700'
                         }`}>
-                        {order.status}
+                        {collecting && stores.length > 1 ? `Collecting ${collectedCount}/${stores.length}` : order.status}
                     </span>
                 </div>
             </div>
@@ -529,127 +520,108 @@ export default function DeliveryOrderDetail() {
                 </div>
             )}
 
-            {/* Google Maps View - Shared Component for Parity */}
-            {isMapVisible && (() => {
-                // 0/undefined means the address was never geocoded — never pass that to the map as a real point
-                const custLat = order.latitude || order.deliveryAddress?.latitude || 0;
-                const custLng = order.longitude || order.deliveryAddress?.longitude || 0;
-                const hasCustomerCoords = !!custLat && !!custLng;
-                const toCustomer = order.status === 'Picked up' || order.status === 'Out for Delivery';
-                const destination = toCustomer
-                    ? (hasCustomerCoords ? { lat: custLat, lng: custLng } : undefined)
-                    : sellerLocations.length > 0
-                        ? { lat: sellerLocations[sellerLocations.length - 1].latitude, lng: sellerLocations[sellerLocations.length - 1].longitude }
-                        : undefined;
-                return (
+            {/* Map: the rider's live position and the route to the next stop */}
+            {isMapVisible && (
                 <GoogleMapsTracking
-                    sellerLocations={sellerLocations.map(s => ({
-                        lat: s.latitude,
-                        lng: s.longitude,
-                        name: s.storeName
-                    }))}
+                    sellerLocations={mapStores.map((s) => ({ lat: s.latitude as number, lng: s.longitude as number, name: s.storeName }))}
                     customerLocation={{ lat: custLat, lng: custLng }}
                     deliveryLocation={deliveryBoyLocation || undefined}
                     isTracking={!!deliveryBoyLocation}
-                    showRoute={!!deliveryBoyLocation && !!destination && (
-                        toCustomer ||
-                        (sellerLocations.length > 0 && order.status !== 'Delivered')
-                    )}
+                    showRoute={!!deliveryBoyLocation && !!destination}
                     routeOrigin={deliveryBoyLocation || undefined}
                     routeDestination={destination}
-                    routeWaypoints={
-                        order.status === 'Picked up' || order.status === 'Out for Delivery'
-                            ? []
-                            : sellerLocations.length > 1
-                                ? sellerLocations.slice(0, -1).map(s => ({ lat: s.latitude, lng: s.longitude }))
-                                : []
-                    }
-                    destinationName={
-                        order.status === 'Picked up' || order.status === 'Out for Delivery'
-                            ? order.address?.split(',')[0]
-                            : sellerLocations.length > 0
-                                ? sellerLocations[0].storeName
-                                : undefined
-                    }
+                    routeWaypoints={[]}
+                    destinationName={headingToCustomer ? order.address?.split(',')[0] : nextStop?.storeName}
                     onRouteInfoUpdate={setRouteInfo}
                     lastUpdate={lastUpdate}
                 />
-                );
-            })()}
+            )}
 
-            {/* Seller Locations Card (before picked up) */}
-            {showSellerLocations && sellerLocations.length > 0 && (
-                <div className="p-4">
+            {pickupNotice && (
+                <div className="mx-4 mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-800 flex items-start gap-2">
+                    <Icons.CheckCircle size={18} className="shrink-0 mt-0.5" />
+                    <span className="flex-1">{pickupNotice}</span>
+                    <button onClick={() => setPickupNotice(null)} className="text-emerald-700 text-xs font-semibold">OK</button>
+                </div>
+            )}
+
+            {/* Stores to collect from: each one is verified separately with its own pickup code */}
+            {stores.length > 0 && !terminal && (
+                <div className="p-4 pb-0 max-w-lg mx-auto">
                     <div className="bg-white rounded-2xl p-5 shadow-sm border border-neutral-100">
-                        <h3 className="font-semibold text-neutral-900 mb-4 flex items-center gap-2">
-                            <Icons.Store size={18} className="text-neutral-500" />
-                            Seller Shop Locations
-                        </h3>
-                        <div className="space-y-3">
-                            {sellerLocations.map((seller: any, idx: number) => (
-                                <div key={idx} className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg">
-                                    <div>
-                                        <p className="font-medium text-neutral-900">{seller.storeName}</p>
-                                        <p className="text-sm text-neutral-500">{seller.address}, {seller.city}</p>
-                                    </div>
-                                    {seller.latitude && seller.longitude && (
-                                        <div className="w-8 h-8 rounded-full bg-[var(--primary-alpha-20)] flex items-center justify-center">
-                                            <Icons.MapPin size={16} className="text-[var(--primary-dark)]" />
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="font-semibold text-neutral-900 flex items-center gap-2">
+                                <Icons.Store size={18} className="text-neutral-500" />
+                                {stores.length > 1 ? `Pick up from ${stores.length} stores` : 'Pick up from'}
+                            </h3>
+                            <span className="text-xs font-semibold text-neutral-500">
+                                {collectedCount}/{stores.length} collected
+                            </span>
                         </div>
+                        <ol className="space-y-2">
+                            {stores.map((s, idx) => {
+                                const isNext = nextStop?.type === 'store' && nextStop.sellerId === s.sellerId;
+                                return (
+                                    <li
+                                        key={s.sellerId}
+                                        className={`flex items-start gap-3 rounded-xl p-3 border ${s.pickedUp ? 'bg-neutral-50 border-neutral-100' : isNext ? 'bg-[var(--primary-alpha-10)] border-[var(--primary-color)]' : 'bg-white border-neutral-100'}`}
+                                    >
+                                        <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${s.pickedUp ? 'bg-[var(--primary-dark)] text-white' : 'bg-neutral-200 text-neutral-600'}`}>
+                                            {s.pickedUp ? <Icons.CheckCircle size={14} /> : idx + 1}
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <p className={`font-medium truncate ${s.pickedUp ? 'text-neutral-500' : 'text-neutral-900'}`}>{s.storeName}</p>
+                                                {isNext && <span className="text-[10px] font-bold uppercase text-[var(--primary-dark)]">Next</span>}
+                                            </div>
+                                            <p className="text-xs text-neutral-500 truncate">{[s.address, s.city].filter(Boolean).join(', ')}</p>
+                                            <p className={`mt-1 text-xs font-semibold ${s.pickedUp ? 'text-[var(--primary-dark)]' : s.ready ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                                {s.pickedUp
+                                                    ? `Collected${s.pickedUpAt ? ` at ${new Date(s.pickedUpAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`
+                                                    : s.ready
+                                                        ? `Packed: ask the store for its pickup code (${s.itemCount} item${s.itemCount === 1 ? '' : 's'})`
+                                                        : s.accepted
+                                                            ? 'Store is packing'
+                                                            : 'Waiting for the store to accept'}
+                                            </p>
+                                        </div>
+                                        {s.phone && !s.pickedUp && (
+                                            <a href={`tel:${s.phone}`} className="p-2 rounded-full bg-neutral-100 text-neutral-600" aria-label={`Call ${s.storeName}`}>
+                                                <Icons.Phone size={16} />
+                                            </a>
+                                        )}
+                                    </li>
+                                );
+                            })}
+                        </ol>
                     </div>
                 </div>
             )}
 
             <div className="p-4 space-y-4 max-w-lg mx-auto">
 
-                {/* Status Stepper Card */}
-                {currentStatusIndex !== -1 && (
+                {/* Progress */}
+                {!terminal && (
                     <div className="bg-white rounded-2xl p-5 shadow-sm border border-neutral-100">
-                        <div className="flex justify-between items-start mb-6">
-                            <div>
-                                <p className="text-neutral-500 text-xs font-medium uppercase tracking-wider mb-1">Process</p>
-                                <h2 className="text-lg font-bold text-neutral-900">Order Progress</h2>
+                        <p className="text-neutral-500 text-xs font-medium uppercase tracking-wider mb-1">Process</p>
+                        <h2 className="text-lg font-bold text-neutral-900 mb-5">Order Progress</h2>
+                        <div className="relative">
+                            <div className="absolute top-4 left-4 right-4 h-0.5 bg-neutral-100">
+                                <div className="h-full bg-[var(--primary-dark)] transition-all duration-500" style={{ width: `${(Math.max(0, currentStep - 1) / (steps.length - 1)) * 100}%` }} />
                             </div>
-                        </div>
-
-                        {/* Status Progress Bar */}
-                        <div className="w-full overflow-x-auto pb-1 no-scrollbar">
-                            <div className="relative min-w-[300px]">
-                                <div className="flex justify-between mb-2 relative z-10">
-                                    {statusFlow.map((step, idx) => (
-                                        <div key={idx} className="flex flex-col items-center flex-1">
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all duration-300 ${idx <= currentStatusIndex
-                                                ? 'bg-[var(--primary-dark)] border-[var(--primary-dark)] text-white'
-                                                : 'bg-white border-neutral-200 text-neutral-300'
-                                                }`}>
-                                                {idx <= currentStatusIndex ? <Icons.CheckCircle size={14} /> : idx + 1}
-                                            </div>
+                            <div className="relative flex justify-between">
+                                {steps.map((st, idx) => (
+                                    <div key={st.label} className="flex flex-1 flex-col items-center">
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 ${st.done ? 'bg-[var(--primary-dark)] border-[var(--primary-dark)] text-white' : 'bg-white border-neutral-200 text-neutral-300'}`}>
+                                            {st.done ? <Icons.CheckCircle size={14} /> : idx + 1}
                                         </div>
-                                    ))}
-                                </div>
-                                {/* Connecting Line */}
-                                <div className="absolute top-4 left-4 right-4 h-0.5 bg-neutral-100 -z-0">
-                                    <div
-                                        className="h-full bg-[var(--primary-dark)] transition-all duration-500"
-                                        style={{ width: `${(currentStatusIndex / (statusFlow.length - 1)) * 100}%` }}
-                                    ></div>
-                                </div>
-                                <div className="flex justify-between text-[9px] sm:text-[10px] text-neutral-500 font-medium mt-2">
-                                    {statusFlow.map((step, idx) => (
-                                        <span key={idx} className={`text-center flex-1 px-0.5 min-w-0 leading-tight transition-colors ${idx === currentStatusIndex ? 'text-[var(--primary-dark)] font-bold' : ''}`}>
-                                            {step === 'Ready for pickup' ? 'Ready' : step}
-                                        </span>
-                                    ))}
-                                </div>
+                                        <span className={`mt-2 text-center text-[10px] font-medium leading-tight ${idx === currentStep ? 'text-[var(--primary-dark)] font-bold' : 'text-neutral-500'}`}>{st.label}</span>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </div>
                 )}
-
 
                 {/* Customer Details */}
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-neutral-100">
@@ -762,20 +734,6 @@ export default function DeliveryOrderDetail() {
 
             </div>
 
-            {/* OTP Section (when order is Picked up or Out for Delivery) */}
-            {(order.status === 'Picked up' || order.status === 'Out for Delivery') && !showOtpInput && (
-                <div className="fixed bottom-24 left-4 right-4 max-w-lg mx-auto z-30">
-                    <button
-                        onClick={handleSendOtp}
-                        className="w-full py-4 rounded-2xl bg-[var(--primary-dark)] backdrop-blur-md border border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] text-white font-bold text-lg transition-transform active:scale-[0.98] flex items-center justify-center gap-3 overflow-hidden group"
-                        disabled={otpSending}
-                    >
-                        <span className="relative z-10">{otpSending ? 'Sending OTP...' : 'Send Delivery OTP'}</span>
-                        <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none"></div>
-                    </button>
-                </div>
-            )}
-
             {/* OTP Input Section Modal */}
             {showOtpInput && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -843,45 +801,52 @@ export default function DeliveryOrderDetail() {
                 </div>
             )}
 
-            {/* Floating Glassmorphic Action Button Dock - Order Taken button or status update */}
-            {/* "Delivered" is only reachable through the OTP section above */}
-            {waitingForStore && (
-                <div className="fixed bottom-24 left-4 right-4 max-w-lg mx-auto z-30 py-4 px-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-semibold text-center shadow-lg">
-                    {order.status === 'Processed' ? 'Store is packing this order' : 'Waiting for the store to accept this order'}
-                </div>
-            )}
-            {!waitingForStore && nextStatus && nextStatus !== 'Delivered' && order.status !== 'Picked up' && !showOtpInput && (
-                <div className="fixed bottom-24 left-4 right-4 max-w-lg mx-auto z-30 flex gap-3">
-                    {/* Scan Button (Visible when Out for Delivery or Ready for Pickup / Processed) */}
-                   {(order.status === 'Out for Delivery' || order.status === 'Ready for pickup' || order.status === 'Processed') && (
-                        <button
-                            onClick={() => openBarcodeScanner(() => setShowScanner(true))}
-                            className="w-16 h-full rounded-2xl bg-neutral-900 text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform"
-                            title="Scan QR Code"
-                        >
-                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
-                                <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
-                                <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
-                                <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
-                                <rect x="7" y="7" width="10" height="10" rx="1"></rect>
-                             </svg>
+            {/* Action dock: one clear next step at a time */}
+            {!showOtpInput && !terminal && (
+                <div className="fixed bottom-24 left-4 right-4 max-w-lg mx-auto z-30">
+                    {isOffer ? (
+                        waitingForStores ? (
+                            <div className="py-4 px-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-semibold text-center shadow-lg">
+                                Waiting for every store to accept this order
+                            </div>
+                        ) : (
+                            <button onClick={handleAcceptOffer} disabled={actionBusy} className="w-full py-4 rounded-2xl bg-[var(--primary-dark)] text-white font-bold text-lg shadow-xl active:scale-[0.98] disabled:opacity-60">
+                                {actionBusy ? 'Accepting…' : 'Accept order'}
+                            </button>
+                        )
+                    ) : collecting ? (
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => openBarcodeScanner(() => setShowScanner(true))}
+                                className="w-16 rounded-2xl bg-neutral-900 text-white flex items-center justify-center shadow-lg active:scale-95"
+                                title="Scan the store's pickup code"
+                                aria-label="Scan the store's pickup code"
+                            >
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><rect x="7" y="7" width="10" height="10" rx="1"></rect>
+                                </svg>
+                            </button>
+                            <button
+                                onClick={() => setShowScanner(true)}
+                                disabled={actionBusy || !remainingStores.some((st) => st.ready)}
+                                className="flex-1 py-4 rounded-2xl bg-neutral-900 text-white font-bold text-base shadow-xl active:scale-[0.98] disabled:opacity-60"
+                            >
+                                {actionBusy
+                                    ? 'Verifying…'
+                                    : remainingStores.some((st) => st.ready)
+                                        ? `Verify pickup${nextStop?.type === 'store' ? ` at ${nextStop.storeName}` : ''}`
+                                        : `Waiting for ${remainingStores.map((st) => st.storeName).join(', ')} to pack`}
+                            </button>
+                        </div>
+                    ) : readyToStart ? (
+                        <button onClick={handleStartDelivery} disabled={actionBusy} className="w-full py-4 rounded-2xl bg-[var(--primary-dark)] text-white font-bold text-lg shadow-xl active:scale-[0.98] disabled:opacity-60">
+                            {actionBusy ? 'Starting…' : 'All stores collected: start delivery'}
                         </button>
-                   )}
-
-                    <button
-                        // Collecting the package requires verifying it (scan bill barcode or enter code)
-                        onClick={() => (nextStatus === 'Picked up' ? setShowScanner(true) : handleStatusChange(nextStatus))}
-                        className="flex-1 py-4 rounded-2xl bg-neutral-900 border border-neutral-700 shadow-xl text-white font-bold text-lg transition-transform active:scale-[0.98] flex items-center justify-center gap-3 overflow-hidden group"
-                        disabled={loading}
-                    >
-                        <span className="relative z-10">
-                            {loading ? 'Updating...' : nextStatus === 'Picked up' ? 'Verify & Pick Up' : `Mark as ${nextStatus}`}
-                        </span>
-                        {!loading && <span className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center relative z-10 group-hover:bg-white/30 transition-colors">
-                            <Icons.ChevronLeft className="rotate-180" size={18} />
-                        </span>}
-                    </button>
+                    ) : outForDelivery ? (
+                        <button onClick={() => setShowOtpInput(true)} className="w-full py-4 rounded-2xl bg-[var(--primary-dark)] text-white font-bold text-lg shadow-xl active:scale-[0.98]">
+                            Enter delivery OTP
+                        </button>
+                    ) : null}
                 </div>
             )}
 
@@ -890,8 +855,8 @@ export default function DeliveryOrderDetail() {
                 <QRScannerModal
                     onScanSuccess={handleScanSuccess}
                     onClose={() => setShowScanner(false)}
-                    title="Verify package at store"
-                    manualPlaceholder="Or type order number / 6-digit pickup code"
+                    title="Verify pickup at the store"
+                    manualPlaceholder="Or type this store's 6-digit pickup code"
                 />
             )}
         </div>

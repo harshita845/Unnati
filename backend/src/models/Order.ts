@@ -83,7 +83,14 @@ export interface IOrder extends Document {
   // When the rider confirmed (scan / code) they collected the right package at the store
   pickupVerifiedAt?: Date;
   // Per-store progress: every store in the order must accept (and pack) before a rider is sent
-  sellerProgress?: Array<{ seller: mongoose.Types.ObjectId; acceptedAt?: Date; readyAt?: Date }>;
+  sellerProgress?: Array<{
+    seller: mongoose.Types.ObjectId;
+    acceptedAt?: Date;
+    readyAt?: Date;
+    pickupCode?: string;
+    pickedUpAt?: Date;
+    pickedUpBy?: mongoose.Types.ObjectId;
+  }>;
 
   // Delivery OTP
   deliveryOtp?: string;
@@ -318,12 +325,18 @@ const OrderSchema = new Schema<IOrder>(
     pickupVerifiedAt: {
       type: Date,
     },
+    // One entry per store in the order: each store accepts, packs and hands over its own part.
+    // pickupCode is that store's own 6-digit handover code (different per store); the rider
+    // enters it at the store, which marks only that store's part picked up.
     sellerProgress: [
       {
         _id: false,
         seller: { type: Schema.Types.ObjectId, ref: "Seller", required: true },
         acceptedAt: { type: Date },
         readyAt: { type: Date },
+        pickupCode: { type: String },
+        pickedUpAt: { type: Date },
+        pickedUpBy: { type: Schema.Types.ObjectId, ref: "Delivery" },
       },
     ],
 

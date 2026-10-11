@@ -530,7 +530,9 @@ export const getProductById = async (req: Request, res: Response) => {
     } else if (userCity && seller?.city) {
       isAvailableAtLocation = new RegExp(`^${userCity}$`, "i").test(seller.city);
     } else {
-      isAvailableAtLocation = true;
+      // Location unknown: don't claim it can be delivered (a Hyderabad product must not look
+      // available to someone in Indore just because the app sent no location)
+      isAvailableAtLocation = false;
     }
 
     // Find similar products (by category)
@@ -577,37 +579,14 @@ export const getProductById = async (req: Request, res: Response) => {
       similarProductsQuery.subSubCategory = { $in: [null, ""] };
     }
 
-    // Filter similar products by location
+    // Similar products: only from stores that deliver to the user (no exceptions, not even the
+    // Admin Store, which is a real store in one city). Location unknown -> none.
     if (userLat && userLng && !isNaN(userLat) && !isNaN(userLng)) {
       const nearbySellerIds = await findSellersWithinRange(userLat, userLng);
-
-      // Allow Admin seller IDs
-      try {
-        const adminSellers = await Seller.find({
-          $or: [
-            { email: "admin-store@Unnatistores.com" },
-            { category: "Admin" },
-            { storeName: { $regex: /Admin/i } }
-          ]
-        }).select("_id");
-        const adminSellerIds = adminSellers.map(s => s._id);
-
-        // Combine
-        const allowedIds = [...nearbySellerIds, ...adminSellerIds];
-
-         if (allowedIds.length > 0) {
-            similarProductsQuery.seller = { $in: allowedIds };
-         } else {
-             // No sellers nearby
-            similarProductsQuery.seller = { $in: [] };
-         }
-      } catch (e) {
-         // fallback
-         if (nearbySellerIds.length > 0) {
-            similarProductsQuery.seller = { $in: nearbySellerIds };
-         }
-      }
-
+      const visibleSellers = await Seller.find({ _id: { $in: nearbySellerIds }, isEnabled: true }).select("_id");
+      similarProductsQuery.seller = { $in: visibleSellers.map((s) => s._id) };
+    } else {
+      similarProductsQuery.seller = { $in: [] };
     }
     const similarProducts = await Product.find(similarProductsQuery)
       .limit(6)

@@ -39,10 +39,14 @@ interface CancelOptions {
 export const cancelOrderAndRestoreStock = async (orderId: string, options: CancelOptions = {}) => {
   const finalStatus = options.finalStatus || "Cancelled";
   const blocked = Array.from(new Set([...TERMINAL_ORDER_STATUSES, ...(options.notCancellableFrom || [])]));
+  // Whoever can't cancel after pickup also can't cancel once any store has handed its part over
+  // (multi-store orders stay "Processed"/"Ready for pickup" until the last store is collected)
+  const blockPartialHandover = (options.notCancellableFrom || []).includes("Picked up");
+  const handoverFilter = blockPartialHandover ? { sellerProgress: { $not: { $elemMatch: { pickedUpAt: { $ne: null } } } } } : {};
 
   const order = await runInTransaction(async (session) => {
     const previous: any = await Order.findOneAndUpdate(
-      { _id: orderId, ...(options.filter || {}), status: { $nin: blocked } },
+      { _id: orderId, ...(options.filter || {}), status: { $nin: blocked }, ...handoverFilter },
       {
         $set: {
           status: finalStatus,
@@ -58,9 +62,12 @@ export const cancelOrderAndRestoreStock = async (orderId: string, options: Cance
 
     if (!previous) {
       const existing: any = await Order.findOne({ _id: orderId, ...(options.filter || {}) })
-        .select("status")
+        .select("status sellerProgress")
         .session(session);
       if (!existing) throw new OrderPlacementError(404, "Order not found");
+      if (blockPartialHandover && !blocked.includes(existing.status) && (existing.sellerProgress || []).some((p: any) => p.pickedUpAt)) {
+        throw new OrderPlacementError(400, "Order cannot be cancelled: part of it has already been handed to the delivery partner");
+      }
       throw new OrderPlacementError(400, `Order cannot be cancelled as it is already ${existing.status}`);
     }
 

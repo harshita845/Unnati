@@ -225,12 +225,12 @@ export const useDeliveryOrderNotifications = () => {
     }, []);
 
     const handleAccept = useCallback(async (orderId: string, navigate?: (path: string) => void) => {
-        if (!socketRef.current || !user?.id) {
-            return { success: false, message: 'Not connected or user not found' };
+        if (!user?.id) {
+            return { success: false, message: 'Please log in again' };
         }
 
         try {
-            const result = await acceptOrder(socketRef.current, orderId, user.id);
+            const result = await acceptOrder(orderId);
 
             if (result.success) {
                 // Clear current notification and show next from queue
@@ -267,8 +267,8 @@ export const useDeliveryOrderNotifications = () => {
     }, [user]);
 
     const handleReject = useCallback(async (orderId: string) => {
-        if (!socketRef.current || !user?.id) {
-            return { success: false, message: 'Not connected or user not found', allRejected: false };
+        if (!user?.id) {
+            return { success: false, message: 'Please log in again', allRejected: false };
         }
 
         // Immediately clear the notification from UI
@@ -283,7 +283,7 @@ export const useDeliveryOrderNotifications = () => {
 
         try {
             // Perform the actual rejection in the background
-            const result = await rejectOrder(socketRef.current, orderId, user.id);
+            const result = await rejectOrder(orderId);
             return result;
         } catch (error: any) {
             console.error('Failed to reject order in background:', error);

@@ -95,9 +95,14 @@ export interface OrderDetail {
 export interface SellerOrderProgress {
   acceptedAt: string | null;
   readyAt: string | null;
+  /** This store's own pickup code: the delivery partner enters it (or scans it) when collecting */
+  pickupCode?: string | null;
+  /** When this store's items were handed to the delivery partner */
+  pickedUpAt?: string | null;
   totalStores: number;
   storesAccepted: number;
   storesReady: number;
+  storesPickedUp?: number;
 }
 
 export interface StoreDetails {

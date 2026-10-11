@@ -170,7 +170,9 @@ export default function SellerOrderDetail() {
 
   const handleExportPDF = async () => {
     if (!orderDetail) return;
-    const pickupBarcode = await code128DataUrl(orderDetail.orderNumber);
+    // This store's own pickup code (each store in a multi-store order has a different one)
+    const storePickupCode = orderDetail.sellerProgress?.pickupCode || '';
+    const pickupBarcode = storePickupCode ? await code128DataUrl(storePickupCode) : null;
 
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -349,7 +351,7 @@ export default function SellerOrderDetail() {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
     doc.setTextColor(0, 0, 0);
-    doc.text(`Pickup code: ${orderDetail.orderNumber.slice(-6)}`, margin, yPos);
+    if (storePickupCode) doc.text(`Pickup code: ${storePickupCode}`, margin, yPos);
     if (pickupBarcode) {
       doc.addImage(pickupBarcode, 'PNG', margin, yPos + 3, 70, 16);
       doc.setFont('helvetica', 'normal');
@@ -455,6 +457,7 @@ export default function SellerOrderDetail() {
             const progress = orderDetail.sellerProgress;
             const accepted = !!progress?.acceptedAt || ['Processed', 'Ready for pickup'].includes(orderStatus);
             const ready = !!progress?.readyAt || orderStatus === 'Ready for pickup';
+            const handedOver = !!progress?.pickedUpAt;
             const multiStore = (progress?.totalStores || 1) > 1;
             const rider = orderDetail.deliveryBoyName
               ? `${orderDetail.deliveryBoyName}${orderDetail.deliveryBoyPhone ? ` (${orderDetail.deliveryBoyPhone})` : ''}`
@@ -497,6 +500,23 @@ export default function SellerOrderDetail() {
                 </div>
               );
             }
+            if (['Processed', 'Ready for pickup'].includes(orderStatus) && handedOver) {
+              const left = (progress?.totalStores || 1) - (progress?.storesPickedUp || 0);
+              return (
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-[var(--primary-dark)]">
+                    Handed over to the delivery partner
+                    {progress?.pickedUpAt ? ` at ${new Date(progress.pickedUpAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}.
+                  </p>
+                  {multiStore && left > 0 && (
+                    <p className="text-sm text-neutral-600">
+                      The delivery partner is collecting from {left} more store{left === 1 ? '' : 's'} before heading to the customer.
+                    </p>
+                  )}
+                  {rider && <p className="text-sm text-neutral-500">Delivery partner: {rider}</p>}
+                </div>
+              );
+            }
             if (['Processed', 'Ready for pickup'].includes(orderStatus)) {
               return (
                 <div className="space-y-3">
@@ -504,15 +524,17 @@ export default function SellerOrderDetail() {
                     {ready
                       ? multiStore && orderStatus !== 'Ready for pickup'
                         ? `Packed. Waiting for the other store(s) to pack (${progress?.storesReady}/${progress?.totalStores} ready).`
-                        : 'Packed and ready. Hand it over when the delivery partner shows the pickup code.'
-                      : 'Accepted. Pack the items, then mark the order ready for pickup.'}
+                        : 'Packed and ready. When the delivery partner arrives, give them your pickup code below (or let them scan its barcode).'
+                      : 'Accepted. Pack your items, then mark them ready for pickup.'}
                   </p>
-                  {/* Riders are only offered the order once it's Ready for pickup, not while it's being packed */}
-                  {orderStatus === 'Ready for pickup' && (
-                    <p className="text-sm text-neutral-500">
-                      {rider ? `Delivery partner: ${rider}` : 'Finding a delivery partner near your store…'}
+                  {ready && multiStore && orderStatus !== 'Ready for pickup' && (
+                    <p className="text-sm text-neutral-600">
+                      Your items can be collected now; the delivery partner verifies each store separately with its own code.
                     </p>
                   )}
+                  <p className="text-sm text-neutral-500">
+                    {rider ? `Delivery partner: ${rider}` : 'Finding a delivery partner near your store…'}
+                  </p>
                   <div className="flex flex-wrap gap-3">
                     {!ready && (
                       <button disabled={actionBusy} onClick={() => handleStatusUpdate('Ready for pickup')} className={primaryBtn}>
@@ -556,7 +578,8 @@ export default function SellerOrderDetail() {
       </div>
 
       {/* Pickup verification: shown once the store has accepted and until the rider collects the package */}
-      {orderDetail.orderNumber &&
+      {orderDetail.sellerProgress?.pickupCode &&
+        !orderDetail.sellerProgress?.pickedUpAt &&
         (['Processed', 'Ready for pickup'].includes(orderStatus) || (orderStatus === 'Received' && !!orderDetail.sellerProgress?.acceptedAt)) && (
         <div className="bg-white mb-6 rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
           <div className="bg-[var(--primary-dark)] text-white px-4 sm:px-6 py-3">
@@ -564,13 +587,16 @@ export default function SellerOrderDetail() {
           </div>
           <div className="px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="bg-white p-2 border border-neutral-200 rounded-lg overflow-x-auto">
-              <Code128Barcode value={orderDetail.orderNumber} />
+              <Code128Barcode value={orderDetail.sellerProgress.pickupCode} />
             </div>
             <div className="text-sm text-neutral-700">
-              <p className="text-neutral-500">Pickup code</p>
-              <p className="text-3xl font-bold tracking-widest text-neutral-900">{orderDetail.orderNumber.slice(-6)}</p>
+              <p className="text-neutral-500">Your pickup code</p>
+              <p className="text-3xl font-bold tracking-widest text-neutral-900">{orderDetail.sellerProgress.pickupCode}</p>
               <p className="mt-1 text-xs text-neutral-500">
-                The delivery partner must scan this barcode (it is also printed on the invoice) or enter this code before taking the package.
+                {(orderDetail.sellerProgress.totalStores || 1) > 1
+                  ? 'This code is only for your items. Each store in this order has its own code. '
+                  : ''}
+                The delivery partner scans this barcode (also printed on the invoice) or enters this code when collecting your items.
               </p>
             </div>
           </div>

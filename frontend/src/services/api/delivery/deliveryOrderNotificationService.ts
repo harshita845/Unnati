@@ -1,4 +1,4 @@
-import { Socket } from 'socket.io-client';
+import api from '../config';
 
 export interface OrderNotificationData {
     orderId: string;
@@ -29,53 +29,24 @@ export interface RejectOrderResponse {
 }
 
 /**
- * Accept an order via WebSocket
+ * Accept an offered order. Uses HTTP, so it works whether or not the live socket is connected
+ * (the backend has no socket server on serverless hosting).
  */
-export const acceptOrder = (
-    socket: Socket,
-    orderId: string,
-    deliveryBoyId: string
-): Promise<AcceptOrderResponse> => {
-    return new Promise((resolve) => {
-        const timeout = setTimeout(() => {
-            resolve({
-                success: false,
-                message: 'Request timeout',
-            });
-        }, 10000); // 10 second timeout
-
-        socket.emit('accept-order', { orderId, deliveryBoyId });
-
-        socket.once('accept-order-response', (response: AcceptOrderResponse) => {
-            clearTimeout(timeout);
-            resolve(response);
-        });
-    });
+export const acceptOrder = async (orderId: string): Promise<AcceptOrderResponse> => {
+    try {
+        const response = await api.post(`/delivery/orders/${orderId}/accept`);
+        return response.data;
+    } catch (error: any) {
+        return { success: false, message: error?.response?.data?.message || error?.message || 'Could not accept the order' };
+    }
 };
 
-/**
- * Reject an order via WebSocket
- */
-export const rejectOrder = (
-    socket: Socket,
-    orderId: string,
-    deliveryBoyId: string
-): Promise<RejectOrderResponse> => {
-    return new Promise((resolve) => {
-        const timeout = setTimeout(() => {
-            resolve({
-                success: false,
-                message: 'Request timeout',
-                allRejected: false,
-            });
-        }, 10000); // 10 second timeout
-
-        socket.emit('reject-order', { orderId, deliveryBoyId });
-
-        socket.once('reject-order-response', (response: RejectOrderResponse) => {
-            clearTimeout(timeout);
-            resolve(response);
-        });
-    });
+/** Decline an offered order (HTTP). */
+export const rejectOrder = async (orderId: string): Promise<RejectOrderResponse> => {
+    try {
+        const response = await api.post(`/delivery/orders/${orderId}/reject`);
+        return { allRejected: false, ...response.data };
+    } catch (error: any) {
+        return { success: false, allRejected: false, message: error?.response?.data?.message || error?.message || 'Could not decline the order' };
+    }
 };
-

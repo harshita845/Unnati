@@ -33,6 +33,10 @@ router.get("/orders/returns", deliveryOrderController.getReturnOrders);
 router.get("/orders/:id", deliveryOrderController.getOrderDetails); // Specific order details
 router.get("/orders/:id/seller-locations", deliveryOrderController.getSellerLocationsForOrder);
 router.put("/orders/:id/status", deliveryOrderController.updateOrderStatus);
+// Taking an offer and collecting from each store (HTTP, so they work without a socket connection)
+router.post("/orders/:id/accept", deliveryOrderController.acceptOrderController);
+router.post("/orders/:id/reject", deliveryOrderController.rejectOrderController);
+router.post("/orders/:id/pickup", deliveryOrderController.verifyStorePickupController);
 router.post("/orders/:id/send-delivery-otp", deliveryOrderController.sendDeliveryOtp);
 router.post("/orders/:id/verify-delivery-otp", deliveryOrderController.verifyDeliveryOtpController);
 

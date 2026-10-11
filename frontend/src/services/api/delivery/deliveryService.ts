@@ -79,6 +79,29 @@ export const updateOrderStatus = async (id: string, status: string, extra?: { pi
     }
 };
 
+/** Take an offered order (HTTP: works with or without the live socket). */
+export const acceptOfferedOrder = async (id: string) => {
+    try {
+        const response = await api.post(`${BASE_URL}/orders/${id}/accept`);
+        return response.data;
+    } catch (error) {
+        throw handleApiError(error);
+    }
+};
+
+/**
+ * At a store: verify that store's own pickup code. Only that store's items are marked
+ * collected; the order becomes "Picked up" after the last store.
+ */
+export const verifyStorePickup = async (id: string, pickupCode: string) => {
+    try {
+        const response = await api.post(`${BASE_URL}/orders/${id}/pickup`, { pickupCode });
+        return response.data as { success: boolean; message: string; data: any };
+    } catch (error) {
+        throw handleApiError(error);
+    }
+};
+
 export const getSellerLocationsForOrder = async (id: string) => {
     try {
         const response = await api.get(`${BASE_URL}/orders/${id}/seller-locations`);

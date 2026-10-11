@@ -489,12 +489,14 @@ export const updateOrderStatus = asyncHandler(
     try {
       if (ORDER_STAGE[status] !== undefined && status !== "Delivered") {
         const from = Object.keys(ORDER_STAGE).filter((s) => ORDER_STAGE[s] < ORDER_STAGE[status]);
-        const { changed } = await transitionOrderStatus(targetOrderId, from, status);
+        const { order: moved, changed } = await transitionOrderStatus(targetOrderId, from, status);
         // Acting on the stores' behalf: record it per store so their pages agree with the order
         if (changed && status === "Processed") await recordAllStoresProgress(targetOrderId, "accepted");
         if (changed && status === "Ready for pickup") await recordAllStoresProgress(targetOrderId, "ready");
-        // Admin marked it ready on behalf of the store(s): only now are riders offered it
-        dispatchNow = changed && status === "Ready for pickup";
+        if (changed && ORDER_STAGE[status] >= ORDER_STAGE["Picked up"]) await recordAllStoresProgress(targetOrderId, "pickedUp");
+        // Every store has now accepted (admin did it for them): offer it to riders, once
+        dispatchNow =
+          changed && (status === "Processed" || status === "Ready for pickup") && !moved.deliveryBoy && !moved.dispatch?.notifiedAt;
       }
       if (status === "Delivered") {
         await markOrderDelivered(targetOrderId);
@@ -541,13 +543,12 @@ export const updateOrderStatus = asyncHandler(
     // to riders), or if paymentStatus changed to "Paid"
     if (status === "Processed" || status === "Ready for pickup" || order.paymentStatus === "Paid") {
       const io: SocketIOServer = req.app.get("io");
-      if (io) {
-        notifySellersOfOrderUpdate(io, order, "STATUS_UPDATE");
-        if (dispatchNow) {
-          notifyDeliveryBoysOfNewOrder(io, order.toObject()).catch((err: any) =>
-            console.error("Error dispatching admin-accepted order to riders:", err)
-          );
-        }
+      if (io) notifySellersOfOrderUpdate(io, order, "STATUS_UPDATE");
+      // Awaited so it completes on serverless hosting too (no socket there)
+      if (dispatchNow) {
+        await notifyDeliveryBoysOfNewOrder(io || null, order.toObject()).catch((err: any) =>
+          console.error("Error dispatching admin-accepted order to riders:", err)
+        );
       }
     }
 
