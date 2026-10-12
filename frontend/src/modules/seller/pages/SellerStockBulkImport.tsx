@@ -10,6 +10,10 @@ import {
 } from "../../../services/api/productService";
 import { Category } from "../../../services/api/categoryService";
 import { useAuth } from "../../../context/AuthContext";
+import { uploadImage } from "../../../services/api/uploadService";
+import ImportImagesPanel from "../../../components/ImportImagesPanel";
+import { addImageGuideSheet } from "../../../utils/importTemplateGuide";
+import { mergeVariantRows, PendingProduct, resolveSheetImages, VARIATION_IMAGES_COLUMN } from "../../../utils/productImportImages";
 
 /** After deploy: pink header ke neeche yeh line dikhni chahiye; `SellerStockBulkImport-*.js` mein bhi search karo. */
 export const SELLER_BULK_IMPORT_BUILD_ID = "Ecommerce-bulk-import-2025-03-24";
@@ -234,6 +238,9 @@ export default function SellerStockBulkImport({
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState({ total: 0, current: 0, success: 0, failed: 0 });
+  // Product photos picked from this computer (matched to file names / paths in the sheet)
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [stage, setStage] = useState<string>("");
   const [importFailures, setImportFailures] = useState<
     { row: number; label: string; message: string }[]
   >([]);
@@ -299,17 +306,17 @@ export default function SellerStockBulkImport({
     const findCategory = (name: string) => categories.find((c) => c.name?.toLowerCase() === name?.toLowerCase())?._id || "";
 
     const variations = [];
-    const sizeVal = rowCell(row, ["Size", "11. Size", "PRODUCT_SIZE"]);
-    const colorVal = rowCell(row, ["Color", "12. Color", "PRODUCT_COLOR"]);
-    if (sizeVal) {
-       variations.push({ name: "Size", value: sizeVal });
-    }
-    if (colorVal) {
-       variations.push({ name: "Color", value: colorVal });
-    }
+    // Exports write "-" for an empty cell
+    const filled = (v?: string) => (v && v.trim() !== "-" ? v : "");
+    const sizeVal = filled(rowCell(row, ["Size", "11. Size", "PRODUCT_SIZE"]));
+    const colorVal = filled(rowCell(row, ["Color", "12. Color", "PRODUCT_COLOR"]));
 
-    // New Generic Variations Column
-    const rawVars = rowCell(row, ["Variations", "28. Variations", "PRODUCT_VARIATIONS"]);
+    // New Generic Variations Column (wins over Size / Color, same as the admin import)
+    const rawVars = filled(rowCell(row, ["Variations", "28. Variations", "PRODUCT_VARIATIONS"]));
+    if (!rawVars) {
+      if (sizeVal) variations.push({ name: "Size", value: sizeVal });
+      if (colorVal) variations.push({ name: "Color", value: colorVal });
+    }
     if (rawVars) {
         String(rawVars).split(';').forEach(v => {
             const [name, val] = v.split(':').map(s => s.trim());
@@ -562,12 +569,29 @@ export default function SellerStockBulkImport({
     }
     const seenImportKeys = new Set<string>();
 
+    // Photos from this computer (product rows only): upload them and put the links into the rows
+    let sheetRows = previewData.map((r) =>
+      normalizeExcelRow(r && typeof r === "object" ? (r as Record<string, unknown>) : {})
+    );
+    if (!stockImportMode) {
+      setStage("Uploading images…");
+      const resolved = await resolveSheetImages(sheetRows, imageFiles, (f) => uploadImage(f), {
+        onProgress: (done, totalImages) => setStage(`Uploading images… ${done}/${totalImages}`),
+        confirm: (m) => window.confirm(m),
+      });
+      setStage("");
+      if (!resolved) {
+        setUploading(false);
+        uploadInFlightRef.current = false;
+        return;
+      }
+      sheetRows = resolved.rows;
+    }
+    // Product rows are created after all rows are read, so variant rows of one product can be merged
+    const pending: PendingProduct[] = [];
+
     for (let i = 0; i < total; i++) {
-        const row = normalizeExcelRow(
-          previewData[i] && typeof previewData[i] === "object"
-            ? (previewData[i] as Record<string, unknown>)
-            : {}
-        );
+        const row = sheetRows[i];
         try {
             if (stockImportMode) {
               const vidRaw = rowCell(row, ["Variation Id", "variation_id"]);
@@ -699,11 +723,30 @@ export default function SellerStockBulkImport({
               compareAtPrice: safeMrp,
               wholesalePrice: Number.isFinite(wholesalePrice) ? wholesalePrice : 0,
               title: varTitle,
+              // The product API requires a type and value on every variant
+              variationType: "Standard",
+              name: "Standard",
+              value: varTitle,
             };
             const code = rawData.itemCode != null ? String(rawData.itemCode).trim() : "";
             if (code) defaultVariation.sku = code;
 
-            const variations = hasPricedExcelVariation ? (excelAttrs as any) : [defaultVariation];
+            // "28. Variations" (e.g. "Weight: 500g; Weight: 1kg") names this row's variant(s): each becomes
+            // a real variant with this row's price and stock (same as the admin import)
+            const namedVariants = excelAttrs
+              .filter((a: any) => a && String(a.name ?? "").trim() && String(a.value ?? "").trim())
+              .map((a: any) => ({
+                ...defaultVariation,
+                variationType: String(a.name).trim(),
+                value: String(a.value).trim(),
+                name: `${String(a.name).trim()}: ${String(a.value).trim()}`,
+                title: String(a.value).trim(),
+              }));
+            const variations = hasPricedExcelVariation
+              ? (excelAttrs as any)
+              : namedVariants.length > 0
+                ? namedVariants
+                : [defaultVariation];
 
             const { variations: _excelVariationAttrs, ...rawWithoutVariations } = rawData as any;
 
@@ -790,6 +833,7 @@ export default function SellerStockBulkImport({
                 isReturnable: false,
                 totalAllowedQuantity: 10, // Default
                 mainImage: rawData.mainImage,
+                galleryImages: rawData.galleryImages,
                 variations: normalizedVariations as any,
                 itemCode: code || undefined,
                 rackNumber: rawData.rackNumber,
@@ -816,11 +860,9 @@ export default function SellerStockBulkImport({
             }
             seenImportKeys.add(signature);
 
-            const res = await createProduct(productPayload);
-            if (!res?.success) {
-              throw new Error(res?.message || "Import failed");
-            }
-            successCount++;
+            pending.push({ row: i + 1, label: code || productNameFinal, rawRow: row, payload: productPayload as any });
+            setProgress(prev => ({ ...prev, current: i + 1, success: successCount, failed: failedCount }));
+            continue;
         } catch (err) {
             const message = bulkImportErrorMessage(err);
             const label =
@@ -832,6 +874,33 @@ export default function SellerStockBulkImport({
             failedCount++;
         }
         setProgress(prev => ({ ...prev, current: i + 1, success: successCount, failed: failedCount }));
+    }
+
+    // Variant rows of the same product become one product; each variant keeps its own picture
+    if (pending.length > 0) {
+      const { products, duplicates } = mergeVariantRows(pending);
+      for (const d of duplicates) {
+        failures.push({ row: d.row, label: d.label, message: d.message });
+        failedCount++;
+      }
+      let done = 0;
+      setStage("Creating products…");
+      for (const product of products) {
+        try {
+          const res = await createProduct(product.payload as CreateProductData);
+          if (!res?.success) throw new Error(res?.message || "Import failed");
+          successCount += product.rows.length;
+        } catch (err) {
+          const message = bulkImportErrorMessage(err);
+          for (const r of product.rows) failures.push({ row: r, label: product.label, message });
+          console.error("Failed to import rows", product.rows, product.label, message, err);
+          failedCount += product.rows.length;
+        }
+        done++;
+        setStage(`Creating products… ${done}/${products.length}`);
+        setProgress(prev => ({ ...prev, success: successCount, failed: failedCount }));
+      }
+      setStage("");
     }
 
     setUploading(false);
@@ -897,7 +966,8 @@ export default function SellerStockBulkImport({
         "36. City",
         "37. Warehouse",
         "38. Room",
-        "39. Status"
+        "39. Status",
+        VARIATION_IMAGES_COLUMN
     ];
 
     // Row 1: Standard Cols + "Unit Pricing Rules" (Merged) + Trailing Cols
@@ -933,6 +1003,7 @@ export default function SellerStockBulkImport({
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Product Template");
+    addImageGuideSheet(wb);
     XLSX.writeFile(wb, "product_import_template.xlsx");
   };
 
@@ -982,7 +1053,7 @@ export default function SellerStockBulkImport({
                 className="hidden"
               />
               <div className="mt-8 text-left text-sm text-neutral-500 bg-neutral-100 p-4 rounded w-full max-w-lg">
-                <p className="font-semibold mb-2">Expected Columns (39 Total):</p>
+                <p className="font-semibold mb-2">Expected Columns (40 Total):</p>
                 <div className="grid grid-cols-3 gap-2">
                    <span>1. Category</span>
                    <span>2. Sub Cat</span>
@@ -1023,7 +1094,12 @@ export default function SellerStockBulkImport({
                    <span>37. Warehouse</span>
                    <span>38. Room</span>
                    <span>39. Status</span>
+                   <span>40. Variation Images</span>
                 </div>
+                <p className="mt-3 text-xs">
+                  Images: write a link, a file name (<code>rice.jpg</code>) or a path from your computer (<code>D:\Images\rice.jpg</code>), then
+                  select the photos after choosing the file. Variant photos: <code>500g: rice-500.jpg; 1kg: rice-1kg.jpg</code> in column 40.
+                </p>
               </div>
             </div>
           ) : (
@@ -1043,6 +1119,8 @@ export default function SellerStockBulkImport({
                    Remove File
                  </button>
               </div>
+
+              <ImportImagesPanel rows={previewData} files={imageFiles} onFilesChange={setImageFiles} disabled={uploading} />
 
               <div className="flex-1 overflow-auto border border-neutral-200 rounded-lg">
                  <table className="w-full text-left text-sm">
@@ -1075,7 +1153,7 @@ export default function SellerStockBulkImport({
               {uploading && (
                   <div className="space-y-2">
                       <div className="flex justify-between text-sm">
-                          <span>Importing...</span>
+                          <span>{stage || "Importing..."}</span>
                           <span>{progress.current} / {progress.total}</span>
                       </div>
                       <div className="w-full bg-neutral-200 rounded-full h-2.5">

@@ -25,6 +25,7 @@ import VariationDropdown from "../../../components/VariationDropdown";
 import QRScannerModal from "../../../components/QRScannerModal";
 import { openBarcodeScanner } from '../../../utils/scannerPlatform';
 import { computeLabelLayout } from '../../../utils/barcodeLabelLayout';
+import { variationImageCell } from '../../../utils/productImportImages';
 
 function fixLikelyMojibake(input: unknown): string {
   let s = String(input ?? "");
@@ -63,6 +64,10 @@ function fixLikelyMojibake(input: unknown): string {
 
 interface ProductVariation {
   id: string;
+  // Export: the product-level main image, and this variant's own photo (column 40)
+  productMainImage?: string;
+  variantOwnImage?: string;
+  variationValue?: string;
   productId: string;
   name: string;
   seller: string;
@@ -981,6 +986,10 @@ export default function AdminStockManagement() {
           ...baseVariation,
           id: `${product._id}-${v._id || index}`,
           variation: `${variationType}: ${variationValue}`,
+          variationValue,
+          // Column 40 only when this variant's photo differs from the product photo
+          variantOwnImage: (v.mainImage || v.image || "") !== baseMainImg ? v.mainImage || v.image || "" : "",
+          productMainImage: baseMainImg,
           stock: currentStock,
           price: Number(v.price) || baseVariation.price,
           compareAtPrice:
@@ -1382,6 +1391,7 @@ export default function AdminStockManagement() {
         "Warehouse",
         "Room",
         "Status",
+        "Variation Images",
       ];
 
       const escapeCsv = (val: any) => {
@@ -1425,7 +1435,7 @@ export default function AdminStockManagement() {
             escapeCsv((product as any).unitPriceMinQty2 ?? ""),
             escapeCsv((product as any).unitPriceMinQty4 ?? ""),
             escapeCsv((product as any).variation ?? ""),
-            escapeCsv((product as any).mainImage || (product as any).image || ""),
+            escapeCsv((product as any).productMainImage || (product as any).mainImage || (product as any).image || ""),
             escapeCsv((product as any).galleryImage1 || (product as any).galleryImages?.[0] || ""),
             escapeCsv((product as any).galleryImage2 || (product as any).galleryImages?.[1] || ""),
             escapeCsv((product as any).galleryImage3 || (product as any).galleryImages?.[2] || ""),
@@ -1436,6 +1446,7 @@ export default function AdminStockManagement() {
             escapeCsv(product.storageWarehouse && product.storageWarehouse !== "-" ? product.storageWarehouse : ""),
             escapeCsv(product.storageRoom && product.storageRoom !== "-" ? product.storageRoom : ""),
             escapeCsv(product.publish ? "Active" : "Inactive"),
+            escapeCsv(variationImageCell((product as any).variationValue, (product as any).variantOwnImage)),
           ].join(",")
         ),
       ].join("\n");
@@ -1800,6 +1811,7 @@ export default function AdminStockManagement() {
                     <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">37. Warehouse</th>
                     <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">38. Room</th>
                     <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">39. Status</th>
+                    <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">40. Variation Images</th>
                     <th className="p-4 whitespace-nowrap sticky top-0 bg-neutral-50 z-20 shadow-sm border-b border-neutral-200">Action</th>
                   </tr>
                 </thead>
@@ -2006,6 +2018,20 @@ export default function AdminStockManagement() {
                         >
                           {product.publish ? "Active" : "Inactive"}
                         </button>
+                      </td>
+                      <td className="p-4 align-middle">
+                        {product.variantOwnImage ? (
+                          <div className="flex items-center gap-2 whitespace-nowrap">
+                            <img
+                              src={product.variantOwnImage}
+                              alt={product.variationValue || "Variant"}
+                              className="w-10 h-10 object-cover rounded border border-neutral-200"
+                            />
+                            <span className="text-xs text-neutral-600">{product.variationValue}</span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
                       </td>
                       <td className="p-4 align-middle">
                         <div className="flex items-center justify-center gap-2">

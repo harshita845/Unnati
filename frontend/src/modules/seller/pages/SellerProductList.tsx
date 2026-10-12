@@ -22,9 +22,14 @@ import SellerStockBulkEdit from "./SellerStockBulkEdit";
 const SellerStockBulkImport = lazy(() => import("./SellerStockBulkImport"));
 import { getAppSettings } from "../../../services/api/admin/adminSettingsService";
 import VariationDropdown from "../../../components/VariationDropdown";
+import { variationImageCell } from "../../../utils/productImportImages";
 
 interface ProductVariation {
   id: string;
+  // Export: the product-level main image, and this variant's own photo (column 40)
+  productMainImage?: string;
+  variantOwnImage?: string;
+  variationValue?: string;
   productId: string;
   name: string;
   seller: string;
@@ -735,7 +740,12 @@ export default function SellerProductList() {
           variations.push({
             ...baseVariation,
             id: `${product._id}-${index}`,
-            variation: `${v.name}: ${v.value}`,
+            // Same "Type: value" as the import's 28. Variations (name can already be "Type: value")
+            variation: `${v.variationType || v.name || "Standard"}: ${v.value || v.title || "Default"}`,
+            variationValue: v.value,
+            // Column 40 only when this variant's photo differs from the product photo
+            variantOwnImage: (v.mainImage || v.image || "") !== baseMainImg ? v.mainImage || v.image || "" : "",
+            productMainImage: baseMainImg,
             stock: currentStock,
             price: Number(v.price) || baseVariation.price,
             compareAtPrice: Number(v.compareAtPrice) || baseVariation.compareAtPrice,
@@ -923,6 +933,7 @@ export default function SellerProductList() {
       "Warehouse",
       "Room",
       "Status",
+      "Variation Images",
     ];
 
     const escapeCsv = (val: any) => {
@@ -966,7 +977,7 @@ export default function SellerProductList() {
           escapeCsv((product as any).unitPriceMinQty2 ?? ""),
           escapeCsv((product as any).unitPriceMinQty4 ?? ""),
           escapeCsv((product as any).variation ?? ""),
-          escapeCsv((product as any).mainImage || (product as any).image || ""),
+          escapeCsv((product as any).productMainImage || (product as any).mainImage || (product as any).image || ""),
           escapeCsv((product as any).galleryImage1 || (product as any).galleryImages?.[0] || ""),
           escapeCsv((product as any).galleryImage2 || (product as any).galleryImages?.[1] || ""),
           escapeCsv((product as any).galleryImage3 || (product as any).galleryImages?.[2] || ""),
@@ -977,6 +988,7 @@ export default function SellerProductList() {
           escapeCsv((product as any).storageWarehouse && (product as any).storageWarehouse !== "-" ? (product as any).storageWarehouse : ""),
           escapeCsv((product as any).storageRoom && (product as any).storageRoom !== "-" ? (product as any).storageRoom : ""),
           escapeCsv(product.publish ? "Active" : "Inactive"),
+          escapeCsv(variationImageCell((product as any).variationValue, (product as any).variantOwnImage)),
         ].join(",")
       ),
     ].join("\n");

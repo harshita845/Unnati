@@ -7,6 +7,10 @@ import {
   createProduct,
 } from "../../../services/api/admin/adminProductService";
 import { useAuth } from "../../../context/AuthContext";
+import { uploadImage } from "../../../services/api/uploadService";
+import ImportImagesPanel from "../../../components/ImportImagesPanel";
+import { addImageGuideSheet } from "../../../utils/importTemplateGuide";
+import { mergeVariantRows, PendingProduct, resolveSheetImages, VARIATION_IMAGES_COLUMN } from "../../../utils/productImportImages";
 
 interface AdminStockBulkImportProps {
   categories: Category[];
@@ -91,6 +95,9 @@ export default function AdminStockBulkImport({
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState({ total: 0, current: 0, success: 0, failed: 0 });
+  // Product photos picked from this computer (matched to file names / paths in the sheet)
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [stage, setStage] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadInFlightRef = useRef(false);
   const { user } = useAuth(); // To get seller ID if needed, but admin creates for default admin store usually
@@ -377,19 +384,38 @@ export default function AdminStockBulkImport({
     if (uploadInFlightRef.current || uploading) return;
     uploadInFlightRef.current = true;
     setUploading(true);
-    const total = previewData.length;
+    const failureDetails: string[] = [];
+
+    // 1. Photos from this computer: upload them and put the links into the rows
+    setStage("Uploading images…");
+    const resolved = await resolveSheetImages(
+      previewData.map((r) => normalizeExcelRow(r && typeof r === "object" ? (r as Record<string, unknown>) : {})),
+      imageFiles,
+      (f) => uploadImage(f),
+      {
+        onProgress: (done, totalImages) => setStage(`Uploading images… ${done}/${totalImages}`),
+        confirm: (m) => window.confirm(m),
+      }
+    );
+    if (!resolved) {
+      setStage("");
+      setUploading(false);
+      uploadInFlightRef.current = false;
+      return;
+    }
+    const rows = resolved.rows;
+    setStage("");
+
+    // 2. Build every product from its row
+    const total = rows.length;
     let successCount = 0;
     let failedCount = 0;
-    const failureDetails: string[] = [];
     setProgress({ total, current: 0, success: 0, failed: 0 });
     const seenImportKeys = new Set<string>();
+    const pending: PendingProduct[] = [];
 
     for (let i = 0; i < total; i++) {
-      const row = normalizeExcelRow(
-        previewData[i] && typeof previewData[i] === "object"
-          ? (previewData[i] as Record<string, unknown>)
-          : {}
-      );
+      const row = rows[i];
       try {
         const productData = mapRowToProduct(row);
 
@@ -407,10 +433,27 @@ export default function AdminStockBulkImport({
           throw new Error("Duplicate row in same import skipped");
         }
         seenImportKeys.add(signature);
+        pending.push({ row: i + 1, label: String(productData.productName), rawRow: row, payload: productData as any });
+      } catch (err) {
+        failureDetails.push(`Row ${i + 1} (${row["4. Product Name"] || row["Product Name"] || "Unnamed"}): ${err instanceof Error ? err.message : String(err)}`);
+        failedCount++;
+      }
+    }
 
-        // Call create API
-        await createProduct(productData as any);
-        successCount++;
+    // 3. Variant rows of the same product become one product; each variant keeps its own picture
+    const { products, duplicates } = mergeVariantRows(pending);
+    for (const d of duplicates) {
+      failureDetails.push(`Row ${d.row} (${d.label}): ${d.message}`);
+      failedCount++;
+    }
+
+    // 4. Create
+    let processedRows = total - pending.length + duplicates.length;
+    setProgress({ total, current: processedRows, success: 0, failed: failedCount });
+    for (const product of products) {
+      try {
+        await createProduct(product.payload as any);
+        successCount += product.rows.length;
       } catch (err) {
         const apiMsg =
           axios.isAxiosError(err) &&
@@ -422,23 +465,20 @@ export default function AdminStockBulkImport({
             : err instanceof Error
             ? err.message
             : String(err);
-
-        console.error(
-          "Failed to import row",
-          i + 1,
-          row,
-          apiMsg || err
-        );
-        failureDetails.push(`Row ${i + 1} (${row["4. Product Name"] || row["Product Name"] || "Unnamed"}): ${apiMsg}`);
-        failedCount++;
+        console.error("Failed to import rows", product.rows, apiMsg || err);
+        failureDetails.push(`Row ${product.rows.join(", ")} (${product.label}): ${apiMsg}`);
+        failedCount += product.rows.length;
       }
-      setProgress(prev => ({ ...prev, current: i + 1, success: successCount, failed: failedCount }));
+      processedRows += product.rows.length;
+      setProgress({ total, current: processedRows, success: successCount, failed: failedCount });
     }
 
     setUploading(false);
     const msg = failedCount > 0
       ? `Import Finished.\nSuccess: ${successCount}\nFailed: ${failedCount}\n\nErrors:\n${failureDetails.slice(0, 5).join("\n")}${failureDetails.length > 5 ? `\n...and ${failureDetails.length - 5} more` : ""}`
-      : `Import Complete! All ${successCount} products imported successfully.`;
+      : `Import Complete! All ${successCount} rows imported successfully${
+          products.length < successCount ? ` (${products.length} products with their variants)` : ""
+        }.`;
     alert(msg);
     if (successCount > 0) {
         onSuccess();
@@ -448,7 +488,7 @@ export default function AdminStockBulkImport({
   };
 
   const handleDownloadTemplate = () => {
-    // 2-Row Header Structure for "Sub-Column" effect (39 Columns Total)
+    // 2-Row Header Structure for "Sub-Column" effect (40 Columns Total)
 
     // Standard Columns (0-24)
     const stdCols = [
@@ -470,7 +510,8 @@ export default function AdminStockBulkImport({
         "36. City",
         "37. Warehouse",
         "38. Room",
-        "39. Status"
+        "39. Status",
+        VARIATION_IMAGES_COLUMN
     ];
 
     // Row 1: Standard Cols + "Unit Pricing Rules" (Merged) + Trailing Cols
@@ -501,6 +542,7 @@ export default function AdminStockBulkImport({
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Product Template");
+    addImageGuideSheet(wb);
     XLSX.writeFile(wb, "product_import_template.xlsx");
   };
 
@@ -538,7 +580,7 @@ export default function AdminStockBulkImport({
                 className="hidden"
               />
               <div className="mt-8 text-left text-sm text-neutral-500 bg-neutral-100 p-4 rounded w-full max-w-lg">
-                <p className="font-semibold mb-2">Expected Columns (39 Total):</p>
+                <p className="font-semibold mb-2">Expected Columns (40 Total):</p>
                 <div className="grid grid-cols-3 gap-2">
                    <span>1. Category</span>
                    <span>2. Sub Cat</span>
@@ -579,7 +621,12 @@ export default function AdminStockBulkImport({
                    <span>37. Warehouse</span>
                    <span>38. Room</span>
                    <span>39. Status</span>
+                   <span>40. Variation Images</span>
                 </div>
+                <p className="mt-3 text-xs">
+                  Images: write a link, a file name (<code>rice.jpg</code>) or a path from your computer (<code>D:\Images\rice.jpg</code>), then
+                  select the photos after choosing the file. Variant photos: <code>500g: rice-500.jpg; 1kg: rice-1kg.jpg</code> in column 40.
+                </p>
               </div>
             </div>
           ) : (
@@ -591,6 +638,8 @@ export default function AdminStockBulkImport({
                  </div>
                  <button onClick={() => setFile(null)} className="text-red-600 hover:text-red-700 text-sm">Remove File</button>
               </div>
+
+              <ImportImagesPanel rows={previewData} files={imageFiles} onFilesChange={setImageFiles} disabled={uploading} />
 
               <div className="flex-1 overflow-auto border border-neutral-200 rounded-lg">
                  <table className="w-full text-left text-sm">
@@ -623,7 +672,7 @@ export default function AdminStockBulkImport({
               {uploading && (
                   <div className="space-y-2">
                       <div className="flex justify-between text-sm">
-                          <span>Importing...</span>
+                          <span>{stage || "Importing..."}</span>
                           <span>{progress.current} / {progress.total}</span>
                       </div>
                       <div className="w-full bg-neutral-200 rounded-full h-2.5">
