@@ -98,11 +98,11 @@ export default function BannerSlider({
         const activeBanners = await bannerService.getActiveBannersForPosition(position);
         const resolvedBanners = Array.isArray(activeBanners) ? activeBanners : [];
         
-        // Prioritize our premium handcrafted fallback banners for main sections if they exist
-        if (FALLBACK_BANNERS[position]) {
-          setBanners(FALLBACK_BANNERS[position]);
-        } else if (resolvedBanners.length > 0) {
+        // Prioritize banners configured from the admin panel / database
+        if (resolvedBanners.length > 0) {
           setBanners(resolvedBanners);
+        } else if (FALLBACK_BANNERS[position]) {
+          setBanners(FALLBACK_BANNERS[position]);
         } else {
           setBanners([]);
         }

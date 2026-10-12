@@ -209,8 +209,24 @@ export default function Home() {
 
           setHomeData(finalData);
 
-          if (finalData.bestsellers) {
-            setProducts(finalData.bestsellers);
+          try {
+            const allProductsRes = await getCustomerProducts({
+              page: 1,
+              limit: 24,
+              latitude: location?.latitude,
+              longitude: location?.longitude,
+              city: location?.city,
+            });
+            if (allProductsRes.success && Array.isArray(allProductsRes.data) && allProductsRes.data.length > 0) {
+              setProducts(allProductsRes.data);
+            } else if (finalData.bestsellers) {
+              setProducts(finalData.bestsellers);
+            }
+          } catch (e) {
+            console.debug("Failed to fetch popular products:", e);
+            if (finalData.bestsellers) {
+              setProducts(finalData.bestsellers);
+            }
           }
         } else {
           setError("Failed to load content. Please try again.");
@@ -564,31 +580,39 @@ export default function Home() {
           </div>
         )}
 
-        {/* Filtered Products Section */}
-        {activeTab !== "all" && (
-          <div data-products-section className="mt-6 mb-6 md:mt-8 md:mb-8">
-            <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 mb-3 md:mb-6 px-2 md:px-4 lg:px-4 tracking-tight capitalize">
-              {activeTab === "grocery" ? "Grocery Items" : activeTab}
+        {/* Products Section */}
+        <div data-products-section className="mt-6 mb-6 md:mt-8 md:mb-8">
+          <div className="flex items-center justify-between mb-3 md:mb-6 px-2 md:px-4 lg:px-4">
+            <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 tracking-tight capitalize">
+              {activeTab === "all" ? "Explore Products" : (activeTab === "grocery" ? "Grocery Items" : `${activeTab} Products`)}
             </h2>
-            <div className="px-2 md:px-4 lg:px-4">
-              {filteredProducts.length > 0 ? (
-                <LazyProductGrid
-                  products={filteredProducts}
-                  gridClassName="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4"
-                  showStockInfo={true}
-                  batchSize={10}
-                />
-              ) : (
-                <div className="text-center py-12 md:py-16 text-neutral-500">
-                  <p className="text-lg md:text-xl mb-2">No products found</p>
-                  <p className="text-sm md:text-base">
-                    Try selecting a different category
-                  </p>
-                </div>
-              )}
-            </div>
+            {activeTab !== "all" && (
+              <button
+                onClick={() => navigate(`/category/${activeTab}`)}
+                className="text-xs md:text-sm font-semibold text-[var(--customer-primary-dark)] hover:underline flex items-center gap-1"
+              >
+                View all in category &rarr;
+              </button>
+            )}
           </div>
-        )}
+          <div className="px-2 md:px-4 lg:px-4">
+            {filteredProducts.length > 0 ? (
+              <LazyProductGrid
+                products={filteredProducts}
+                gridClassName="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4"
+                showStockInfo={true}
+                batchSize={10}
+              />
+            ) : (
+              <div className="text-center py-12 md:py-16 text-neutral-500">
+                <p className="text-lg md:text-xl mb-2">No products found</p>
+                <p className="text-sm md:text-base">
+                  Try selecting a different category
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Dynamic Home Sections - Render sections created by admin */}
         {homeData.homeSections && homeData.homeSections.length > 0 && (

@@ -173,7 +173,12 @@ export const getNotifications = asyncHandler(
     const query: any = {};
 
     if (recipientType) query.recipientType = recipientType;
-    if (recipientId) query.recipientId = recipientId;
+    if (recipientId) {
+      query.recipientId = recipientId;
+    } else if (req.user?.userType === "Admin" && req.user?.userId) {
+      // Default to current admin's ID so broadcast notifications aren't duplicated across admins
+      query.recipientId = req.user.userId;
+    }
     if (isRead !== undefined) query.isRead = isRead === "true";
     if (type) query.type = type;
     if (priority) query.priority = priority;
@@ -196,10 +201,19 @@ export const getNotifications = asyncHandler(
       Notification.countDocuments(query),
     ]);
 
+    // Deduplicate by title + message + link in case broadcast notifications were replicated
+    const seen = new Set<string>();
+    const uniqueNotifications = notifications.filter((n) => {
+      const key = `${n.title}::${n.message}::${n.link || ''}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
     return res.status(200).json({
       success: true,
       message: "Notifications fetched successfully",
-      data: notifications,
+      data: uniqueNotifications,
       pagination: {
         page: parseInt(page as string),
         limit: parseInt(limit as string),

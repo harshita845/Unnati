@@ -10,15 +10,19 @@ import Seller from "../../../models/Seller";
 // Get all categories (public) - with caching
 export const getCategories = async (_req: Request, res: Response) => {
   try {
-    const cacheKey = "customer-categories-list";
+    const includeSubcategories = _req.query.includeSubcategories === "true";
+    const cacheKey = `customer-categories-list-${includeSubcategories}`;
 
     // Try cache first
     let categories = cache.get(cacheKey);
 
     if (!categories) {
-      categories = await Category.find({
-        status: "Active", // Only return active categories
-      })
+      const filter: any = { status: "Active" };
+      if (!includeSubcategories) {
+        filter.$or = [{ parentId: null }, { parentId: { $exists: false } }];
+      }
+
+      categories = await Category.find(filter)
         .sort({ order: 1 })
         .select("name image icon description color slug _id")
         .lean(); // Use lean() for better performance

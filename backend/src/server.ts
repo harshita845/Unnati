@@ -20,6 +20,7 @@ import { errorHandler } from "./middleware/errorHandler";
 import { notFound } from "./middleware/notFound";
 import { ensureDefaultAdmin } from "./utils/ensureDefaultAdmin";
 import { seedHeaderCategories } from "./utils/seedHeaderCategories";
+import { seedDefaultBanners } from "./utils/seedBanners";
 import { initializeSocket } from "./socket/socketService";
 import ThemeSettings from "./models/ThemeSettings";
 import { expireUnpaidOnlineOrders } from "./services/orderLifecycleService";
@@ -142,6 +143,7 @@ const ensureSetup = () => {
       await connectDB();
       await ensureDefaultAdmin();
       await seedHeaderCategories();
+      await seedDefaultBanners();
       await ThemeSettings.getSettings();
     })().catch((err) => {
       setupPromise = null; // retry on the next request instead of failing forever
@@ -178,6 +180,7 @@ app.get("/", (_req: Request, res: Response) => {
 app.use("/api/search", searchRoutes);
 app.use("/api/v1", routes);
 
+
 // Error handling middleware (must be last)
 app.use(notFound);
 app.use(errorHandler);
@@ -189,6 +192,7 @@ async function startServer() {
   await connectDB();
   await ensureDefaultAdmin();
   await seedHeaderCategories();
+  await seedDefaultBanners();
 
   // Ensure default theme settings exist
   await ThemeSettings.getSettings();

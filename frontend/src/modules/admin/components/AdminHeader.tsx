@@ -4,11 +4,26 @@ import { useAuth } from '../../../context/AuthContext';
 import EcommerceStoresLogo from '@assets/unnati_logo.png';
 import { io, Socket } from 'socket.io-client';
 import { getSocketBaseURL, isRealtimeAvailable } from '../../../services/api/config';
-import { getNotifications, Notification as AdminNotificationData } from '../../../services/api/admin/adminNotificationService';
+import { getNotifications, markAsRead, Notification as AdminNotificationData } from '../../../services/api/admin/adminNotificationService';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'react-hot-toast';
 import { useAppContext } from '../../../context/AppContext';
 import AdminNotificationAlert, { AdminNotificationData as AlertNotificationData } from './AdminNotificationAlert';
+
+const getRoleBadge = (msg: string) => {
+  if (!msg) return null;
+  const lower = msg.toLowerCase();
+  if (lower.startsWith('delivery partner') || lower.includes('[delivery partner]')) {
+    return { label: 'Delivery partner', className: 'bg-amber-100 text-amber-800 border-amber-300' };
+  }
+  if (lower.startsWith('seller') || lower.includes('[seller]')) {
+    return { label: 'Seller', className: 'bg-purple-100 text-purple-800 border-purple-300' };
+  }
+  if (lower.startsWith('customer') || lower.includes('[customer]')) {
+    return { label: 'Customer', className: 'bg-blue-100 text-blue-800 border-blue-300' };
+  }
+  return null;
+};
 
 interface AdminHeaderProps {
   onMenuClick: () => void;
@@ -44,24 +59,24 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
     };
   }, []);
 
-  // Fetch initial notifications
-  useEffect(() => {
-    const fetchInitialNotifications = async () => {
-      if (!isAuthenticated || !token) return;
-      try {
-        const response = await getNotifications({ limit: 5, recipientType: 'Admin' });
-        if (response.success && Array.isArray(response.data)) {
-          setNotifications(response.data);
-          // Actual unread count would depend on an isRead property
-          setUnreadCount(response.data.filter(n => !n.isRead).length);
-        }
-      } catch (error) {
-        console.error('Error fetching initial notifications:', error);
+  // Fetch admin notifications
+  const fetchNotificationsList = async () => {
+    if (!isAuthenticated || !token) return;
+    try {
+      const adminId = user?.userId || user?.id;
+      const response = await getNotifications({ limit: 10, recipientType: 'Admin', recipientId: adminId });
+      if (response.success && Array.isArray(response.data)) {
+        setNotifications(response.data);
+        setUnreadCount(response.data.filter(n => !n.isRead).length);
       }
-    };
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    }
+  };
 
-    fetchInitialNotifications();
-  }, [isAuthenticated, token]);
+  useEffect(() => {
+    fetchNotificationsList();
+  }, [isAuthenticated, token, user?.userId, user?.id]);
 
   // Socket.io initialization
   useEffect(() => {
@@ -303,8 +318,12 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
           <div className="relative" ref={notificationsRef}>
             <button
               onClick={() => {
-                setShowNotificationsDropdown(!showNotificationsDropdown);
+                const next = !showNotificationsDropdown;
+                setShowNotificationsDropdown(next);
                 setShowSearchModal(false);
+                if (next) {
+                  fetchNotificationsList();
+                }
               }}
               className="p-2 text-neutral-600 hover:text-neutral-900 transition-colors relative"
               aria-label="Notifications"
@@ -332,33 +351,57 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
                 </div>
                 {notifications.length > 0 ? (
                   <div className="divide-y divide-neutral-100 max-h-[300px] overflow-y-auto">
-                    {notifications.map((notif) => (
-                      <div
-                        key={notif._id}
-                        onClick={() => {
-                          if (notif.link) navigate(notif.link);
-                          setShowNotificationsDropdown(false);
-                        }}
-                        className={`px-4 py-3 hover:bg-neutral-50 transition-colors cursor-pointer`}
-                        style={!notif.isRead ? { backgroundColor: 'var(--primary-alpha-10, rgba(241,135,181,0.1))' } : {}}
-                      >
-                        <div className="flex gap-3">
-                          <div className="w-2 h-2 mt-1.5 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: !notif.isRead ? 'var(--primary-color, var(--primary-color))' : '#d4d4d4' }} />
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-neutral-900 leading-tight">
-                              {notif.title}
-                            </p>
-                            <p className="text-xs text-neutral-500 mt-0.5 line-clamp-2">
-                              {notif.message}
-                            </p>
-                            <p className="text-[10px] text-neutral-400 mt-1">
-                              {notif.createdAt ? formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true }) : 'Just now'}
-                            </p>
+                    {notifications.map((notif) => {
+                      const roleBadge = getRoleBadge(notif.message);
+                      let cleanMsg = notif.message || '';
+                      if (roleBadge) {
+                        cleanMsg = cleanMsg.replace(/^(delivery partner|seller|customer)[\s:]+/i, '').replace(/^\[(delivery partner|seller|customer)\][\s:]+/i, '');
+                      }
+
+                      return (
+                        <div
+                          key={notif._id}
+                          onClick={async () => {
+                            if (!notif.isRead && notif._id) {
+                              try {
+                                await markAsRead(notif._id);
+                                setNotifications(prev => prev.map(n => n._id === notif._id ? { ...n, isRead: true } : n));
+                                setUnreadCount(prev => Math.max(0, prev - 1));
+                              } catch (e) {
+                                console.error('Failed to mark notification read', e);
+                              }
+                            }
+                            if (notif.link) navigate(notif.link);
+                            setShowNotificationsDropdown(false);
+                          }}
+                          className={`px-4 py-3 hover:bg-neutral-50 transition-colors cursor-pointer`}
+                          style={!notif.isRead ? { backgroundColor: 'var(--primary-alpha-10, rgba(241,135,181,0.1))' } : {}}
+                        >
+                          <div className="flex gap-3">
+                            <div className="w-2 h-2 mt-1.5 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: !notif.isRead ? 'var(--primary-color, var(--primary-color))' : '#d4d4d4' }} />
+                            <div className="flex-1">
+                              <div className="flex items-center gap-1.5 justify-between">
+                                <p className="text-sm font-semibold text-neutral-900 leading-tight">
+                                  {notif.title}
+                                </p>
+                                {roleBadge && (
+                                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${roleBadge.className}`}>
+                                    {roleBadge.label}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-neutral-600 mt-1 line-clamp-2">
+                                {cleanMsg}
+                              </p>
+                              <p className="text-[10px] text-neutral-400 mt-1">
+                                {notif.createdAt ? formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true }) : 'Just now'}
+                              </p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="py-8 px-4 text-center">

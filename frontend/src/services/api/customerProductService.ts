@@ -30,6 +30,7 @@ export interface GetProductsParams {
     headerCategorySlug?: string; // Home header tabs (e.g. grocery, beauty)
     latitude?: number; // User location latitude
     longitude?: number; // User location longitude
+    city?: string; // User location city
 }
 
 export interface ProductListResponse {

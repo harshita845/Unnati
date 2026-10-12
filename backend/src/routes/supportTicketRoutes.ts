@@ -275,7 +275,10 @@ router.post(
     await ticket.save();
 
     if (admin) notifyUser(ticket, `Reply on ticket ${ticket.ticketNumber}`, message.slice(0, 200));
-    else notifyAdmins(ticket, `New reply on ${ticket.ticketNumber}`, `${ticket.raisedBy.name}: ${message.slice(0, 160)}`);
+    else {
+      const who = ticket.raisedBy.userType === "Delivery" ? "Delivery partner" : ticket.raisedBy.userType;
+      notifyAdmins(ticket, `New reply on ${ticket.ticketNumber}`, `${who} ${ticket.raisedBy.name}: ${message.slice(0, 160)}`);
+    }
     return res.json({ success: true, data: ticket });
   })
 );
@@ -311,7 +314,8 @@ router.patch(
       };
       notifyUser(ticket, `Ticket ${ticket.ticketNumber}: ${status}`, text[status]);
     } else {
-      notifyAdmins(ticket, `Ticket ${ticket.ticketNumber} closed`, `${ticket.raisedBy.name} closed the ticket.`);
+      const who = ticket.raisedBy.userType === "Delivery" ? "Delivery partner" : ticket.raisedBy.userType;
+      notifyAdmins(ticket, `Ticket ${ticket.ticketNumber} closed`, `${who} ${ticket.raisedBy.name} closed the ticket.`);
     }
     return res.json({ success: true, data: ticket });
   })

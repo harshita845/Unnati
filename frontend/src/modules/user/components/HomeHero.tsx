@@ -484,12 +484,21 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
   }, [activeTab]);
 
   const handleTabClick = (tabId: string) => {
-    const mainElement = document.querySelector('main');
-    if (mainElement instanceof HTMLElement) {
-      mainElement.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-    }
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     onTabChange?.(tabId);
+    if (tabId === 'all') {
+      const mainElement = document.querySelector('main');
+      if (mainElement instanceof HTMLElement) {
+        mainElement.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      }
+      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+    } else {
+      setTimeout(() => {
+        const productsEl = document.querySelector('[data-products-section]');
+        if (productsEl instanceof HTMLElement) {
+          productsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
+    }
   };
 
   const theme = getTheme(currentThemeKey);

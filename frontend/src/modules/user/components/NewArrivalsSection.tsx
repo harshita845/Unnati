@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getProducts } from "../../../services/api/customerProductService";
 import { Product } from "../../../types/domain";
+import { useLocation } from "../../../hooks/useLocation";
 
 // A list of high-quality mock product images matching the user's heels, watches, sneakers mockup
 const MOCK_NEW_ARRIVALS = [
@@ -17,12 +18,18 @@ const MOCK_NEW_ARRIVALS = [
 export default function NewArrivalsSection() {
   const navigate = useNavigate();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const { location } = useLocation();
   const [products, setProducts] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchNewArrivals = async () => {
       try {
-        const response = await getProducts({ limit: 10 });
+        const response = await getProducts({
+          limit: 10,
+          latitude: location?.latitude,
+          longitude: location?.longitude,
+          city: location?.city,
+        });
         if (response.success && Array.isArray(response.data) && response.data.length > 0) {
           // Map real products to image array, filtering those that have mainImage/imageUrl
           const mapped = response.data

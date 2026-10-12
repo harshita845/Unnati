@@ -218,7 +218,19 @@ export const getProducts = async (req: Request, res: Response) => {
           const allCategoryIds = [catDoc._id, ...descendants.map(d => d._id)];
           andConditions.push({ category: { $in: allCategoryIds } });
         } else {
-          andConditions.push({ category: categoryId });
+          const header = await HeaderCategory.findById(categoryId);
+          if (header) {
+            const categoryIds = await getHeaderCategoryTreeIds(header._id);
+            andConditions.push({
+              $or: [
+                { headerCategoryId: header._id },
+                { category: { $in: categoryIds } },
+                { subcategory: { $in: categoryIds } },
+              ],
+            });
+          } else {
+            andConditions.push({ category: categoryId });
+          }
         }
       }
     }

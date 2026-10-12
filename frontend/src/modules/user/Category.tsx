@@ -45,6 +45,7 @@ export default function CategoryPage() {
   const productsContainerRef = useRef<HTMLDivElement>(null);
 
   // Fetch Category Details
+  // Fetch Category Details (only when category ID changes)
   useEffect(() => {
     const fetchCategoryDetails = async () => {
       setCategoryLoading(true);
@@ -77,6 +78,8 @@ export default function CategoryPage() {
           } else if (currentSubcategory) {
             const subId = String(currentSubcategory._id || currentSubcategory.id || "");
             if (subId) setSelectedSubcategory(subId);
+          } else {
+            setSelectedSubcategory("all");
           }
         } else {
           setError("Category not found or failed to load details.");
@@ -93,7 +96,17 @@ export default function CategoryPage() {
       fetchCategoryDetails();
       setCurrentPage(1); // Reset to page 1 when category changes
     }
-  }, [id, searchParams]);
+  }, [id]);
+
+  // Sync selected subcategory if URL search params change
+  useEffect(() => {
+    const subcategoryFromUrl = searchParams.get("subcategory");
+    if (subcategoryFromUrl && subcategoryFromUrl !== selectedSubcategory) {
+      setSelectedSubcategory(subcategoryFromUrl);
+    } else if (!subcategoryFromUrl && selectedSubcategory !== "all") {
+      setSelectedSubcategory("all");
+    }
+  }, [searchParams]);
 
   // Fetch Products when category or subcategory changes
   useEffect(() => {
@@ -115,10 +128,13 @@ export default function CategoryPage() {
           params.subcategory = selectedSubcategory;
         }
         // Include user location for seller service filtering
-        // if (userLocation?.latitude && userLocation?.longitude) {
-        //   params.latitude = userLocation.latitude;
-        //   params.longitude = userLocation.longitude;
-        // }
+        if (userLocation?.latitude && userLocation?.longitude) {
+          params.latitude = userLocation.latitude;
+          params.longitude = userLocation.longitude;
+        }
+        if (userLocation?.city) {
+          params.city = userLocation.city;
+        }
 
         const response = await getProducts(params);
         if (response.success) {

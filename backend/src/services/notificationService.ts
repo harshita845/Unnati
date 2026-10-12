@@ -3,6 +3,7 @@ import Admin from "../models/Admin";
 import Seller from "../models/Seller";
 import Customer from "../models/Customer";
 import Delivery from "../models/Delivery";
+import { getSocketIO } from "../socket/socketService";
 
 /**
  * Send notification to specific user
@@ -40,8 +41,31 @@ export const sendNotification = async (
     isRead: false,
   });
 
-  // Here you would integrate with push notification service (FCM, APNS, etc.)
-  // For now, we'll just create the notification record
+  try {
+    const io = getSocketIO();
+    if (io) {
+      const socketPayload = {
+        _id: notification._id,
+        title: notification.title,
+        message: notification.message,
+        type: notification.type,
+        link: notification.link,
+        createdAt: notification.createdAt,
+        isRead: false,
+      };
+      if (recipientType === "Admin") {
+        io.to("admin-notifications").to(`admin-${recipientId}`).emit("new-notification", socketPayload);
+      } else if (recipientType === "Seller") {
+        io.to("seller-notifications").to(`seller-${recipientId}`).emit("new-notification", socketPayload);
+      } else if (recipientType === "Delivery") {
+        io.to("delivery-notifications").to(`delivery-${recipientId}`).emit("new-notification", socketPayload);
+      } else if (recipientType === "Customer") {
+        io.to(`customer-${recipientId}`).emit("new-notification", socketPayload);
+      }
+    }
+  } catch (err) {
+    console.error("Failed to emit socket notification:", err);
+  }
 
   return notification;
 };
@@ -107,6 +131,33 @@ export const sendBroadcastNotification = async (
       })
     )
   );
+
+  try {
+    const io = getSocketIO();
+    if (io && notifications.length > 0) {
+      const first = notifications[0];
+      const socketPayload = {
+        _id: first._id,
+        title: first.title,
+        message: first.message,
+        type: first.type,
+        link: first.link,
+        createdAt: first.createdAt,
+        isRead: false,
+      };
+      if (recipientType === "Admin") {
+        io.to("admin-notifications").emit("new-notification", socketPayload);
+      } else if (recipientType === "Seller") {
+        io.to("seller-notifications").emit("new-notification", socketPayload);
+      } else if (recipientType === "Delivery") {
+        io.to("delivery-notifications").emit("new-notification", socketPayload);
+      } else if (recipientType === "Customer") {
+        io.emit("new-notification", socketPayload);
+      }
+    }
+  } catch (err) {
+    console.error("Failed to emit socket broadcast notification:", err);
+  }
 
   return notifications;
 };
