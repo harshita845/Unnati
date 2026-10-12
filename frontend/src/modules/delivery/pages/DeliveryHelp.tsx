@@ -65,6 +65,18 @@ export default function DeliveryHelp() {
           <h2 className="text-neutral-900 text-xl font-semibold">Help & Support</h2>
         </div>
 
+        {/* Support tickets */}
+        <button
+          onClick={() => navigate('/delivery/support')}
+          className="w-full bg-white rounded-xl shadow-sm border border-neutral-200 p-4 mb-4 flex items-center justify-between text-left"
+        >
+          <div>
+            <p className="text-neutral-900 font-semibold">Support Tickets</p>
+            <p className="text-neutral-500 text-xs mt-0.5">Raise a ticket or see replies from the team</p>
+          </div>
+          <span className="text-2xl">🎫</span>
+        </button>
+
         {/* Contact Options */}
         <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden mb-4">
           <div className="p-4 border-b border-neutral-200">

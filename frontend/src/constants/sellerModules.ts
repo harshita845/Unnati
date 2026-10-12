@@ -223,8 +223,8 @@ export function isSellerModuleAllowed(
   accessibleModules?: string[] | null
 ): boolean {
   const key = MODULE_LABEL_TO_KEY[moduleKeyOrLabel] || moduleKeyOrLabel.toLowerCase().trim();
-  // Essential modules are always permitted
-  if (key === 'dashboard' || key === 'subscriptions') {
+  // Essential modules are always permitted (every store can reach Support)
+  if (key === 'dashboard' || key === 'subscriptions' || key === 'support') {
     return true;
   }
   if (accessibleModules === null || accessibleModules === undefined) {

@@ -43,6 +43,7 @@ const Login = lazy(() => import("./modules/user/Login"));
 const SignUp = lazy(() => import("./modules/user/SignUp"));
 const AboutUs = lazy(() => import("./modules/user/AboutUs"));
 const FAQ = lazy(() => import("./modules/user/FAQ"));
+const Support = lazy(() => import("./modules/user/Support"));
 const Wishlist = lazy(() => import("./modules/user/Wishlist"));
 const Addresses = lazy(() => import("./modules/user/Addresses"));
 const AddressBook = lazy(() => import("./modules/user/AddressBook"));
@@ -75,6 +76,7 @@ const DeliveryProfile = lazy(() => import("./modules/delivery/pages/DeliveryProf
 const DeliveryEarnings = lazy(() => import("./modules/delivery/pages/DeliveryEarnings"));
 const DeliverySettings = lazy(() => import("./modules/delivery/pages/DeliverySettings"));
 const DeliveryHelp = lazy(() => import("./modules/delivery/pages/DeliveryHelp"));
+const DeliverySupport = lazy(() => import("./modules/delivery/pages/DeliverySupport"));
 const DeliveryAbout = lazy(() => import("./modules/delivery/pages/DeliveryAbout"));
 const DeliverySellersInRange = lazy(() => import("./modules/delivery/pages/DeliverySellersInRange"));
 const DeliveryLogin = lazy(() => import("./modules/delivery/pages/DeliveryLogin"));
@@ -93,6 +95,7 @@ const SellerProductList = lazy(() => import("./modules/seller/pages/SellerProduc
 const SellerStockManagement = lazy(() => import("./modules/seller/pages/SellerStockManagement"));
 const SellerWallet = lazy(() => import("./modules/seller/pages/SellerWallet"));
 const SellerSubscriptions = lazy(() => import("./modules/seller/pages/SellerSubscriptions"));
+const SellerSupport = lazy(() => import("./modules/seller/pages/SellerSupport"));
 const SellerWalletTransactions = lazy(() => import("./modules/seller/pages/SellerWalletTransactions"));
 const SellerWithdrawalRequests = lazy(() => import("./modules/seller/pages/SellerWithdrawalRequests"));
 const SellerSalesReport = lazy(() => import("./modules/seller/pages/SellerSalesReport"));
@@ -216,6 +219,7 @@ const AdminFeaturedDeal = lazy(() => import("./modules/admin/pages/AdminFeatured
 const AdminFirstOrderOffer = lazy(() => import("./modules/admin/pages/AdminFirstOrderOffer"));
 const AdminFreeGiftRules = lazy(() => import("./modules/admin/pages/AdminFreeGiftRules"));
 const AdminReturnRequests = lazy(() => import("./modules/admin/pages/AdminReturnRequests"));
+const AdminSupportTickets = lazy(() => import("./modules/admin/pages/AdminSupportTickets"));
 const AdminReplaceRequests = lazy(() => import("./modules/admin/pages/AdminReplaceRequests"));
 const AdminAttributeSetup = lazy(() => import("./modules/admin/pages/AdminAttributeSetup"));
 const AdminVariationTypeSetup = lazy(() => import("./modules/admin/pages/AdminVariationTypeSetup"));
@@ -450,6 +454,7 @@ function App() {
                               <Route path="earnings" element={<DeliveryEarnings />} />
                               <Route path="settings" element={<DeliverySettings />} />
                               <Route path="help" element={<DeliveryHelp />} />
+                              <Route path="support" element={<DeliverySupport />} />
                               <Route path="about" element={<DeliveryAbout />} />
                               <Route path="sellers-in-range" element={<DeliverySellersInRange />} />
                             </Routes>
@@ -494,6 +499,7 @@ function App() {
                               <Route path="product/stock" element={<SellerStockManagement />} />
                               <Route path="wallet" element={<SellerWallet />} />
                               <Route path="subscriptions" element={<SellerSubscriptions />} />
+                              <Route path="support" element={<SellerSupport />} />
                               <Route path="wallet/transactions" element={<SellerWalletTransactions />} />
                               <Route path="wallet/withdrawals" element={<SellerWithdrawalRequests />} />
                               <Route path="reports/sales" element={<SellerSalesReport />} />
@@ -652,6 +658,7 @@ function App() {
                             <Route path="promotion/free-gift-rules" element={<AdminFreeGiftRules />} />
 
                             <Route path="return-requests" element={<AdminReturnRequests />} />
+                            <Route path="support-tickets" element={<AdminSupportTickets />} />
                             <Route path="replace-requests" element={<AdminReplaceRequests />} />
 
                             <Route path="banner-management" element={<AdminBannerSetup />} />
@@ -679,6 +686,7 @@ function App() {
                             <Route path="/account" element={<Account />} />
                             <Route path="/about-us" element={<AboutUs />} />
                             <Route path="/faq" element={<FAQ />} />
+                            <Route path="/support" element={<Support />} />
                             <Route path="/wishlist" element={<Wishlist />} />
                             <Route path="/categories" element={<Categories />} />
                             <Route path="/category/:id" element={<Category />} />

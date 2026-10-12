@@ -86,6 +86,9 @@ router.use(
 router.use("/search", searchRoutes);
 router.use("/customer/products", customerProductRoutes);
 router.use("/enquiries", enquiryRoutes);
+// Support tickets: customers, sellers and delivery partners raise them, Super Admin manages
+import supportTicketRoutes from "./supportTicketRoutes";
+router.use("/support", supportTicketRoutes);
 router.use("/customer/categories", customerCategoryRoutes);
 
 // Tracking routes (must be before general /customer/orders/:id route)

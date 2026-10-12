@@ -257,6 +257,7 @@ const ADMIN_SIDEBAR_SECTIONS: Array<{
     items: [
       { label: 'Return Requests', path: '/admin/return-requests' },
       { label: 'Replace Requests', path: '/admin/replace-requests' },
+      { label: 'Support Tickets', path: '/admin/support-tickets' },
     ],
   },
   {
@@ -392,6 +393,7 @@ const SELLER_SIDEBAR_SECTIONS: Array<{
       { label: 'Requests', path: '/seller/requests' },
       { label: 'Return Requests', path: '/seller/return-requests' },
       { label: 'Replace Requests', path: '/seller/replace-requests' },
+      { label: 'Support', path: '/seller/support' },
     ],
   },
   {

@@ -254,6 +254,13 @@ export default function Account() {
             </div>
             <span className="text-neutral-400">›</span>
           </button>
+          <button onClick={() => navigate('/support')} className="w-full flex items-center justify-between px-3 py-3 hover:bg-neutral-50 transition-colors">
+            <div className="flex items-center gap-3">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-neutral-500"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><line x1="8" y1="9" x2="16" y2="9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><line x1="8" y1="13" x2="13" y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+              <span className="text-[13px] font-medium text-neutral-900">Help &amp; Support (raise a ticket)</span>
+            </div>
+            <span className="text-neutral-400">›</span>
+          </button>
           <button onClick={() => navigate('/about-us')} className="w-full flex items-center justify-between px-3 py-3 hover:bg-neutral-50 transition-colors">
             <div className="flex items-center gap-3">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-neutral-500"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" /><line x1="12" y1="16" x2="12" y2="12" stroke="currentColor" strokeWidth="2" /><line x1="12" y1="8" x2="12.01" y2="8" stroke="currentColor" strokeWidth="2" /></svg>

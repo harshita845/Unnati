@@ -91,7 +91,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   // Check if location is required for current route
   const requiresLocation = () => {
-    const publicRoutes = ['/login', '/signup', '/seller/login', '/seller/signup', '/delivery/login', '/delivery/signup', '/admin/login'];
+    // Help & Support stays reachable even for someone who can't set a location
+    const publicRoutes = ['/login', '/signup', '/seller/login', '/seller/signup', '/delivery/login', '/delivery/signup', '/admin/login', '/support'];
     // Don't require location on login/signup pages
     if (publicRoutes.includes(location.pathname)) {
       return false;
