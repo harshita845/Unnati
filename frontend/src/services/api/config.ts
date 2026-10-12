@@ -158,6 +158,26 @@ api.interceptors.request.use(
   }
 );
 
+const LOGIN_PATHS: Record<string, string> = {
+  admin: "/admin/login",
+  seller: "/seller/login",
+  delivery: "/delivery/login",
+};
+let redirectingToLogin = false;
+
+/** Saved login no longer valid: clear it; panels go to their login page, customers become guests */
+const handleDeadSession = () => {
+  const module = detectModuleFromPath();
+  if (!getCurrentModuleToken()) return;
+  removeModuleAuthToken(module);
+  const loginPath = LOGIN_PATHS[module];
+  if (loginPath && !redirectingToLogin && !window.location.pathname.startsWith(loginPath)) {
+    redirectingToLogin = true;
+    console.warn("⚠️ Your login has expired. Please sign in again.");
+    window.location.assign(`${loginPath}?expired=1`);
+  }
+};
+
 // Response interceptor - Handle errors
 api.interceptors.response.use(
   (response) => {
@@ -176,9 +196,15 @@ api.interceptors.response.use(
     }
 
     // Keep session persistent across refreshes and transient API failures.
-    // Do not auto-clear token or force-redirect on 401; only explicit logout should clear auth.
+    // Only a login the server says can never work again (expired / signed with another secret)
+    // is cleared: otherwise every request keeps failing with 401 while the panel looks signed in.
     if (error.response?.status === 401) {
-      console.warn("⚠️ Received 401 response. Keeping session intact (manual logout only).");
+      const message = String(error.response?.data?.message || "");
+      if (message === "Token has expired" || message === "Invalid token") {
+        handleDeadSession();
+      } else {
+        console.warn("⚠️ Received 401 response. Keeping session intact (manual logout only).");
+      }
     }
     return Promise.reject(error);
   }
