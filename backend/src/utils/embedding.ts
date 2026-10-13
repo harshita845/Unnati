@@ -66,3 +66,21 @@ export const generateEmbedding = async (text: string): Promise<number[]> => {
     throw error;
   }
 };
+
+let unavailableUntil = 0;
+
+/**
+ * Embedding for search, or [] when the model can't run here (e.g. the package isn't in a
+ * serverless bundle). Search then ranks by keywords only instead of failing. After a failure
+ * it isn't retried for 10 minutes. SEARCH_SEMANTIC_DISABLED=true skips it entirely.
+ */
+export const tryGenerateEmbedding = async (text: string): Promise<number[]> => {
+  if (process.env.SEARCH_SEMANTIC_DISABLED === "true" || Date.now() < unavailableUntil) return [];
+  try {
+    return await generateEmbedding(text);
+  } catch {
+    unavailableUntil = Date.now() + 10 * 60_000;
+    console.warn("[Embedding] Unavailable, using keyword search only");
+    return [];
+  }
+};

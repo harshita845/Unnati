@@ -6,7 +6,7 @@ import Brand from "../models/Brand";
 import Seller from "../models/Seller";
 import AppSettings from "../models/AppSettings";
 import SearchAnalytics from "../models/SearchAnalytics";
-import { generateEmbedding } from "../utils/embedding";
+import { tryGenerateEmbedding } from "../utils/embedding";
 import { findSellersWithinRange } from "../utils/locationHelper";
 import { cache } from "../utils/cache";
 import { toListItem } from "../modules/product/productReadMapper";
@@ -187,6 +187,10 @@ const toNumber = (value: unknown): number | undefined => {
 // `true` — using it here previously hid every normal seller's products.)
 const visibleSellerQuery = { isEnabled: true } as const;
 
+/** 0 when either side has no embedding (model unavailable, product not indexed yet) */
+const vectorSimilarity = (a: unknown, b: unknown): number =>
+  Array.isArray(a) && Array.isArray(b) && a.length > 0 && a.length === b.length ? Math.max(0, cosineSimilarity(a, b) || 0) : 0;
+
 const buildVisibleProductQuery = async (options: Partial<SearchOptions>) => {
   const query: Record<string, any> = {
     status: "Active",
@@ -332,7 +336,7 @@ export const hybridProductSearch = async (options: SearchOptions) => {
     pages = cached.pagination.pages;
   } else {
     const [queryEmbedding, productQuery] = await Promise.all([
-      generateEmbedding(query),
+      tryGenerateEmbedding(query),
       buildVisibleProductQuery(options),
     ]);
 
@@ -366,9 +370,7 @@ export const hybridProductSearch = async (options: SearchOptions) => {
 
     const scored = products
       .map((product: any) => {
-        const semanticScore = Array.isArray(product.embedding) && product.embedding.length
-          ? Math.max(0, cosineSimilarity(queryEmbedding, product.embedding) || 0)
-          : 0;
+        const semanticScore = vectorSimilarity(queryEmbedding, product.embedding);
         const lexicalScore = keywordScore(query, product);
         const popularityBoost = Math.min(0.08, Math.log10((product.searchCount || 0) + 1) * 0.02);
         const stockPenalty = product.stock === 0 ? 0.05 : 0;
@@ -490,7 +492,7 @@ export const getSimilarProductsForProduct = async (
 
   let targetEmbedding = Array.isArray((target as any).embedding) ? (target as any).embedding : [];
   if (!targetEmbedding.length) {
-    targetEmbedding = await generateEmbedding(await buildProductSearchText(target as any));
+    targetEmbedding = await tryGenerateEmbedding(await buildProductSearchText(target as any));
   }
 
   // Only recommend products the customer can actually order: stores that deliver to them
@@ -516,7 +518,7 @@ export const getSimilarProductsForProduct = async (
 
   const similarProducts = candidates
     .map((product: any) => {
-      const similarity = Math.max(0, cosineSimilarity(targetEmbedding, product.embedding) || 0);
+      const similarity = vectorSimilarity(targetEmbedding, product.embedding);
       const categoryBoost =
         String(product.category?._id || product.category) === String((target as any).category?._id || (target as any).category)
           ? 0.08

@@ -142,10 +142,24 @@ export function checkImageRefs(rows: Record<string, unknown>[], files: File[]): 
   return { localRefs, matched, missing };
 }
 
-/** Shrink big photos before upload (server uploads are capped at a few MB). */
+const IMAGE_TYPES: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", jfif: "image/jpeg", png: "image/png", webp: "image/webp" };
+
+/** The file's image type, from the browser or (when it gives none, as some PCs do) the extension. */
+const imageTypeOf = (file: File) => {
+  if (/^image\/(jpeg|png|webp)$/i.test(file.type)) return file.type.toLowerCase();
+  return IMAGE_TYPES[(file.name.split(".").pop() || "").toLowerCase()] || file.type;
+};
+
+/**
+ * Shrink big photos before upload: uploads must stay under Vercel's 4.5 MB body limit.
+ * JPG/PNG/WebP all work; a PNG that is still too big after resizing is sent as JPG.
+ */
 export async function prepareImageForUpload(file: File, maxEdge = 1600, maxBytes = 1.5 * 1024 * 1024): Promise<File> {
-  if (typeof document === "undefined" || !/^image\/(jpeg|png|webp)$/i.test(file.type)) return file;
-  const url = URL.createObjectURL(file);
+  const type = imageTypeOf(file);
+  if (typeof document === "undefined" || !/^image\/(jpeg|png|webp)$/.test(type)) return file;
+  // Same bytes, but with a type the server accepts
+  const typed = type === file.type ? file : new File([file], file.name, { type });
+  const url = URL.createObjectURL(typed);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const el = new Image();
@@ -153,23 +167,33 @@ export async function prepareImageForUpload(file: File, maxEdge = 1600, maxBytes
       el.onerror = () => reject(new Error(`Couldn't read ${file.name}`));
       el.src = url;
     });
-    const scale = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
-    if (scale === 1 && file.size <= maxBytes) return file;
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
-    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
-    const ctx = canvas.getContext("2d")!;
-    const keepPng = file.type === "image/png" && file.size <= maxBytes * 2;
-    if (!keepPng) {
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    let scale = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
+    if (scale === 1 && typed.size <= maxBytes) return typed;
+
+    const encode = async (as: "image/png" | "image/jpeg", quality: number) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      const ctx = canvas.getContext("2d")!;
+      if (as === "image/jpeg") {
+        ctx.fillStyle = "#fff"; // transparent PNG areas become white, not black
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, as, quality));
+    };
+
+    const base = file.name.replace(/\.[^.]+$/, "");
+    if (type === "image/png") {
+      const png = await encode("image/png", 1);
+      if (png && png.size <= maxBytes) return new File([png], file.name, { type: "image/png" });
     }
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    const type = keepPng ? "image/png" : "image/jpeg";
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, 0.85));
-    if (!blob) return file;
-    const name = keepPng ? file.name : file.name.replace(/\.[^.]+$/, "") + ".jpg";
-    return new File([blob], name, { type });
+    for (const [quality, shrink] of [[0.85, 1], [0.75, 1], [0.7, 0.75], [0.65, 0.6]] as const) {
+      scale *= shrink;
+      const jpg = await encode("image/jpeg", quality);
+      if (jpg && (jpg.size <= maxBytes || quality === 0.65)) return new File([jpg], `${base}.jpg`, { type: "image/jpeg" });
+    }
+    return typed;
   } finally {
     URL.revokeObjectURL(url);
   }
