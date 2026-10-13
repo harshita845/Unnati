@@ -79,3 +79,15 @@ test('helpers: date, item name, page size', () => {
   assert.equal(getThermalReceiptWidthMm('58mm'), '48mm');
   assert.equal(getThermalReceiptWidthMm('80mm'), '72mm');
 });
+
+test('Seller Name prints the biller from the bill, never the old typed setting, and follows the toggle', () => {
+  const bill = { invoiceNum: 'POS-2', date: '9/10/2026', time: '10:00', paymentMethod: 'Cash', items, total: 174, sellerName: 'Priya (Cashier)' };
+  const typed = { shopName: 'Unnati Mart', sellerName: 'yashwant' };
+  const on = text(<ThermalReceiptContent settings={typed} data={bill} />);
+  assert.match(on, /Seller Name: Priya \(Cashier\)/);
+  assert.doesNotMatch(on, /yashwant/);
+  const off = text(<ThermalReceiptContent settings={{ ...typed, showSellerName: false }} data={bill} />);
+  assert.doesNotMatch(off, /Seller Name/);
+  const noBiller = text(<ThermalReceiptContent settings={typed} data={{ ...bill, sellerName: '' }} />);
+  assert.doesNotMatch(noBiller, /Seller Name|yashwant/);
+});

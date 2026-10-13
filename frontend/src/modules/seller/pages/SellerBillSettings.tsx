@@ -31,6 +31,7 @@ import {
   getDefaultPosBillSettings,
 } from "../../../utils/sellerPosBillSettings";
 import { ThermalReceiptPreview } from "../../../components/ThermalReceiptPreview";
+import { currentBillerName } from "../../../utils/posBiller";
 import { uploadImage } from "../../../services/api/uploadService";
 
 const SellerBillSettings = () => {
@@ -627,19 +628,31 @@ const SellerBillSettings = () => {
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Seller Name (Store Operator / Cashier)
-              </label>
-              <input
-                type="text"
-                name="sellerName"
-                value={settings.sellerName || ""}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)] text-sm"
-                placeholder="e.g. Store Attendant / Cashier Name"
-              />
-            </div>
+            <div className="flex items-start justify-between gap-3 rounded-2xl border border-neutral-200 bg-neutral-50/30 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-gray-700">Show Seller Name on bill</p>
+                  <p className="mt-0.5 text-[11px] text-neutral-500">
+                    Prints who made the bill: the logged-in staff member, or 
+                    <b>{currentBillerName("seller") || "the logged-in user"}</b> when no staff is logged in.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={settings.showSellerName !== false}
+                  aria-label="Show Seller Name on bill"
+                  onClick={() => setSettings((prev) => ({ ...prev, showSellerName: prev.showSellerName === false }))}
+                  className={`relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                    settings.showSellerName !== false ? "bg-[var(--primary-color)]" : "bg-gray-200"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                      settings.showSellerName !== false ? "translate-x-4" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
 
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
@@ -1172,7 +1185,7 @@ const SellerBillSettings = () => {
 
         {/* Right Column: Live Interactive Thermal Receipt Preview */}
         <div className="lg:col-span-5 lg:sticky lg:top-6">
-          <ThermalReceiptPreview settings={settings} />
+          <ThermalReceiptPreview settings={settings} sellerName={currentBillerName("seller")} />
         </div>
       </div>
     </div>

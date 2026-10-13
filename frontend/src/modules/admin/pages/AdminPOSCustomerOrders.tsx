@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { showsSellerName } from '../../../utils/posBiller';
 import { useParams, useNavigate } from "react-router-dom";
 import { getOrderById, deletePOSOrder } from "../../../services/api/admin/adminOrderService";
 import { getCustomerHistory } from "../../../services/api/admin/creditService";
@@ -217,9 +218,9 @@ const AdminPOSCustomerOrders = () => {
         doc.text(String(customerName), 196, 63, { align: 'right' });
         doc.text(String(customerPhone), 196, 68, { align: 'right' });
 
-        const sellerName = order.sellerName || order.seller?.name || order.seller?.storeName || (order as any).cashierName || readSellerPosBillSettings()?.sellerName || "";
+        const sellerName = order.sellerName || order.seller?.name || order.seller?.storeName || (order as any).cashierName || (order as any).staffName || "";
         let lineY = 73;
-        if (sellerName) {
+        if (sellerName && showsSellerName(readSellerPosBillSettings())) {
             doc.text("Seller Name:", 14, 73);
             doc.text(String(sellerName), 196, 73, { align: 'right' });
             lineY = 78;

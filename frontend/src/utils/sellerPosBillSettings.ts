@@ -6,7 +6,10 @@ export const SELLER_BILL_SETTINGS_UPDATED_EVENT = 'seller_bill_settings_updated'
 
 export interface PosBillSettings {
   shopName?: string;
+  /** @deprecated the bill prints the logged-in biller; kept so old saved settings still load */
   sellerName?: string;
+  /** Print "Seller Name" (the logged-in biller) on the bill; on unless false */
+  showSellerName?: boolean;
   address?: string;
   phone?: string;
   email?: string;
@@ -101,6 +104,7 @@ export function getDefaultPosBillSettings(): PosBillSettings {
   return {
     shopName: '',
     sellerName: '',
+    showSellerName: true,
     address: '',
     phone: '',
     email: '',

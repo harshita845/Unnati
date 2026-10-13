@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import Admin from "../../../models/Admin";
 import mongoose from "mongoose";
 import axios from "axios";
 import { asyncHandler } from "../../../utils/asyncHandler";
@@ -1505,9 +1506,10 @@ export const createPOSOrder = asyncHandler(
           });
         }
 
-        // Resolve Seller / Staff Name from request or AppSettings
-        const appSettings: any = await AppSettings.findOne().select("billSettings").lean();
-        const resolvedSellerName = req.body.sellerName || req.body.staffName || appSettings?.billSettings?.sellerName || "";
+        // "Seller Name" on the bill: whoever is billing (staff, else the signed-in admin), never a typed setting
+        const billingAdmin: any = req.user?.userId ? await Admin.findById(req.user.userId).select("firstName lastName").lean() : null;
+        const resolvedSellerName =
+          req.body.sellerName || req.body.staffName || `${billingAdmin?.firstName || ""} ${billingAdmin?.lastName || ""}`.trim() || "";
 
         // 1. Create Order shell
         let order = await Order.create({

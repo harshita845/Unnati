@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef } from 'react';
+import { currentBillerName } from '../../../utils/posBiller';
 import { createPortal } from 'react-dom';
 import { getProducts, getProductById, Product, updateProduct, createProduct } from '../../../services/api/productService';
 import { createPOSOrder, initiatePOSOnlineOrder, verifyPOSPayment, getSellerOrderById as getOrderById } from '../../../services/api/orderService';
@@ -3687,7 +3688,7 @@ const SellerPOSOrders = () => {
             paymentStatus: "Paid" as const,
             createdBy: activeStaffSession?.id,
             staffName: activeStaffSession?.name,
-            sellerName: activeStaffSession?.name || posBillSettings?.sellerName || readSellerPosBillSettings()?.sellerName || ''
+            sellerName: currentBillerName('seller')
         };
 
         const response = await createPOSOrder(orderData);
@@ -3750,7 +3751,7 @@ const SellerPOSOrders = () => {
                 paymentStatus: "Pending" as const,
                 createdBy: activeStaffSession?.id,
                 staffName: activeStaffSession?.name,
-                sellerName: activeStaffSession?.name || posBillSettings?.sellerName || readSellerPosBillSettings()?.sellerName || ''
+                sellerName: currentBillerName('seller')
             };
 
             const response = await createPOSOrder(orderData);
@@ -6538,7 +6539,7 @@ const SellerPOSOrders = () => {
                           paymentMethod: lastBillDetails?.paymentMethod || 'Cash',
                           customerName: getBillCustomerDisplay(lastBillDetails).name,
                           customerPhone: getBillCustomerDisplay(lastBillDetails).phone,
-                          sellerName: (lastBillDetails as any)?.sellerName || (activeBill as any)?.sellerName || posBillSettings?.sellerName,
+                          sellerName: (lastBillDetails as any)?.sellerName || (activeBill as any)?.sellerName || currentBillerName('seller'),
                           items: items,
                           total: lastBillDetails?.total || calculateTotal(),
                           cashTendered: Number(lastBillDetails?.cashTendered ?? activeBill.cashTendered) || undefined,

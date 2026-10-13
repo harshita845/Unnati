@@ -2,19 +2,23 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Printer } from 'lucide-react';
 import { PosBillSettings, getThermalReceiptWidthMm, getReceiptPageCss } from '../utils/sellerPosBillSettings';
-import { ThermalReceiptContent, ReceiptData } from './thermal/ThermalReceiptContent';
+import { ThermalReceiptContent, ReceiptData, DEFAULT_SAMPLE_DATA } from './thermal/ThermalReceiptContent';
 
 interface ThermalReceiptPreviewProps {
   settings: PosBillSettings;
   data?: ReceiptData;
   onTestPrint?: () => void;
+  /** Name shown as "Seller Name" on the sample bill (the logged-in biller) */
+  sellerName?: string;
 }
 
 export const ThermalReceiptPreview: React.FC<ThermalReceiptPreviewProps> = ({
   settings,
-  data,
+  data: dataProp,
   onTestPrint,
+  sellerName,
 }) => {
+  const data = dataProp || (sellerName ? { ...DEFAULT_SAMPLE_DATA, sellerName } : undefined);
   const [isPrinting, setIsPrinting] = useState(false);
   const paperWidthMm = getThermalReceiptWidthMm(settings.paperWidth);
   const is58mm = settings.paperWidth === '58mm';

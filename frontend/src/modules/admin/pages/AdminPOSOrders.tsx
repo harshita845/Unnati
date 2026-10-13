@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { currentBillerName } from '../../../utils/posBiller';
 import { flushSync, createPortal } from 'react-dom';
 import { getProducts, getProductById, getPOSProducts, Product, getSellers, updateProduct, createProduct } from '../../../services/api/admin/adminProductService';
 import { createPOSOrder, initiatePOSOnlineOrder, verifyPOSPayment, getOrderById, updateOrderItems } from '../../../services/api/admin/adminOrderService';
@@ -3866,7 +3867,7 @@ const AdminPOSOrders = () => {
               ...walkInContactForOrder(),
               createdBy: activeStaffSession?.id,
               staffName: activeStaffSession?.name,
-              sellerName: activeStaffSession?.name || posBillSettings?.sellerName || readAdminPosBillSettings()?.sellerName || ''
+              sellerName: currentBillerName('admin')
           };
 
           const response = await initiatePOSOnlineOrder(orderData);
@@ -3961,7 +3962,7 @@ const AdminPOSOrders = () => {
             paymentStatus: "Paid" as const,
             createdBy: activeStaffSession?.id,
             staffName: activeStaffSession?.name,
-            sellerName: activeStaffSession?.name || posBillSettings?.sellerName || readAdminPosBillSettings()?.sellerName || ''
+            sellerName: currentBillerName('admin')
         };
 
         const response = await createPOSOrder(orderData);
@@ -4031,7 +4032,7 @@ const AdminPOSOrders = () => {
                 paymentStatus: "Pending" as const,
                 createdBy: activeStaffSession?.id,
                 staffName: activeStaffSession?.name,
-                sellerName: activeStaffSession?.name || posBillSettings?.sellerName || readAdminPosBillSettings()?.sellerName || ''
+                sellerName: currentBillerName('admin')
             };
 
             const response = await createPOSOrder(orderData);
@@ -6898,7 +6899,7 @@ const AdminPOSOrders = () => {
                           paymentMethod: lastBillDetails?.paymentMethod || 'Cash',
                           customerName: getBillCustomerDisplay(lastBillDetails).name,
                           customerPhone: getBillCustomerDisplay(lastBillDetails).phone,
-                          sellerName: (lastBillDetails as any)?.sellerName || (activeBill as any)?.sellerName || posBillSettings?.sellerName,
+                          sellerName: (lastBillDetails as any)?.sellerName || (activeBill as any)?.sellerName || currentBillerName('admin'),
                           customerAddress: getBillCustomerDisplay(lastBillDetails).address,
                           customerGst: getBillCustomerDisplay(lastBillDetails).gst,
                           items: items,

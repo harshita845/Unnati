@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { showsSellerName } from '../../../utils/posBiller';
 import { createPortal } from "react-dom";
 import { getPOSReport, getStockLedger, deletePOSOrder, updateStockLedgerEntry, updateOrderStatus, getOrderById } from "../../../services/api/admin/adminOrderService";
 import { getAdminBillSettings } from "../../../services/api/admin/adminSettingsService";
@@ -453,9 +454,9 @@ const AdminPOSReport = () => {
         doc.text(String(customerName), 196, 63, { align: 'right' });
         doc.text(String(customerPhone), 196, 68, { align: 'right' });
 
-        const sellerName = order.sellerName || order.seller?.name || order.seller?.storeName || (order as any).staffName || posBillSettings?.sellerName || readAdminPosBillSettings()?.sellerName || "Unnati Store Manager";
+        const sellerName = order.sellerName || order.seller?.name || order.seller?.storeName || (order as any).staffName || "";
         let lineY = 73;
-        if (sellerName) {
+        if (sellerName && showsSellerName(posBillSettings || readAdminPosBillSettings())) {
             doc.text("Seller Name:", 14, 73);
             doc.text(String(sellerName), 196, 73, { align: 'right' });
             lineY = 78;
@@ -1301,7 +1302,7 @@ const AdminPOSReport = () => {
                               paymentStatus: printOrder.paymentStatus === 'Pending' ? 'Unpaid' : printOrder.paymentStatus || undefined,
                               customerName: (printOrder as any).customerName || (printOrder as any).customer?.name || 'Walk-in Customer',
                               customerPhone: (printOrder as any).customerPhone || (printOrder as any).customer?.phone || '',
-                              sellerName: (printOrder as any).sellerName || (printOrder as any).seller?.name || (printOrder as any).seller?.storeName || (printOrder as any).staffName || posBillSettings?.sellerName || readAdminPosBillSettings()?.sellerName || 'Unnati Store Manager',
+                              sellerName: (printOrder as any).sellerName || (printOrder as any).seller?.name || (printOrder as any).seller?.storeName || (printOrder as any).staffName || '',
                               // Saved customers: reprint with their address and GSTIN too (walk-in record has none)
                               customerAddress: isWalkInOrder(printOrder)
                                 ? ''

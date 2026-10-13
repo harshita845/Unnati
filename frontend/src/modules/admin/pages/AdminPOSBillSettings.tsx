@@ -20,7 +20,6 @@ import {
   Image as ImageIcon,
   Check,
   RotateCcw,
-  User,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { uploadImage } from "../../../services/api/uploadService";
@@ -31,6 +30,7 @@ import {
   getDefaultPosBillSettings,
 } from "../../../utils/adminPosBillSettings";
 import { ThermalReceiptPreview } from "../../../components/ThermalReceiptPreview";
+import { currentBillerName } from "../../../utils/posBiller";
 import {
   getAdminBillSettings,
   updateAdminBillSettings,
@@ -645,19 +645,30 @@ const AdminPOSBillSettings = () => {
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-neutral-600 ml-1 flex items-center gap-1.5 mb-1">
-                  <User className="h-3.5 w-3.5 text-[var(--primary-color)]" />
-                  Seller Name (Store Operator / Cashier)
-                </label>
-                <input
-                  type="text"
-                  name="sellerName"
-                  value={settings.sellerName || ""}
-                  onChange={handleChange}
-                  placeholder="e.g. Rahul Sharma / Store Attendant"
-                  className="w-full rounded-2xl border border-neutral-200 bg-neutral-50/30 px-4 py-2.5 text-sm font-semibold text-neutral-800 outline-none focus:border-[var(--primary-color)]"
-                />
+              <div className="flex items-start justify-between gap-3 rounded-2xl border border-neutral-200 bg-neutral-50/30 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-neutral-700">Show Seller Name on bill</p>
+                  <p className="mt-0.5 text-[11px] text-neutral-500">
+                    Prints who made the bill: the logged-in staff member, or 
+                    <b>{currentBillerName("admin") || "the logged-in user"}</b> when no staff is logged in.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={settings.showSellerName !== false}
+                  aria-label="Show Seller Name on bill"
+                  onClick={() => setSettings((prev) => ({ ...prev, showSellerName: prev.showSellerName === false }))}
+                  className={`relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                    settings.showSellerName !== false ? "bg-[var(--primary-color)]" : "bg-gray-200"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                      settings.showSellerName !== false ? "translate-x-4" : "translate-x-1"
+                    }`}
+                  />
+                </button>
               </div>
             </div>
 
@@ -1179,7 +1190,7 @@ const AdminPOSBillSettings = () => {
 
         {/* Right Column: Live Interactive Thermal Receipt Preview */}
         <div className="lg:col-span-5 lg:sticky lg:top-6">
-          <ThermalReceiptPreview settings={settings} />
+          <ThermalReceiptPreview settings={settings} sellerName={currentBillerName("admin")} />
         </div>
       </div>
     </div>

@@ -54,7 +54,7 @@ export interface ReceiptData {
   cashReturn?: number | string;
 }
 
-const DEFAULT_SAMPLE_DATA: ReceiptData = {
+export const DEFAULT_SAMPLE_DATA: ReceiptData = {
   invoiceNum: '7514',
   date: formatBillDate(new Date()),
   time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
@@ -362,10 +362,10 @@ export const ThermalReceiptContent: React.FC<ThermalReceiptContentProps> = ({
             <span className="shrink-0 text-right" style={{ fontWeight: regularWeight }}>{data.customerPhone}</span>
           </div>
         )}
-        {(settings?.sellerName || data.sellerName) && (
+        {settings?.showSellerName !== false && data.sellerName && (
           <div className="flex items-center justify-between gap-2">
             <span className="shrink" style={{ fontWeight: mediumWeight }}>Seller Name:</span>
-            <span className="truncate text-right" style={{ fontWeight: regularWeight }}>{settings?.sellerName || data.sellerName}</span>
+            <span className="truncate text-right" style={{ fontWeight: regularWeight }}>{data.sellerName}</span>
           </div>
         )}
         {data.customerAddress && (
