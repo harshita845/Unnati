@@ -256,6 +256,53 @@ export class ProductWriteService {
     return toDetail(product);
   }
 
+  /**
+   * Bulk import only. If the seller already has a product with this name in this category, don't
+   * create a second copy: options (variants) it doesn't have yet are added to it, and if it already
+   * has them all nothing changes. Never overwrites existing data. Returns null when there is no such
+   * product (the caller then creates it as usual).
+   */
+  static async mergeIntoExisting(body: Record<string, unknown>, policy: ProductWritePolicy) {
+    const normalized = normalizeCreatePayload(body, { publish: policy.defaultPublish });
+    const name = normalized.productName;
+    if (!name || !normalized.category) return null;
+
+    const sellerId =
+      policy.role === "seller"
+        ? policy.sellerId
+        : await resolveAdminSeller(policy.allowSellerAssignment ? normalized.seller : undefined);
+    if (!sellerId) return null;
+
+    const escaped = name.replace(/\s+/g, " ").replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s+");
+    const existing = await Product.findOne({
+      seller: sellerId,
+      category: normalized.category,
+      productName: new RegExp(`^\\s*${escaped}\\s*$`, "i"),
+    });
+    if (!existing) return null;
+
+    const key = (v: any) => `${String(v.variationType || "").trim().toLowerCase()}|${String(v.value || "").trim().toLowerCase()}`;
+    const have = new Set(existing.variations.map(key));
+    // A product typed with no option at all is the placeholder "Standard / Default" variant
+    const placeholder = (v: any) => key(v) === "standard|default";
+    const fresh = normalized.variations.filter((v) => !have.has(key(v)) && !(placeholder(v) && existing.variations.length > 0));
+    const skipped = normalized.variations.filter((v) => !fresh.includes(v)).map((v) => v.value);
+
+    if (fresh.length) {
+      const barcodes = fresh.flatMap((v) => (Array.isArray(v.barcode) ? v.barcode : [])).map((b) => String(b).trim()).filter(Boolean);
+      if (new Set(barcodes).size !== barcodes.length) {
+        throw new ProductWriteError(`Duplicate barcode(s) found across variants: ${barcodes.filter((b, i) => barcodes.indexOf(b) !== i).join(", ")}`, 400);
+      }
+      if (barcodes.length) {
+        const clash = await Product.findOne({ $or: [{ barcode: { $in: barcodes } }, { "variations.barcode": { $in: barcodes } }] });
+        if (clash) throw new ProductWriteError(`Barcode is already in use by another product: "${clash.productName}"`, 400);
+      }
+      existing.variations.push(...(fresh.map(variantToMongooseSubdoc) as any));
+      await existing.save();
+    }
+    return { product: existing, added: fresh.map((v) => v.value), skipped };
+  }
+
   static async updateProduct(
     productId: string,
     body: Record<string, unknown>,
@@ -394,4 +441,22 @@ export class ProductWriteError extends Error {
     super(message);
     this.statusCode = statusCode;
   }
+}
+
+/** JSON reply for a bulk-import row that matched an existing product (see mergeIntoExisting) */
+export function importMergeResponse(
+  merged: { product: any; added: string[]; skipped: string[] },
+  warnings: string[]
+) {
+  const name = merged.product.productName;
+  const note = merged.added.length
+    ? `Already in your products: added ${merged.added.join(", ")} to the existing "${name}" instead of creating a duplicate`
+    : `"${name}" is already in your products with the same options, so nothing was added (no duplicate created)`;
+  return {
+    success: true,
+    message: note,
+    data: toDetail(merged.product),
+    merged: true,
+    warnings: [...warnings, note],
+  };
 }

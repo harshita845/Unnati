@@ -850,6 +850,8 @@ export default function SellerStockBulkImport({
             // Every product-form field beyond the original columns (short description, SEO, returns, ...)
             const fields = readProductFields(row);
             Object.assign(productPayload, fields.payload);
+            // Server: a product already in the list is topped up with new options, not copied again
+            (productPayload as any).bulkImport = true;
             for (const w of fields.warnings) importNotes.push(`Row ${i + 1} (${productNameFinal}): ${w.field} ${w.message}`);
 
             const signature = rowSignature(row);
@@ -933,7 +935,7 @@ export default function SellerStockBulkImport({
     });
 
     const notes = importNotes.length
-      ? `\n\nImported, but please check:\n${importNotes.slice(0, 6).join("\n")}${importNotes.length > 6 ? `\n...and ${importNotes.length - 6} more` : ""}`
+      ? `\n\nNotes about this import:\n${importNotes.slice(0, 6).join("\n")}${importNotes.length > 6 ? `\n...and ${importNotes.length - 6} more` : ""}`
       : "";
         if (failures.length > 0) {
       alert(

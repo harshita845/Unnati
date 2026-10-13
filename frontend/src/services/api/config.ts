@@ -8,6 +8,7 @@ import {
 
 type RetriableRequestConfig = InternalAxiosRequestConfig & {
   _apiFailoverAttempted?: boolean;
+  _networkRetried?: boolean;
 };
 
 const normalizeBaseUrl = (value: string): string => value.replace(/\/+$/, "");
@@ -40,13 +41,14 @@ const buildApiBaseCandidates = (): string[] => {
       ? withApiVersionPath(window.location.origin)
       : "";
 
-  return unique([
-    fromCustom,
-    fromEnvBase,
-    fromEnvRoot,
-    originCandidate,
-    "/api/v1",
-  ]);
+  // The website's own address only makes sense when the API is served from the same domain (no API
+  // address configured). With an API address set (Vercel: website and backend are separate
+  // projects) falling back to the website would send every later request to a host whose /api/...
+  // returns the web page, so searches and lists would come back empty after one failed request.
+  if (fromCustom || fromEnvBase || fromEnvRoot) {
+    return unique([fromCustom, fromEnvBase, fromEnvRoot]);
+  }
+  return unique([originCandidate, "/api/v1"]);
 };
 
 const API_BASE_CANDIDATES = buildApiBaseCandidates();
@@ -193,6 +195,19 @@ api.interceptors.response.use(
         originalConfig.baseURL = nextBase;
         return api.request(originalConfig);
       }
+    }
+
+    // A dropped connection on a read: try once more shortly (not after a timeout, which would double
+    // the wait). Writes are never repeated.
+    if (
+      hasNetworkError &&
+      originalConfig &&
+      !originalConfig._networkRetried &&
+      error.code !== "ECONNABORTED" &&
+      /^get$/i.test(originalConfig.method || "get")
+    ) {
+      originalConfig._networkRetried = true;
+      return new Promise((resolve) => setTimeout(resolve, 600)).then(() => api.request(originalConfig));
     }
 
     // Keep session persistent across refreshes and transient API failures.

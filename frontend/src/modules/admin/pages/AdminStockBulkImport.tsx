@@ -426,6 +426,8 @@ export default function AdminStockBulkImport({
         // Every product-form field beyond the original columns (short description, SEO, returns, ...)
         const fields = readProductFields(row);
         Object.assign(productData, fields.payload);
+        // Server: a product already in the list is topped up with new options, not copied again
+        (productData as any).bulkImport = true;
         for (const w of fields.warnings) importNotes.push(`Row ${i + 1} (${String(productData.productName || "")}): ${w.field} ${w.message}`);
 
         // Basic validation
@@ -490,7 +492,7 @@ export default function AdminStockBulkImport({
           products.length < successCount ? ` (${products.length} products with their variants)` : ""
         }.`;
     const notes = importNotes.length
-      ? `\n\nImported, but please check:\n${importNotes.slice(0, 6).join("\n")}${importNotes.length > 6 ? `\n...and ${importNotes.length - 6} more` : ""}`
+      ? `\n\nNotes about this import:\n${importNotes.slice(0, 6).join("\n")}${importNotes.length > 6 ? `\n...and ${importNotes.length - 6} more` : ""}`
       : "";
     alert(msg + notes);
     if (successCount > 0) {

@@ -18,6 +18,7 @@ import { cache } from "../../../utils/cache";
 import {
   ProductWriteService,
   ProductWriteError,
+  importMergeResponse,
 } from "../../product/productWriteService";
 import { adminProductPolicy } from "../../product/productPolicies";
 import { withPosImage } from "../../product/variantHelpers";
@@ -1023,6 +1024,10 @@ export const createProduct = asyncHandler(
     try {
       const warnings = await resolveReferenceNames(req.body);
       stripInvalidProductObjectIds(req.body);
+      if (req.body.bulkImport === true) {
+        const merged = await ProductWriteService.mergeIntoExisting(req.body, adminProductPolicy);
+        if (merged) return res.status(200).json(importMergeResponse(merged, warnings));
+      }
       const product = await ProductWriteService.createProduct(
         req.body,
         adminProductPolicy

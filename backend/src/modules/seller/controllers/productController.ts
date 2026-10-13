@@ -10,6 +10,7 @@ import { asyncHandler } from "../../../utils/asyncHandler";
 import {
   ProductWriteService,
   ProductWriteError,
+  importMergeResponse,
 } from "../../product/productWriteService";
 import { sellerProductPolicy } from "../../product/productPolicies";
 import { resolveReferenceNames } from "../../product/referenceResolver";
@@ -52,6 +53,10 @@ export const createProduct = asyncHandler(
     stripInvalidObjectIdFields(req.body);
 
     try {
+      if (req.body.bulkImport === true) {
+        const merged = await ProductWriteService.mergeIntoExisting(req.body, sellerProductPolicy(sellerId));
+        if (merged) return res.status(200).json(importMergeResponse(merged, warnings));
+      }
       const product = await ProductWriteService.createProduct(
         req.body,
         sellerProductPolicy(sellerId)
