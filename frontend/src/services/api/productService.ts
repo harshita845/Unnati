@@ -277,8 +277,12 @@ export const updateProductStatus = async (
 /**
  * Get all active shops (for seller to select when creating shop-by-store-only products)
  */
-export const getShops = async (): Promise<ApiResponse<Shop[]>> => {
-  const response = await api.get<ApiResponse<Shop[]>>("/products/shops");
+/** Stores for "Show in Shop by Store only": admins use their own list, sellers theirs (a seller-only route returns 403 to an admin) */
+export const getShops = async (role: "admin" | "seller" = "seller"): Promise<ApiResponse<Shop[]>> => {
+  const response =
+    role === "admin"
+      ? await api.get<ApiResponse<Shop[]>>("/admin/shops", { params: { status: "active" } })
+      : await api.get<ApiResponse<Shop[]>>("/products/shops");
   return response.data;
 };
 

@@ -200,7 +200,7 @@ export default function ProductMainInfoSection({
     if (isFieldEnabled("visibility", "select_store")) {
       const fetchShopsData = async () => {
         try {
-          const res = await getShops();
+          const res = await getShops(role);
           if (res.success) {
             setShops(res.data || []);
           }
@@ -210,7 +210,7 @@ export default function ProductMainInfoSection({
       };
       fetchShopsData();
     }
-  }, [isFieldEnabled]);
+  }, [isFieldEnabled, role]);
 
   const showSummary = isFieldEnabled("basic", "summary");
   const showDescription = isFieldEnabled("basic", "description");
