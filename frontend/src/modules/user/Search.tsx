@@ -33,6 +33,20 @@ const sortLabels: Record<SortOption, string> = {
   popular: "Popular",
 };
 
+/** Second line of a dropdown row: a product's sizes (not its category), otherwise what kind of row it is */
+const suggestionSubtitle = (item: SearchSuggestion): string => {
+  if (item.type === "product") {
+    const options = item.options || [];
+    if (options.length) {
+      const more = (item.optionCount || options.length) - options.length;
+      return options.join(" · ") + (more > 0 ? ` +${more} more` : "");
+    }
+    return item.pack || "";
+  }
+  const labels: Record<string, string> = { category: "Category", brand: "Brand", tag: "Tag", trending: "Popular search" };
+  return labels[item.type] || "";
+};
+
 export default function Search() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -236,6 +250,15 @@ export default function Search() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // The dropdown lists products first, then categories / brands / popular searches. The typed text
+  // itself isn't a row (Enter or the search button searches it).
+  const visibleSuggestions = useMemo(() => {
+    const order: Record<string, number> = { product: 0, category: 1, brand: 2, tag: 3, trending: 4 };
+    return suggestions
+      .filter((item) => item.type !== "search")
+      .sort((a, b) => (order[a.type] ?? 9) - (order[b.type] ?? 9));
+  }, [suggestions]);
+
   const chips = useMemo(() => {
     const fallback = ["atta", "milk", "dal", "rice", "oil", "snacks", "bread", "eggs"];
     return popularSearches.length ? popularSearches.slice(0, 10) : fallback;
@@ -267,26 +290,26 @@ export default function Search() {
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!showSuggestions || suggestions.length === 0) {
+    if (!showSuggestions || visibleSuggestions.length === 0) {
       if (event.key === "Enter") applySearch(inputValue);
       return;
     }
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setActiveSuggestionIndex((index) => (index + 1) % suggestions.length);
+      setActiveSuggestionIndex((index) => (index + 1) % visibleSuggestions.length);
       return;
     }
 
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      setActiveSuggestionIndex((index) => (index <= 0 ? suggestions.length - 1 : index - 1));
+      setActiveSuggestionIndex((index) => (index <= 0 ? visibleSuggestions.length - 1 : index - 1));
       return;
     }
 
     if (event.key === "Enter") {
       event.preventDefault();
-      const selected = suggestions[activeSuggestionIndex];
+      const selected = visibleSuggestions[activeSuggestionIndex];
       selected ? handleSuggestionClick(selected) : applySearch(inputValue);
       return;
     }
@@ -338,9 +361,9 @@ export default function Search() {
               )}
             </div>
 
-            {showSuggestions && suggestions.length > 0 && (
+            {showSuggestions && visibleSuggestions.length > 0 && (
               <div className="absolute left-0 right-0 top-14 z-50 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-xl">
-                {suggestions.map((item, index) => (
+                {visibleSuggestions.map((item, index) => (
                   <button
                     key={`${item.type}-${item.id}-${item.name}`}
                     type="button"
@@ -361,11 +384,16 @@ export default function Search() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-neutral-900">{item.name}</p>
-                      <p className="text-xs capitalize text-neutral-500">{item.categoryName || item.type}</p>
+                      {suggestionSubtitle(item) && <p className="truncate text-xs text-neutral-500">{suggestionSubtitle(item)}</p>}
                     </div>
-                    {item.price !== undefined && (
-                      <span className="text-sm font-bold text-[var(--customer-primary)]">
-                        Rs {Number(item.price).toLocaleString("en-IN")}
+                    {item.type === "product" && Number(item.price) > 0 && (
+                      <span className="flex-shrink-0 text-right">
+                        <span className="block text-sm font-bold text-[var(--customer-primary)]">
+                          Rs {Number(item.price).toLocaleString("en-IN")}
+                        </span>
+                        {Number(item.mrp) > Number(item.price) && (
+                          <span className="block text-[10px] text-neutral-400 line-through">Rs {Number(item.mrp).toLocaleString("en-IN")}</span>
+                        )}
                       </span>
                     )}
                   </button>

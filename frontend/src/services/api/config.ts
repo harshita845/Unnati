@@ -183,6 +183,20 @@ const handleDeadSession = () => {
 // Response interceptor - Handle errors
 api.interceptors.response.use(
   (response) => {
+    // A web page where data was expected (the API address is wrong, or a host that serves the site
+    // for every path answered): fail the request instead of handing text to code that expects a
+    // list or an object (that crashed screens with "a.forEach is not a function")
+    const type = String(response.config?.responseType || "json");
+    if (
+      (type === "json" || type === "text") &&
+      typeof response.data === "string" &&
+      /^\s*(<!doctype html|<html)/i.test(response.data)
+    ) {
+      const err: any = new Error("The server sent a web page instead of data. Please check your connection and try again.");
+      err.code = "ERR_HTML_RESPONSE";
+      err.config = response.config;
+      return Promise.reject(err);
+    }
     return response;
   },
   (error: any) => {

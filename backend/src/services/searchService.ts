@@ -566,7 +566,7 @@ export const getSearchSuggestionsForQuery = async (
 
   const [products, categories, brands, tags, trending] = await Promise.all([
     Product.find({ ...productQuery, productName: regex })
-      .select("productName _id mainImage price compareAtPrice discount category")
+      .select("productName _id mainImage galleryImages price compareAtPrice discount category variations pack")
       .populate("category", "name")
       .limit(limit)
       .lean(),
@@ -596,16 +596,26 @@ export const getSearchSuggestionsForQuery = async (
   const suggestions = add([
     { id: "search", name: query, type: "search" },
     ...trending.map((item) => ({ id: item._id, name: item._id, type: "trending", count: item.count })),
-    ...products.map((product: any) => ({
-      id: product._id,
-      name: product.productName,
-      type: "product",
-      image: product.mainImage,
-      categoryName: product.category?.name,
-      price: product.price,
-      mrp: product.compareAtPrice || product.price,
-      discount: product.discount,
-    })),
+    ...products.map((product: any) => {
+      // Photos and prices live on the size options: use the same listing values as the product cards
+      const item = toListItem(product);
+      const options = (item.variants || [])
+        .map((v: any) => String(v.value || "").trim())
+        .filter((v: string) => v && v.toLowerCase() !== "default");
+      return {
+        id: product._id,
+        name: product.productName,
+        type: "product",
+        image: item.listing?.imageUrl || product.mainImage || undefined,
+        categoryName: product.category?.name,
+        options: options.slice(0, 3),
+        optionCount: options.length,
+        pack: product.pack || undefined,
+        price: item.price,
+        mrp: item.compareAtPrice || item.price,
+        discount: item.discount,
+      };
+    }),
     ...categories.map((category) => ({
       id: category._id,
       name: category.name,

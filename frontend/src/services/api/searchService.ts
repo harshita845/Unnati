@@ -46,6 +46,10 @@ export interface SearchSuggestion {
   type: "search" | "trending" | "product" | "category" | "brand" | "tag";
   image?: string;
   categoryName?: string;
+  /** Product rows: the first size options ("200ML", "500ML") and how many there are */
+  options?: string[];
+  optionCount?: number;
+  pack?: string;
   price?: number;
   mrp?: number;
   discount?: number;
