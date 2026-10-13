@@ -38,7 +38,7 @@ const getCategoryTabIcon = (c: any) => {
   // 2. If explicit iconName is set, render SVG from iconLibrary
   if (c.iconName && typeof c.iconName === 'string' && c.iconName.trim()) {
     return (
-      <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">
+      <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-full [&>svg]:h-full">
         {getIconByName(c.iconName)}
       </div>
     );
@@ -51,7 +51,7 @@ const getCategoryTabIcon = (c: any) => {
   );
   if (matched) {
     return (
-      <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">
+      <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-full [&>svg]:h-full">
         {matched.svg}
       </div>
     );
@@ -59,7 +59,7 @@ const getCategoryTabIcon = (c: any) => {
 
   // 4. Default fallback icon
   return (
-    <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">
+    <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-full [&>svg]:h-full">
       {getIconByName('grocery-basket')}
     </div>
   );
@@ -70,7 +70,7 @@ const ALL_TAB: Tab = {
   label: 'All',
   theme: 'all',
   icon: (
-    <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">
+    <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-full [&>svg]:h-full">
       {getIconByName('home')}
     </div>
   ),
@@ -78,14 +78,14 @@ const ALL_TAB: Tab = {
 
 const DEFAULT_HEADER_TABS: Tab[] = [
   ALL_TAB,
-  { id: 'grocery', label: 'Grocery', theme: 'grocery', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">{getIconByName('grocery-basket')}</div> },
-  { id: 'winter', label: 'Winter', theme: 'winter', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">{getIconByName('winter')}</div> },
-  { id: 'fashion', label: 'Fashion', theme: 'fashion', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">{getIconByName('fashion')}</div> },
-  { id: 'women', label: 'Women', theme: 'fashion', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">{getIconByName('womens-wear')}</div> },
-  { id: 'beauty', label: 'Beauty', theme: 'beauty', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">{getIconByName('beauty')}</div> },
-  { id: 'household', label: 'Household', theme: 'home', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">{getIconByName('home')}</div> },
-  { id: 'electronics', label: 'Electronics', theme: 'electronics', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">{getIconByName('electronics')}</div> },
-  { id: 'sports', label: 'Sports', theme: 'sports', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-7 [&>svg]:h-7 md:[&>svg]:w-9 md:[&>svg]:h-9">{getIconByName('sports')}</div> }
+  { id: 'grocery', label: 'Grocery', theme: 'grocery', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-full [&>svg]:h-full">{getIconByName('grocery-basket')}</div> },
+  { id: 'winter', label: 'Winter', theme: 'winter', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-full [&>svg]:h-full">{getIconByName('winter')}</div> },
+  { id: 'fashion', label: 'Fashion', theme: 'fashion', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-full [&>svg]:h-full">{getIconByName('fashion')}</div> },
+  { id: 'women', label: 'Women', theme: 'fashion', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-full [&>svg]:h-full">{getIconByName('womens-wear')}</div> },
+  { id: 'beauty', label: 'Beauty', theme: 'beauty', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-full [&>svg]:h-full">{getIconByName('beauty')}</div> },
+  { id: 'household', label: 'Household', theme: 'home', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-full [&>svg]:h-full">{getIconByName('home')}</div> },
+  { id: 'electronics', label: 'Electronics', theme: 'electronics', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-full [&>svg]:h-full">{getIconByName('electronics')}</div> },
+  { id: 'sports', label: 'Sports', theme: 'sports', icon: <div className="w-full h-full flex items-center justify-center text-current [&>svg]:w-full [&>svg]:h-full">{getIconByName('sports')}</div> }
 ];
 
 interface LanguageDropdownProps {
@@ -559,7 +559,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                   ref={(el) => { if (el) tabRefs.current.set(tab.id, el); else tabRefs.current.delete(tab.id); }}
                   onClick={() => handleTabClick(tab.id)}
                   style={isActive && tab.theme?.startsWith('#') ? { borderColor: activeColor } : undefined}
-                  className={`flex-shrink-0 flex flex-col items-center justify-between w-[68px] h-[78px] md:w-[96px] md:h-[104px] p-1 md:p-2 rounded-xl transition-all duration-200 group border cursor-pointer ${
+                  className={`flex-shrink-0 flex flex-col items-center justify-between w-[58px] h-[66px] md:w-[78px] md:h-[86px] p-1 md:p-1.5 rounded-xl transition-all duration-200 group border cursor-pointer ${
                     isActive
                       ? 'border-[#163F2E] md:border-[#34d399] bg-[#e6f7f2] shadow-sm text-[#059669]'
                       : 'border-neutral-200 bg-white hover:border-neutral-300 shadow-[0_1px_2px_rgba(0,0,0,0.03)] text-neutral-600 hover:text-neutral-900'
@@ -569,14 +569,14 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                   <div className="w-full flex-1 flex items-center justify-center overflow-hidden p-0">
                     <div 
                       style={isActive && tab.theme?.startsWith('#') ? { color: activeColor } : undefined}
-                      className="w-[48px] h-[48px] md:w-[68px] md:h-[68px] flex items-center justify-center flex-shrink-0 [&>svg]:w-full [&>svg]:h-full [&>img]:w-full [&>img]:h-full [&>img]:object-contain transition-transform duration-200 group-hover:scale-105"
+                      className="w-[26px] h-[26px] md:w-[34px] md:h-[34px] flex items-center justify-center flex-shrink-0 [&>svg]:w-full [&>svg]:h-full [&>img]:w-full [&>img]:h-full [&>img]:object-contain transition-transform duration-200 group-hover:scale-105"
                     >
                       {tab.icon}
                     </div>
                   </div>
                   <span
                     style={isActive && tab.theme?.startsWith('#') ? { color: activeColor } : undefined}
-                    className={`text-[9.5px] md:text-[12.5px] leading-tight text-center font-sans truncate w-full px-0.5 ${
+                    className={`text-[9px] md:text-[11.5px] leading-tight text-center font-sans truncate w-full px-0.5 ${
                       isActive ? 'font-bold text-[#059669]' : 'font-medium text-neutral-600 group-hover:text-neutral-900'
                     }`}
                   >
