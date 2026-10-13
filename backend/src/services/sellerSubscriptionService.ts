@@ -210,9 +210,23 @@ const billTypeFor = async (categoryIds: unknown[], settings: ISubscriptionSettin
  * Does the seller currently have access to sell in this category?
  * Access = an active (or expired but still within this category's grace period) subscription that covers it.
  */
+/** Unnati's own store (products added from the admin panel): run by Super Admin, never needs a plan */
+const adminStoreCache = new Map<string, { at: number; value: boolean }>();
+const isAdminStore = async (sellerId: unknown): Promise<boolean> => {
+  const key = idStr(sellerId);
+  const hit = adminStoreCache.get(key);
+  if (hit && Date.now() - hit.at < 30 * 1000) return hit.value;
+  const seller: any = mongoose.isValidObjectId(key) ? await Seller.findById(key).select("category").lean() : null;
+  const value = seller?.category === "Admin";
+  adminStoreCache.set(key, { at: Date.now(), value });
+  return value;
+};
+
 export const getCategoryAccess = async (sellerId: unknown, categoryId: unknown) => {
   const rules = await getCategoryRules(categoryId);
   if (!rules.required) return { required: false, allowed: true as const, graceDays: rules.graceDays };
+  // Same as the store-wide rule: the admin's own store doesn't need a plan for plan-only categories
+  if (await isAdminStore(sellerId)) return { required: false, allowed: true as const, graceDays: rules.graceDays };
 
   const now = new Date();
   const subscription = await SellerSubscription.findOne({
