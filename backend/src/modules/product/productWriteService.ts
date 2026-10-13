@@ -128,6 +128,8 @@ function buildMongooseDoc(
   if (payload.madeIn) doc.madeIn = payload.madeIn;
   if (payload.marketer) doc.marketer = payload.marketer;
   if (payload.shelfLife) doc.shelfLife = payload.shelfLife;
+  if (payload.mfgDate) doc.mfgDate = payload.mfgDate;
+  if (payload.expiryDate) doc.expiryDate = payload.expiryDate;
   if (payload.pack) doc.pack = payload.pack;
   if (payload.fssaiLicNo) doc.fssaiLicNo = payload.fssaiLicNo;
   if (payload.maxReturnDays != null) doc.maxReturnDays = payload.maxReturnDays;

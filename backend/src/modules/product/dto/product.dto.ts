@@ -59,6 +59,8 @@ const productPayloadShape = {
   madeIn: z.string().optional(),
   marketer: z.string().optional(),
   shelfLife: z.string().optional(),
+  mfgDate: z.string().optional(),
+  expiryDate: z.string().optional(),
   pack: z.string().optional(),
   fssaiLicNo: z.string().optional(),
   isReturnable: z.union([z.boolean(), z.literal("true"), z.literal("false")]).optional(),

@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { fieldGuideRows } from "./productImportFields";
 
 /**
  * Adds a "How to add images" sheet to the bulk-import template: how to use photos from the
@@ -30,4 +31,17 @@ export function addImageGuideSheet(wb: XLSX.WorkBook) {
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws["!cols"] = [{ wch: 26 }, { wch: 70 }, { wch: 42 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 22 }, { wch: 26 }];
   XLSX.utils.book_append_sheet(wb, ws, "How to add images");
+}
+
+/** "Field guide" sheet: what to type in each column (names, Yes/No, dates, tax visibility ...) */
+export function addFieldGuideSheet(wb: XLSX.WorkBook) {
+  const rows: (string | number)[][] = [
+    ["Field guide: what to type in each column"],
+    ["Blank cells are fine. Yes/No columns take Yes or No. Names (category, brand, tax, header category, store) must match what is set up in the admin panel; anything not found is left blank and the import tells you."],
+    [],
+    ...fieldGuideRows(),
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws["!cols"] = [{ wch: 36 }, { wch: 80 }, { wch: 30 }];
+  XLSX.utils.book_append_sheet(wb, ws, "Field guide");
 }

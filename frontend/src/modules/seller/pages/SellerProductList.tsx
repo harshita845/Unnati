@@ -23,11 +23,14 @@ const SellerStockBulkImport = lazy(() => import("./SellerStockBulkImport"));
 import { getAppSettings } from "../../../services/api/admin/adminSettingsService";
 import VariationDropdown from "../../../components/VariationDropdown";
 import { variationImageCell } from "../../../utils/productImportImages";
+import { extraFieldCells, extraFieldHeaders } from "../../../utils/productImportFields";
 
 interface ProductVariation {
   id: string;
   // Export: the product-level main image, and this variant's own photo (column 40)
   productMainImage?: string;
+  productExtras?: string[];
+  fullDescription?: string;
   variantOwnImage?: string;
   variationValue?: string;
   productId: string;
@@ -688,6 +691,8 @@ export default function SellerProductList() {
         : (p.barcode || "-");
 
       const baseVariation = {
+        // Every product-form field beyond the original columns, for export (same table the import reads)
+        productExtras: extraFieldCells(product),
         productId: product._id,
         name: product.productName,
         seller: sellerName,
@@ -705,9 +710,16 @@ export default function SellerProductList() {
         sku: p.itemCode || p.sku || "",
         rackNumber: p.rackNumber || "-",
         description: p.smallDescription || p.description || "-",
+        // Export "Desc" = the full description (the short one has its own column)
+        fullDescription: p.description || "",
         barcode: baseBarcodeVal,
         hsnCode: p.hsnCode || "-",
-        unit: p.pack || p.totalAllowedQuantity || "-",
+        unit: p.pack || "-",
+        mfgDate: p.mfgDate || "",
+        expiryDate: p.expiryDate || "",
+        storageCity: p.storageLocation?.city || "-",
+        storageWarehouse: p.storageLocation?.warehouse || "-",
+        storageRoom: p.storageLocation?.room || "-",
         taxCategory: taxName,
         gst: gstVal,
         purchasePrice: Number(p.purchasePrice) || 0,
@@ -934,6 +946,7 @@ export default function SellerProductList() {
       "Room",
       "Status",
       "Variation Images",
+      ...extraFieldHeaders(false),
     ];
 
     const escapeCsv = (val: any) => {
@@ -955,7 +968,7 @@ export default function SellerProductList() {
           escapeCsv(product.name),
           escapeCsv(product.sku),
           escapeCsv(product.rackNumber),
-          escapeCsv(product.description),
+          escapeCsv((product as any).fullDescription || "-"),
           escapeCsv(product.barcode),
           escapeCsv(product.hsnCode),
           escapeCsv(product.unit),
@@ -989,6 +1002,7 @@ export default function SellerProductList() {
           escapeCsv((product as any).storageRoom && (product as any).storageRoom !== "-" ? (product as any).storageRoom : ""),
           escapeCsv(product.publish ? "Active" : "Inactive"),
           escapeCsv(variationImageCell((product as any).variationValue, (product as any).variantOwnImage)),
+          ...(((product as any).productExtras as string[] | undefined) || extraFieldHeaders(false).map(() => "")).map((c) => escapeCsv(c)),
         ].join(",")
       ),
     ].join("\n");

@@ -21,6 +21,8 @@ import {
 } from "../../product/productWriteService";
 import { adminProductPolicy } from "../../product/productPolicies";
 import { withPosImage } from "../../product/variantHelpers";
+import { resolveReferenceNames } from "../../product/referenceResolver";
+import { attachListNames } from "../../product/listNames";
 import { toDetail, toListItem, toListItems } from "../../product/productReadMapper";
 
 // ==================== Category Controllers ====================
@@ -1019,6 +1021,7 @@ function stripInvalidProductObjectIds(body: Record<string, unknown>): void {
 export const createProduct = asyncHandler(
   async (req: Request, res: Response) => {
     try {
+      const warnings = await resolveReferenceNames(req.body);
       stripInvalidProductObjectIds(req.body);
       const product = await ProductWriteService.createProduct(
         req.body,
@@ -1028,6 +1031,7 @@ export const createProduct = asyncHandler(
         success: true,
         message: "Product created successfully",
         data: product,
+        ...(warnings.length ? { warnings } : {}),
       });
     } catch (error: any) {
       if (error instanceof ProductWriteError) {
@@ -1232,6 +1236,7 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     }
     return toListItem(obj);
   });
+  await attachListNames(products);
 
   return res.status(200).json({
     success: true,

@@ -12,7 +12,8 @@ import { Category } from "../../../services/api/categoryService";
 import { useAuth } from "../../../context/AuthContext";
 import { uploadImage } from "../../../services/api/uploadService";
 import ImportImagesPanel from "../../../components/ImportImagesPanel";
-import { addImageGuideSheet } from "../../../utils/importTemplateGuide";
+import { addImageGuideSheet, addFieldGuideSheet } from "../../../utils/importTemplateGuide";
+import { clearDashPlaceholders, extraFieldHeaders, readProductFields, variantDisplayName, PRODUCT_LEVEL_KEYS } from "../../../utils/productImportFields";
 import { mergeVariantRows, PendingProduct, resolveSheetImages, VARIATION_IMAGES_COLUMN } from "../../../utils/productImportImages";
 
 /** After deploy: pink header ke neeche yeh line dikhni chahiye; `SellerStockBulkImport-*.js` mein bhi search karo. */
@@ -571,8 +572,10 @@ export default function SellerStockBulkImport({
 
     // Photos from this computer (product rows only): upload them and put the links into the rows
     let sheetRows = previewData.map((r) =>
-      normalizeExcelRow(r && typeof r === "object" ? (r as Record<string, unknown>) : {})
+      clearDashPlaceholders(normalizeExcelRow(r && typeof r === "object" ? (r as Record<string, unknown>) : {}))
     );
+    // Imported fine, but something in the sheet was ignored (unknown brand, "Maybe" in a Yes/No cell ...)
+    const importNotes: string[] = [];
     if (!stockImportMode) {
       setStage("Uploading images…");
       const resolved = await resolveSheetImages(sheetRows, imageFiles, (f) => uploadImage(f), {
@@ -739,7 +742,7 @@ export default function SellerStockBulkImport({
                 ...defaultVariation,
                 variationType: String(a.name).trim(),
                 value: String(a.value).trim(),
-                name: `${String(a.name).trim()}: ${String(a.value).trim()}`,
+                name: variantDisplayName(String(a.name), String(a.value)),
                 title: String(a.value).trim(),
               }));
             const variations = hasPricedExcelVariation
@@ -827,11 +830,12 @@ export default function SellerStockBulkImport({
                 subSubCategoryId: rawData.subSubCategoryId,
                 brandId: isValidObjectIdString(rawData.brandId) ? rawData.brandId : undefined,
                 // Bulk-imported products should appear active immediately.
-                publish: true,
+                // Active unless the sheet says Inactive / Draft in "39. Status"
+                publish: (rawData as any).publish !== false,
                 popular: false,
                 dealOfDay: false,
                 isReturnable: false,
-                totalAllowedQuantity: 10, // Default
+                totalAllowedQuantity: 10, // Default (a "Max Allowed Qty" column overrides it)
                 mainImage: rawData.mainImage,
                 galleryImages: rawData.galleryImages,
                 variations: normalizedVariations as any,
@@ -842,6 +846,11 @@ export default function SellerStockBulkImport({
                 deliveryTime: rawData.deliveryTime,
                 lowStockQuantity: lowStockFinal,
             };
+
+            // Every product-form field beyond the original columns (short description, SEO, returns, ...)
+            const fields = readProductFields(row);
+            Object.assign(productPayload, fields.payload);
+            for (const w of fields.warnings) importNotes.push(`Row ${i + 1} (${productNameFinal}): ${w.field} ${w.message}`);
 
             const signature = rowSignature(row);
             if (seenImportKeys.has(signature)) {
@@ -878,7 +887,7 @@ export default function SellerStockBulkImport({
 
     // Variant rows of the same product become one product; each variant keeps its own picture
     if (pending.length > 0) {
-      const { products, duplicates } = mergeVariantRows(pending);
+      const { products, duplicates } = mergeVariantRows(pending, PRODUCT_LEVEL_KEYS);
       for (const d of duplicates) {
         failures.push({ row: d.row, label: d.label, message: d.message });
         failedCount++;
@@ -889,6 +898,7 @@ export default function SellerStockBulkImport({
         try {
           const res = await createProduct(product.payload as CreateProductData);
           if (!res?.success) throw new Error(res?.message || "Import failed");
+          for (const w of (res as any)?.warnings || []) importNotes.push(`Row ${product.rows.join(", ")} (${product.label}): ${w}`);
           successCount += product.rows.length;
         } catch (err) {
           const message = bulkImportErrorMessage(err);
@@ -922,16 +932,19 @@ export default function SellerStockBulkImport({
       summary,
     });
 
-    if (failures.length > 0) {
+    const notes = importNotes.length
+      ? `\n\nImported, but please check:\n${importNotes.slice(0, 6).join("\n")}${importNotes.length > 6 ? `\n...and ${importNotes.length - 6} more` : ""}`
+      : "";
+        if (failures.length > 0) {
       alert(
-        `Import finished.\nSuccess: ${successCount}\nFailed: ${failedCount}\n\nSee the red box below for the exact error on each row.`
+        `Import finished.\nSuccess: ${successCount}\nFailed: ${failedCount}\n\nSee the red box below for the exact error on each row.${notes}`
       );
       if (successCount > 0) onSuccess();
       uploadInFlightRef.current = false;
       return;
     }
 
-    alert(`Import complete! Success: ${successCount}`);
+    alert(`Import complete! Success: ${successCount}${notes}`);
     if (successCount > 0) {
       onSuccess();
       onClose();
@@ -967,7 +980,9 @@ export default function SellerStockBulkImport({
         "37. Warehouse",
         "38. Room",
         "39. Status",
-        VARIATION_IMAGES_COLUMN
+        VARIATION_IMAGES_COLUMN,
+        // 41+: the rest of the product form (short description, video, SEO, returns, warranty ...)
+        ...extraFieldHeaders(true),
     ];
 
     // Row 1: Standard Cols + "Unit Pricing Rules" (Merged) + Trailing Cols
@@ -1003,6 +1018,7 @@ export default function SellerStockBulkImport({
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Product Template");
+    addFieldGuideSheet(wb);
     addImageGuideSheet(wb);
     XLSX.writeFile(wb, "product_import_template.xlsx");
   };
@@ -1053,7 +1069,7 @@ export default function SellerStockBulkImport({
                 className="hidden"
               />
               <div className="mt-8 text-left text-sm text-neutral-500 bg-neutral-100 p-4 rounded w-full max-w-lg">
-                <p className="font-semibold mb-2">Expected Columns (40 Total):</p>
+                <p className="font-semibold mb-2">Expected Columns ({40 + extraFieldHeaders(true).length} Total):</p>
                 <div className="grid grid-cols-3 gap-2">
                    <span>1. Category</span>
                    <span>2. Sub Cat</span>
@@ -1095,6 +1111,9 @@ export default function SellerStockBulkImport({
                    <span>38. Room</span>
                    <span>39. Status</span>
                    <span>40. Variation Images</span>
+                   {extraFieldHeaders(true).map((h) => (
+                     <span key={h}>{h}</span>
+                   ))}
                 </div>
                 <p className="mt-3 text-xs">
                   Images: write a link, a file name (<code>rice.jpg</code>) or a path from your computer (<code>D:\Images\rice.jpg</code>), then

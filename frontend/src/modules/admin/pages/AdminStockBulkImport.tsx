@@ -9,7 +9,8 @@ import {
 import { useAuth } from "../../../context/AuthContext";
 import { uploadImage } from "../../../services/api/uploadService";
 import ImportImagesPanel from "../../../components/ImportImagesPanel";
-import { addImageGuideSheet } from "../../../utils/importTemplateGuide";
+import { addImageGuideSheet, addFieldGuideSheet } from "../../../utils/importTemplateGuide";
+import { clearDashPlaceholders, extraFieldHeaders, readProductFields, variantDisplayName, PRODUCT_LEVEL_KEYS } from "../../../utils/productImportFields";
 import { mergeVariantRows, PendingProduct, resolveSheetImages, VARIATION_IMAGES_COLUMN } from "../../../utils/productImportImages";
 
 interface AdminStockBulkImportProps {
@@ -244,7 +245,7 @@ export default function AdminStockBulkImport({
           parsedVars.push({
             variationType: parts[0],
             value: parts[1],
-            name: `${parts[0]}: ${parts[1]}`,
+            name: variantDisplayName(parts[0], parts[1]),
             price,
             stock,
             compareAtPrice,
@@ -387,11 +388,13 @@ export default function AdminStockBulkImport({
     uploadInFlightRef.current = true;
     setUploading(true);
     const failureDetails: string[] = [];
+    // Imported fine, but something in the sheet was ignored (unknown brand, "Maybe" in a Yes/No cell ...)
+    const importNotes: string[] = [];
 
     // 1. Photos from this computer: upload them and put the links into the rows
     setStage("Uploading images…");
     const resolved = await resolveSheetImages(
-      previewData.map((r) => normalizeExcelRow(r && typeof r === "object" ? (r as Record<string, unknown>) : {})),
+      previewData.map((r) => clearDashPlaceholders(normalizeExcelRow(r && typeof r === "object" ? (r as Record<string, unknown>) : {}))),
       imageFiles,
       (f) => uploadImage(f),
       {
@@ -420,6 +423,10 @@ export default function AdminStockBulkImport({
       const row = rows[i];
       try {
         const productData = mapRowToProduct(row);
+        // Every product-form field beyond the original columns (short description, SEO, returns, ...)
+        const fields = readProductFields(row);
+        Object.assign(productData, fields.payload);
+        for (const w of fields.warnings) importNotes.push(`Row ${i + 1} (${String(productData.productName || "")}): ${w.field} ${w.message}`);
 
         // Basic validation
         if (
@@ -443,7 +450,7 @@ export default function AdminStockBulkImport({
     }
 
     // 3. Variant rows of the same product become one product; each variant keeps its own picture
-    const { products, duplicates } = mergeVariantRows(pending);
+    const { products, duplicates } = mergeVariantRows(pending, PRODUCT_LEVEL_KEYS);
     for (const d of duplicates) {
       failureDetails.push(`Row ${d.row} (${d.label}): ${d.message}`);
       failedCount++;
@@ -454,7 +461,8 @@ export default function AdminStockBulkImport({
     setProgress({ total, current: processedRows, success: 0, failed: failedCount });
     for (const product of products) {
       try {
-        await createProduct(product.payload as any);
+        const created: any = await createProduct(product.payload as any);
+        for (const w of created?.warnings || []) importNotes.push(`Row ${product.rows.join(", ")} (${product.label}): ${w}`);
         successCount += product.rows.length;
       } catch (err) {
         const apiMsg =
@@ -481,7 +489,10 @@ export default function AdminStockBulkImport({
       : `Import Complete! All ${successCount} rows imported successfully${
           products.length < successCount ? ` (${products.length} products with their variants)` : ""
         }.`;
-    alert(msg);
+    const notes = importNotes.length
+      ? `\n\nImported, but please check:\n${importNotes.slice(0, 6).join("\n")}${importNotes.length > 6 ? `\n...and ${importNotes.length - 6} more` : ""}`
+      : "";
+    alert(msg + notes);
     if (successCount > 0) {
         onSuccess();
         onClose();
@@ -490,7 +501,7 @@ export default function AdminStockBulkImport({
   };
 
   const handleDownloadTemplate = () => {
-    // 2-Row Header Structure for "Sub-Column" effect (40 Columns Total)
+    // 2-Row Header Structure for "Sub-Column" effect (65 Columns Total)
 
     // Standard Columns (0-24)
     const stdCols = [
@@ -513,7 +524,9 @@ export default function AdminStockBulkImport({
         "37. Warehouse",
         "38. Room",
         "39. Status",
-        VARIATION_IMAGES_COLUMN
+        VARIATION_IMAGES_COLUMN,
+        // 41+: the rest of the product form (short description, video, SEO, returns, warranty ...)
+        ...extraFieldHeaders(true),
     ];
 
     // Row 1: Standard Cols + "Unit Pricing Rules" (Merged) + Trailing Cols
@@ -544,6 +557,7 @@ export default function AdminStockBulkImport({
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Product Template");
+    addFieldGuideSheet(wb);
     addImageGuideSheet(wb);
     XLSX.writeFile(wb, "product_import_template.xlsx");
   };
@@ -582,7 +596,7 @@ export default function AdminStockBulkImport({
                 className="hidden"
               />
               <div className="mt-8 text-left text-sm text-neutral-500 bg-neutral-100 p-4 rounded w-full max-w-lg">
-                <p className="font-semibold mb-2">Expected Columns (40 Total):</p>
+                <p className="font-semibold mb-2">Expected Columns ({40 + extraFieldHeaders(true).length} Total):</p>
                 <div className="grid grid-cols-3 gap-2">
                    <span>1. Category</span>
                    <span>2. Sub Cat</span>
@@ -624,6 +638,9 @@ export default function AdminStockBulkImport({
                    <span>38. Room</span>
                    <span>39. Status</span>
                    <span>40. Variation Images</span>
+                   {extraFieldHeaders(true).map((h) => (
+                     <span key={h}>{h}</span>
+                   ))}
                 </div>
                 <p className="mt-3 text-xs">
                   Images: write a link, a file name (<code>rice.jpg</code>) or a path from your computer (<code>D:\Images\rice.jpg</code>), then

@@ -12,6 +12,8 @@ import {
   ProductWriteError,
 } from "../../product/productWriteService";
 import { sellerProductPolicy } from "../../product/productPolicies";
+import { resolveReferenceNames } from "../../product/referenceResolver";
+import { attachListNames, attachSubcategories } from "../../product/listNames";
 import { toDetail, toListItems } from "../../product/productReadMapper";
 
 /** Excel / bulk import often sends category or brand *names*; only valid 24-char hex IDs may be cast to ObjectId. */
@@ -46,6 +48,7 @@ function stripInvalidObjectIdFields(body: Record<string, unknown>): void {
 export const createProduct = asyncHandler(
   async (req: Request, res: Response) => {
     const sellerId = (req as any).user.userId;
+    const warnings = await resolveReferenceNames(req.body);
     stripInvalidObjectIdFields(req.body);
 
     try {
@@ -57,6 +60,7 @@ export const createProduct = asyncHandler(
         success: true,
         message: "Product created successfully",
         data: product,
+        ...(warnings.length ? { warnings } : {}),
       });
     } catch (error: any) {
       if (error instanceof ProductWriteError) {
@@ -220,7 +224,7 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
 
   const productsRaw = await Product.find(query)
     .populate("category", "name")
-    .populate("subcategory", "name")
+    // sub category names are attached below (category tree or legacy collection)
     // .populate("subSubCategory", "name") // Removed as it is now a string
     .populate("brand", "name")
     .populate("tax", "name percentage")
@@ -235,6 +239,8 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
     products = products.filter((p) => !p.listing.inStock);
   }
 
+  await attachSubcategories(products);
+  await attachListNames(products);
   const total = await Product.countDocuments(query);
 
   return res.status(200).json({

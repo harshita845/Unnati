@@ -59,6 +59,8 @@ export interface NormalizedProductPayload {
   madeIn?: string;
   marketer?: string;
   shelfLife?: string;
+  mfgDate?: string;
+  expiryDate?: string;
   pack?: string;
   fssaiLicNo?: string;
   isReturnable: boolean;
@@ -171,6 +173,8 @@ export function normalizeCreatePayload(
     madeIn: parsed.madeIn ? String(parsed.madeIn) : undefined,
     marketer: parsed.marketer ? String(parsed.marketer) : undefined,
     shelfLife: parsed.shelfLife ? String(parsed.shelfLife) : undefined,
+    mfgDate: parsed.mfgDate ? String(parsed.mfgDate).trim() : undefined,
+    expiryDate: parsed.expiryDate ? String(parsed.expiryDate).trim() : undefined,
     pack: parsed.pack ? String(parsed.pack) : undefined,
     fssaiLicNo: parsed.fssaiLicNo ? String(parsed.fssaiLicNo) : undefined,
     isReturnable: parseBool(parsed.isReturnable, false),

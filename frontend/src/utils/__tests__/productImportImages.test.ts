@@ -100,6 +100,17 @@ test('merge: older exports with a different Main Image per variant row keep it p
   assert.deepEqual(products[0].payload.variations.map((v: any) => v.mainImage), ['https://cdn/t250.jpg', 'https://cdn/t1kg.jpg']);
 });
 
+test('merge: a blank Sub Cat on a variant row does not split the product; different Sub Cats do', () => {
+  const row = (n: number, sub: string, value: string) => pending(n, 'Rice', { variationType: 'Weight', value }, { '2. Sub Cat': sub });
+  const same = mergeVariantRows([row(2, 'Grains', '500g'), row(3, '', '1kg'), row(4, 'grains', '2kg')]);
+  assert.equal(same.products.length, 1);
+  assert.equal(same.products[0].payload.variations.length, 3);
+  const blankFirst = mergeVariantRows([row(2, '', '500g'), row(3, 'Grains', '1kg')]);
+  assert.equal(blankFirst.products.length, 1);
+  const different = mergeVariantRows([row(2, 'Grains', '500g'), row(3, 'Pulses', '1kg')]);
+  assert.equal(different.products.length, 2);
+});
+
 test('variants without their own picture get the row Main Image and gallery', () => {
   const { products } = mergeVariantRows([{
     row: 2, label: 'Oil', rawRow: { '4. Product Name': 'Oil', '40. Variation Images': '5L: https://cdn/5l.jpg' },

@@ -292,16 +292,31 @@ export function applyVariationImages(p: PendingProduct): void {
  * name, each with a variant). Each variant keeps its own row's price, stock, SKU, barcode and
  * picture. A variant repeated within a product is reported, not imported twice.
  */
-export function mergeVariantRows(pending: PendingProduct[]): { products: MergedProduct[]; duplicates: { row: number; label: string; message: string }[] } {
+export function mergeVariantRows(pending: PendingProduct[], fillKeys: string[] = []): { products: MergedProduct[]; duplicates: { row: number; label: string; message: string }[] } {
   const groups = new Map<string, PendingProduct[]>();
   const order: string[] = [];
+  // Same category + product name = same product. A Sub Cat left blank on a variant row doesn't split
+  // it; two different Sub Cats do.
+  const open = new Map<string, { key: string; sub: string }[]>();
   pending.forEach((p, idx) => {
     applyVariationImages(p);
     const hasVariant = Array.isArray(p.payload.variations) && p.payload.variations.length > 0;
     const name = String(p.payload.productName || "").trim().toLowerCase();
-    const key = hasVariant && name
-      ? [cell(p.rawRow, COLUMN_ALIASES.category), cell(p.rawRow, COLUMN_ALIASES.subCategory), name].map((s) => s.toLowerCase()).join("|")
-      : `__single_${idx}`;
+    let key = `__single_${idx}`;
+    if (hasVariant && name) {
+      const base = `${cell(p.rawRow, COLUMN_ALIASES.category).toLowerCase()}|${name}`;
+      const sub = cell(p.rawRow, COLUMN_ALIASES.subCategory).toLowerCase();
+      const candidates = open.get(base) || [];
+      const hit = candidates.find((c) => !c.sub || !sub || c.sub === sub);
+      if (hit) {
+        if (!hit.sub) hit.sub = sub;
+        key = hit.key;
+      } else {
+        key = `${base}|${candidates.length}`;
+        candidates.push({ key, sub });
+        open.set(base, candidates);
+      }
+    }
     if (!groups.has(key)) {
       groups.set(key, []);
       order.push(key);
@@ -333,6 +348,23 @@ export function mergeVariantRows(pending: PendingProduct[]): { products: MergedP
         merged.variations.push({ ...v });
       }
       rows.push(g.row);
+    }
+    // A variant whose own row has no photo uses the product's Main Image (typed on any of its rows)
+    const groupMain = group.map((g) => String(g.payload.mainImage || "").trim()).find(Boolean);
+    if (groupMain) {
+      for (const v of merged.variations) {
+        if (!v.mainImage && !v.image) {
+          v.mainImage = groupMain;
+          v.image = groupMain;
+        }
+      }
+    }
+    // Product-level fields typed on only one of the variant rows still apply to the product
+    for (const key of fillKeys) {
+      const blank = (v: unknown) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+      if (!blank(merged[key])) continue;
+      const donor = group.find((g) => !blank(g.payload[key]));
+      if (donor) merged[key] = donor.payload[key];
     }
     products.push({ rows, label: first.label, payload: merged });
   }

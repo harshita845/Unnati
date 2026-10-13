@@ -26,6 +26,7 @@ import QRScannerModal from "../../../components/QRScannerModal";
 import { openBarcodeScanner } from '../../../utils/scannerPlatform';
 import { computeLabelLayout } from '../../../utils/barcodeLabelLayout';
 import { variationImageCell } from '../../../utils/productImportImages';
+import { extraFieldCells, extraFieldHeaders } from '../../../utils/productImportFields';
 
 function fixLikelyMojibake(input: unknown): string {
   let s = String(input ?? "");
@@ -66,6 +67,8 @@ interface ProductVariation {
   id: string;
   // Export: the product-level main image, and this variant's own photo (column 40)
   productMainImage?: string;
+  productExtras?: string[];
+  fullDescription?: string;
   variantOwnImage?: string;
   variationValue?: string;
   productId: string;
@@ -909,6 +912,8 @@ export default function AdminStockManagement() {
     const baseExpiryDate = p.expiryDate || (product as any).expiryDate || "";
 
     const baseVariation = {
+      // Every product-form field beyond the original columns, for export (same table the import reads)
+      productExtras: extraFieldCells(product),
       productId: product._id,
       name: fixLikelyMojibake(product.productName),
       seller: sellerName,
@@ -930,6 +935,8 @@ export default function AdminStockManagement() {
       storageWarehouse: p.storageLocation?.warehouse || "-",
       storageRoom: p.storageLocation?.room || "-",
       description: p.smallDescription || p.description || "-",
+      // Export "Desc" = the full description (the short one has its own column)
+      fullDescription: p.description || "",
       barcode: baseBarcodeVal,
       hsnCode: p.hsnCode || "-",
       unit: p.pack || "-",
@@ -1392,6 +1399,7 @@ export default function AdminStockManagement() {
         "Room",
         "Status",
         "Variation Images",
+        ...extraFieldHeaders(false),
       ];
 
       const escapeCsv = (val: any) => {
@@ -1413,7 +1421,7 @@ export default function AdminStockManagement() {
             escapeCsv(product.name),
             escapeCsv(product.sku),
             escapeCsv(product.rackNumber),
-            escapeCsv(product.description),
+            escapeCsv((product as any).fullDescription || "-"),
             escapeCsv(product.barcode),
             escapeCsv(product.hsnCode),
             escapeCsv(product.unit),
@@ -1447,6 +1455,7 @@ export default function AdminStockManagement() {
             escapeCsv(product.storageRoom && product.storageRoom !== "-" ? product.storageRoom : ""),
             escapeCsv(product.publish ? "Active" : "Inactive"),
             escapeCsv(variationImageCell((product as any).variationValue, (product as any).variantOwnImage)),
+            ...(((product as any).productExtras as string[] | undefined) || extraFieldHeaders(false).map(() => "")).map((c) => escapeCsv(c)),
           ].join(",")
         ),
       ].join("\n");

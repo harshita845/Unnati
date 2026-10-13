@@ -376,6 +376,30 @@ export default function ProductDetail() {
   };
 
   const currentMedia = allMedia[selectedImageIndex] || null;
+
+  // "Product details": only what the product really has (no made-up defaults)
+  const detailDate = (v?: string) => {
+    if (!v) return "";
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  };
+  const detailRows: { label: string; value: string; mono?: boolean }[] = [
+    { label: "Shelf Life", value: product?.shelfLife },
+    { label: "Country of Origin", value: product?.madeIn },
+    { label: "Manufacturer", value: product?.manufacturer },
+    { label: "Marketed By / Customer Care", value: product?.marketer },
+    { label: "FSSAI License", value: product?.fssaiLicNo, mono: true },
+    { label: "Manufactured On", value: detailDate(product?.mfgDate) },
+    { label: "Best Before / Expiry", value: detailDate(product?.expiryDate) },
+    {
+      label: "Returns",
+      value: product?.isReturnable ? `Returnable${Number(product?.maxReturnDays) > 0 ? ` within ${product.maxReturnDays} days` : ""}` : "",
+    },
+    {
+      label: "Warranty",
+      value: product?.warrantyType && product.warrantyType !== "None" ? `${product.warrantyType}${product?.warrantyDuration ? ` · ${product.warrantyDuration}` : ""}` : "",
+    },
+  ].filter((r) => r.value && String(r.value).trim());
   const currentImage = currentMedia?.type === "image" ? currentMedia.url : (allMedia.find(m => m.type === "image")?.url || product?.imageUrl || "");
 
   const variationImageMatches = useMemo(() => {
@@ -910,6 +934,7 @@ export default function ProductDetail() {
               </div>
 
               {/* Section 2: Product Details */}
+              {detailRows.length > 0 && (
               <div className="bg-white rounded-xl border border-neutral-100 shadow-sm overflow-hidden">
                 <button
                   onClick={() => setIsDetailsOpen(!isDetailsOpen)}
@@ -930,35 +955,17 @@ export default function ProductDetail() {
                 {isDetailsOpen && (
                   <div className="px-3 pb-3 pt-2 border-t border-neutral-50">
                     <div className="grid grid-cols-2 gap-2">
-                      {/* Shelf Life */}
-                      <div className="bg-neutral-50 border border-neutral-100 py-1.5 px-2.5 rounded-lg">
-                        <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider mb-0.5">Shelf Life</p>
-                        <p className="text-xs font-bold text-neutral-800">{product.shelfLife || "7 Days"}</p>
-                      </div>
-
-                      {/* Country of Origin */}
-                      <div className="bg-neutral-50 border border-neutral-100 py-1.5 px-2.5 rounded-lg">
-                        <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider mb-0.5">Country of Origin</p>
-                        <p className="text-xs font-bold text-neutral-800">{product.madeIn || "India"}</p>
-                      </div>
-
-                      {/* FSSAI */}
-                      <div className="bg-neutral-50 border border-neutral-100 py-1.5 px-2.5 rounded-lg">
-                        <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider mb-0.5">FSSAI License</p>
-                        <p className="text-xs font-bold text-neutral-800 font-mono">{product.fssaiLicNo || "1001234567890"}</p>
-                      </div>
-
-                      {/* Customer Care / Marketer */}
-                      <div className="bg-neutral-50 border border-neutral-100 py-1.5 px-2.5 rounded-lg">
-                        <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider mb-0.5">Customer Care</p>
-                        <p className="text-xs font-bold text-neutral-800 truncate" title={product.marketer || "care@unnatimegamart.com"}>
-                          {product.marketer || "care@unnatimegamart.com"}
-                        </p>
-                      </div>
+                      {detailRows.map((row) => (
+                        <div key={row.label} className="bg-neutral-50 border border-neutral-100 py-1.5 px-2.5 rounded-lg">
+                          <p className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider mb-0.5">{row.label}</p>
+                          <p className={`text-xs font-bold text-neutral-800 break-words ${row.mono ? "font-mono" : ""}`}>{row.value}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
               </div>
+              )}
 
               {/* Section 3: Customer Reviews */}
               <div className="bg-white rounded-xl border border-neutral-100 shadow-sm overflow-hidden">
