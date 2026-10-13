@@ -677,16 +677,17 @@ export default function ProductDetail() {
               {/* Main Image Container */}
               <div className="w-full flex-1 aspect-square bg-white border border-neutral-200 rounded-2xl flex items-center justify-center p-2 md:p-6 relative group overflow-hidden shadow-sm">
 
-                {/* Mobile carousel */}
+                {/* Mobile carousel: a fixed frame that clips, with the strip of photos sliding inside it */}
                 <div
-                  className="absolute inset-0 flex transition-transform duration-300 ease-out md:hidden overflow-hidden"
+                  className="absolute inset-0 md:hidden overflow-hidden"
                   onTouchStart={onTouchStart}
                   onTouchMove={onTouchMove}
                   onTouchEnd={onTouchEnd}
-                  style={{
-                    transform: `translateX(-${selectedImageIndex * 100}%)`,
-                    touchAction: allMedia.length > 1 ? 'pan-x' : 'pan-y pinch-zoom',
-                  }}
+                  style={{ touchAction: allMedia.length > 1 ? 'pan-x' : 'pan-y pinch-zoom' }}
+                >
+                <div
+                  className="flex h-full w-full transition-transform duration-300 ease-out"
+                  style={{ transform: `translateX(-${selectedImageIndex * 100}%)` }}
                 >
                   {allMedia.map((item, index: number) => (
                     <div key={index} className="w-full h-full flex-shrink-0 flex items-center justify-center overflow-hidden" style={{ minWidth: '100%', width: '100%' }}>
@@ -701,6 +702,7 @@ export default function ProductDetail() {
                       )}
                     </div>
                   ))}
+                </div>
                 </div>
 
                 {/* Desktop static main image/video */}
