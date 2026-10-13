@@ -6,7 +6,7 @@ import {
 import { useAuth } from "./AuthContext";
 import { Order } from "../types/order";
 import { createOrder, getMyOrders } from "../services/api/customerOrderService";
-import { isCustomerDisplayPath } from "../utils/moduleAuth";
+import { detectModuleFromPath, isCustomerDisplayPath } from "../utils/moduleAuth";
 import { OrdersContext } from "./ordersContext.types";
 
 // Type for API response order (with _id from MongoDB)
@@ -59,7 +59,8 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
     const userType =
       user?.userType || (isAuthenticated && user ? "Customer" : undefined);
 
-    if (!isAuthenticated || userType !== "Customer" || isCustomerDisplayPath()) {
+    // Customer orders belong to the customer app only (a store / rider / admin login must not ask for them)
+    if (!isAuthenticated || userType !== "Customer" || isCustomerDisplayPath() || detectModuleFromPath() !== "user") {
       setLoading(false);
       return;
     }
@@ -82,7 +83,7 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Ensure userType is set in user object if missing (for backward compatibility)
-    if (isAuthenticated && user && !user.userType) {
+    if (isAuthenticated && user && !user.userType && detectModuleFromPath() === "user") {
       const updatedUser = { ...user, userType: "Customer" as const };
       updateUser(updatedUser);
     }
