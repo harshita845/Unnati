@@ -229,9 +229,11 @@ export default function AdminStockBulkImport({
       rowCell(row, ["38. Room", "38.Room", "Room", "room", "STORAGE_ROOM", "storageRoom"]) || "";
     const rackNumber = rowCell(row, ["Rack", "6. Rack"]) || "";
 
-    const sizeVal = rowCell(row, ["Size", "11. Size", "PRODUCT_SIZE"]);
-    const colorVal = rowCell(row, ["Color", "12. Color", "PRODUCT_COLOR"]);
-    const rawVars = rowCell(row, ["Variations", "28. Variations", "PRODUCT_VARIATIONS"]);
+    // Sheets and exports write "-" for an empty cell
+    const filled = (v?: string) => (v && v.trim() !== "-" ? v : "");
+    const sizeVal = filled(rowCell(row, ["Size", "11. Size", "PRODUCT_SIZE"]));
+    const colorVal = filled(rowCell(row, ["Color", "12. Color", "PRODUCT_COLOR"]));
+    const rawVars = filled(rowCell(row, ["Variations", "28. Variations", "PRODUCT_VARIATIONS"]));
 
     let variations: any[] | undefined = undefined;
     if (rawVars) {

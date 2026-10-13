@@ -21,6 +21,7 @@ import {
   findVariantById,
   resolveLedgerSku,
   variantsFromProductDoc,
+  withPosImage,
 } from "../../product/variantHelpers";
 import { initiatePosOnlineOrderCore } from "../../pos/initiatePosOnlineOrder";
 import { completePosOnlinePayment } from "../../pos/completePosOnlinePayment";
@@ -65,7 +66,7 @@ export const getPOSProducts = asyncHandler(
     return res.status(200).json({
       success: true,
       message: "POS products fetched successfully",
-      data: products
+      data: products.map(withPosImage)
     });
   }
 );

@@ -20,6 +20,7 @@ import {
   ProductWriteError,
 } from "../../product/productWriteService";
 import { adminProductPolicy } from "../../product/productPolicies";
+import { withPosImage } from "../../product/variantHelpers";
 import { toDetail, toListItem, toListItems } from "../../product/productReadMapper";
 
 // ==================== Category Controllers ====================
@@ -1631,7 +1632,7 @@ export const getPOSProducts = asyncHandler(
     return res.status(200).json({
       success: true,
       message: "POS products fetched successfully",
-      data: products
+      data: products.map(withPosImage)
     });
   }
 );

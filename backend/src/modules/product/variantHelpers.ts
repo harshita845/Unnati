@@ -305,3 +305,16 @@ export function resolveLedgerSku(
   }
   return "NO-SKU";
 }
+
+/**
+ * POS lists show `product.mainImage`. Imported products keep their photos on the variants
+ * only, so fall back to the listing image (in-stock variant photo first).
+ */
+export function withPosImage(product: any) {
+  const plain = typeof product?.toJSON === "function" ? product.toJSON() : { ...product };
+  if (!plain.mainImage) {
+    const variants: any[] = Array.isArray(plain.variations) ? plain.variations : [];
+    plain.mainImage = getListingImage(variants.map((v) => ({ ...v, mainImage: v.mainImage || v.image }))) || "";
+  }
+  return plain;
+}
