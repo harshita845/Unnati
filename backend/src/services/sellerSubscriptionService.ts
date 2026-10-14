@@ -1055,6 +1055,15 @@ export const adminCancelSubscription = async (subscriptionId: unknown, reason?: 
 // Background job: reminders, expiry, hiding after each category's grace period
 // ----------------------------------------------------------------------------
 
+/** The admin's own store never needs a plan: clear any subscription hiding / lock left on it. */
+export const releaseAdminStores = async (sellerIds?: unknown[]) => {
+  const ids = sellerIds?.length ? sellerIds.map(toId) : await Seller.distinct("_id", { category: "Admin" });
+  if (!ids.length) return 0;
+  await Seller.updateMany({ _id: { $in: ids }, subscriptionLocked: true }, { $set: { subscriptionLocked: false } });
+  const res = await Product.updateMany({ seller: { $in: ids }, subscriptionHidden: true }, { $set: { subscriptionHidden: false } });
+  return res.modifiedCount || 0;
+};
+
 export const runSubscriptionJob = async (now = new Date()) => {
   const settings = await getSubscriptionSettings();
   await SubscriptionSettings.updateOne({ _id: settings._id }, { $set: { lastJobRunAt: now } });
@@ -1064,6 +1073,7 @@ export const runSubscriptionJob = async (now = new Date()) => {
   } catch (error) {
     console.error("Applying plan coverage failed:", error);
   }
+  await releaseAdminStores().catch((error) => console.error("Releasing the admin store failed:", error));
   const reminderDays = [...(settings.reminderDays || [])].filter((d) => d > 0).sort((a, b) => b - a);
   const stats = { reminders: 0, expired: 0, hidden: 0, pendingCleared: 0 };
   // Stores locked before this run, so every store that becomes locked during it is told (whichever step locks it)
@@ -1279,6 +1289,9 @@ export const getSellerSubscriptionOverview = async (sellerId: unknown) => {
   const coverage = await getPlanCoverage();
   const now = new Date();
   const sid = toId(sellerId);
+  // The admin's own store never needs a plan (same rule as listing products and panel access)
+  const exempt = await isAdminStore(sid);
+  if (exempt) await releaseAdminStores([sid]);
 
   const [plans, rawHistory, headerCategoryDocs, sellerCategoryIds, sellerDoc] = await Promise.all([
     SubscriptionPlan.find({ isActive: true })
@@ -1359,7 +1372,8 @@ export const getSellerSubscriptionOverview = async (sellerId: unknown) => {
 
     // Needs a plan: store-wide rule, the category's own switch, or any active plan covers this group
     const isRequired =
-      !!settings.requirePlanForAllSellers || catsUnderHeader.some((c) => c.subscriptionEnabled) || coverage.headerIds.has(hid);
+      !exempt &&
+      (!!settings.requirePlanForAllSellers || catsUnderHeader.some((c) => c.subscriptionEnabled) || coverage.headerIds.has(hid));
     const customGrace = catsUnderHeader.find((c) => typeof c.subscriptionGraceDays === "number")?.subscriptionGraceDays;
     const graceDays = typeof customGrace === "number" ? customGrace : settings.graceDays;
 
@@ -1464,6 +1478,8 @@ export const getSellerSubscriptionOverview = async (sellerId: unknown) => {
       requirePlanForAllSellers: !!settings.requirePlanForAllSellers,
     },
     planAccess,
+    /** Admin's own store: subscription plans don't apply */
+    exempt,
     selectedPlanId: (sellerDoc as any)?.selectedPlan ? String((sellerDoc as any).selectedPlan) : null,
     categories,
     currentPlans,
