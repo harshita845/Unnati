@@ -11,6 +11,42 @@ import {
 import api from "../../../../services/api/config";
 import { toast } from "react-hot-toast";
 import { validateImageFile } from "../../../../utils/imageUpload";
+import { ImageSizeChoice, ORIGINAL_SIZE, describeImageSize, isImageSizeValid, resizeImageFile } from "../../../../utils/imageResize";
+import ImageSizeSelector from "../components/ImageSizeSelector";
+
+// Last size chosen on this device, so the next product starts with it
+const savedSize = (key: string): ImageSizeChoice => {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) || "null");
+    if (v && (v.fit === "contain" || v.fit === "cover") && isImageSizeValid(v)) return v;
+  } catch {
+    /* ignore */
+  }
+  return ORIGINAL_SIZE;
+};
+const rememberSize = (key: string, v: ImageSizeChoice) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(v));
+  } catch {
+    /* ignore */
+  }
+};
+
+/** Product image thumbnail with its real size in pixels underneath. */
+function SizedThumb({ src, className }: { src: string; className: string }) {
+  const [size, setSize] = useState<string>("");
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <img
+        src={src}
+        alt=""
+        className={className}
+        onLoad={(e) => setSize(`${e.currentTarget.naturalWidth} × ${e.currentTarget.naturalHeight} px`)}
+      />
+      {size && <span className="text-[11px] font-medium text-slate-500">{size}</span>}
+    </div>
+  );
+}
 
 
 interface Props {
@@ -83,6 +119,41 @@ export default function VariantCard({
 }: Props) {
   const [uploadingMain, setUploadingMain] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
+  const [mainSize, setMainSize] = useState<ImageSizeChoice>(() => savedSize("productImageSize.main"));
+  const [gallerySize, setGallerySize] = useState<ImageSizeChoice>(() => savedSize("productImageSize.gallery"));
+  const changeMainSize = (v: ImageSizeChoice) => {
+    setMainSize(v);
+    rememberSize("productImageSize.main", v);
+  };
+  const changeGallerySize = (v: ImageSizeChoice) => {
+    setGallerySize(v);
+    rememberSize("productImageSize.gallery", v);
+  };
+  const sizeIsValid = isImageSizeValid;
+
+  /** Resize to the chosen size, then check type / 5MB limit on what will actually be uploaded. */
+  const prepareImage = async (file: File, choice: ImageSizeChoice): Promise<File | null> => {
+    const typeCheck = validateImageFile(new File([], file.name, { type: file.type }));
+    if (!typeCheck.valid) {
+      toast.error(typeCheck.error || `Invalid image file: ${file.name}`);
+      return null;
+    }
+    let ready = file;
+    try {
+      const resized = await resizeImageFile(file, choice);
+      ready = resized.file;
+      if (resized.upscaled) toast(`${file.name} is smaller than ${describeImageSize(choice)}, so it was enlarged and may look less sharp.`);
+    } catch (err: any) {
+      toast.error(err?.message || `Could not resize ${file.name}`);
+      return null;
+    }
+    const validation = validateImageFile(ready);
+    if (!validation.valid) {
+      toast.error(validation.error || `Invalid image file: ${file.name}`);
+      return null;
+    }
+    return ready;
+  };
   const [showScanner, setShowScanner] = useState(false);
   const [barcodeError, setBarcodeError] = useState("");
   const gradient = variantColors[index % variantColors.length];
@@ -401,14 +472,15 @@ export default function VariantCard({
     printWindow.document.close();
   };
 
-  const handleMainImage = async (file: File) => {
-    const validation = validateImageFile(file);
-    if (!validation.valid) {
-      toast.error(validation.error || "Invalid image file");
+  const handleMainImage = async (original: File) => {
+    if (!sizeIsValid(mainSize)) {
+      toast.error("Choose an image size of at least 100 × 100 px");
       return;
     }
     setUploadingMain(true);
     try {
+      const file = await prepareImage(original, mainSize);
+      if (!file) return;
       const result = await uploadImage(file, "Ecommerce/products");
       patch({ mainImage: result.secureUrl });
       toast.success("Main image uploaded successfully!");
@@ -421,15 +493,16 @@ export default function VariantCard({
 
   const handleGalleryImages = async (files: FileList | null) => {
     if (!files?.length) return;
+    if (!sizeIsValid(gallerySize)) {
+      toast.error("Choose an image size of at least 100 × 100 px");
+      return;
+    }
     setUploadingGallery(true);
     try {
       const uploaded: string[] = [];
-      for (const file of Array.from(files)) {
-        const validation = validateImageFile(file);
-        if (!validation.valid) {
-          toast.error(validation.error || `Invalid image file: ${file.name}`);
-          continue;
-        }
+      for (const original of Array.from(files)) {
+        const file = await prepareImage(original, gallerySize);
+        if (!file) continue;
         try {
           const result = await uploadImage(file, "Ecommerce/products");
           uploaded.push(result.secureUrl);
@@ -710,13 +783,15 @@ export default function VariantCard({
           </div>
         </FormField>
 
-        <FormField label="Main Image" hint="Upload a clear product image for this variant">
+        <FormField
+          label="Main Image"
+          hint={`Upload a clear product image for this variant. It is saved at ${describeImageSize(mainSize)} and shown the same in the admin, seller and customer apps.`}
+        >
           <div className="flex flex-wrap items-center gap-4 rounded-xl border border-dashed border-violet-200 bg-violet-50/40 p-4">
             {variant.mainImage ? (
-              <img
+              <SizedThumb
                 src={variant.mainImage}
-                alt=""
-                className="h-24 w-24 rounded-xl border border-white object-cover shadow-md"
+                className="h-24 w-24 rounded-xl border border-white bg-white object-contain shadow-md"
               />
             ) : (
               <div className="flex h-24 w-24 items-center justify-center rounded-xl bg-white text-3xl text-violet-300 shadow-inner">
@@ -733,24 +808,25 @@ export default function VariantCard({
                 onChange={(e) =>
                   e.target.files?.[0] && handleMainImage(e.target.files[0])
                 }
+                onClick={(e) => ((e.target as HTMLInputElement).value = "")}
               />
             </label>
+            <ImageSizeSelector value={mainSize} onChange={changeMainSize} disabled={uploadingMain} />
           </div>
         </FormField>
 
         <FormField
           label="Gallery Images"
-          hint="Add multiple extra images for this variant (optional)"
+          hint={`Add multiple extra images for this variant (optional). Each is saved at ${describeImageSize(gallerySize)}.`}
         >
           <div className="space-y-4 rounded-xl border border-dashed border-fuchsia-200 bg-fuchsia-50/40 p-4">
             {(variant.galleryImages || []).length > 0 ? (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                 {(variant.galleryImages || []).map((url) => (
                   <div key={url} className="group relative">
-                    <img
+                    <SizedThumb
                       src={url}
-                      alt=""
-                      className="h-24 w-full rounded-xl border border-white object-cover shadow-md"
+                      className="h-24 w-full rounded-xl border border-white bg-white object-contain shadow-md"
                     />
                     <button
                       type="button"
@@ -768,6 +844,7 @@ export default function VariantCard({
                 No gallery images yet
               </div>
             )}
+            <div className="flex flex-wrap items-center gap-4">
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-gradient-to-r from-fuchsia-500 to-pink-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:opacity-90">
               {uploadingGallery ? "Uploading..." : "Add Gallery Images"}
               <input
@@ -782,6 +859,8 @@ export default function VariantCard({
                 }}
               />
             </label>
+            <ImageSizeSelector value={gallerySize} onChange={changeGallerySize} disabled={uploadingGallery} />
+            </div>
           </div>
         </FormField>
       </div>
