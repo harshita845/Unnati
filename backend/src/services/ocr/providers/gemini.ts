@@ -9,17 +9,59 @@ export const GEMINI_DEFAULT_MODEL = "gemini-3.8-flash";
 
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 
+/** Tried once when the main model stays busy (Google 503 "high demand"). OCR_FALLBACK_MODEL overrides. */
+export const GEMINI_FALLBACK_MODEL = "gemini-3.5-flash";
+/** Waits before retrying a busy / rate-limited answer */
+const RETRY_DELAYS_MS = [2000, 5000];
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const isBusy = (error: unknown) =>
+  error instanceof OcrProviderError &&
+  (error.kind === "rate_limit" || (error.kind === "upstream" && [500, 502, 503, 504].includes(Number(error.status))));
+
 export class GeminiOcrProvider implements OcrProvider {
   readonly name = "gemini";
 
-  constructor(private apiKey: string, readonly model: string = GEMINI_DEFAULT_MODEL) {}
+  constructor(
+    private apiKey: string,
+    readonly model: string = GEMINI_DEFAULT_MODEL,
+    /** Model tried when the main one stays busy; null turns it off */
+    private fallbackModel: string | null = GEMINI_FALLBACK_MODEL
+  ) {}
 
-  private async call(parts: unknown[], system: string, schema: Record<string, unknown>, timeoutMs: number): Promise<OcrResult> {
+  /**
+   * Google often answers "high demand" (503) or rate limits for a few seconds: retry the main model
+   * a couple of times, then try the fallback model once, all within the time the scan allows.
+   */
+  private async callWithRetry(parts: unknown[], system: string, schema: Record<string, unknown>, timeoutMs: number): Promise<OcrResult> {
+    const deadline = Date.now() + timeoutMs;
+    const left = () => deadline - Date.now();
+    const attempts: string[] = [this.model, this.model, this.model];
+    if (this.fallbackModel && this.fallbackModel !== this.model) attempts.push(this.fallbackModel);
+    let lastError: unknown;
+    for (let i = 0; i < attempts.length; i++) {
+      if (i > 0) {
+        const wait = RETRY_DELAYS_MS[Math.min(i - 1, RETRY_DELAYS_MS.length - 1)];
+        if (left() < wait + 10000) break;
+        await sleep(wait);
+      }
+      try {
+        return await this.call(attempts[i], parts, system, schema, Math.max(3000, left()));
+      } catch (error) {
+        lastError = error;
+        if (!isBusy(error)) throw error;
+      }
+    }
+    throw lastError instanceof OcrProviderError && lastError.kind === "upstream"
+      ? new OcrProviderError("The AI service is busy right now. Wait a minute and try again.", "upstream", lastError.status)
+      : lastError;
+  }
+
+  private async call(model: string, parts: unknown[], system: string, schema: Record<string, unknown>, timeoutMs: number): Promise<OcrResult> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     let res: Response;
     try {
-      res = await fetch(`${ENDPOINT}/${encodeURIComponent(this.model)}:generateContent`, {
+      res = await fetch(`${ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
         method: "POST",
         // Key in a header, never in the URL (URLs end up in logs)
         headers: { "Content-Type": "application/json", "x-goog-api-key": this.apiKey },
@@ -56,7 +98,7 @@ export class GeminiOcrProvider implements OcrProvider {
     const text = (candidate.content?.parts || []).map((p: any) => p?.text || "").join("");
     return {
       text,
-      model: body?.modelVersion || this.model,
+      model: body?.modelVersion || model,
       usage: { inputTokens: body?.usageMetadata?.promptTokenCount, outputTokens: body?.usageMetadata?.candidatesTokenCount },
     };
   }
@@ -64,10 +106,10 @@ export class GeminiOcrProvider implements OcrProvider {
   extract(req: OcrRequest): Promise<OcrResult> {
     const parts: unknown[] = req.files.map((f) => ({ inlineData: { mimeType: f.mimeType, data: f.data.toString("base64") } }));
     parts.push({ text: req.prompt });
-    return this.call(parts, req.system, req.schema, req.timeoutMs);
+    return this.callWithRetry(parts, req.system, req.schema, req.timeoutMs);
   }
 
   repair(req: OcrRepairRequest): Promise<OcrResult> {
-    return this.call([{ text: req.prompt }], req.system, req.schema, req.timeoutMs);
+    return this.callWithRetry([{ text: req.prompt }], req.system, req.schema, req.timeoutMs);
   }
 }
