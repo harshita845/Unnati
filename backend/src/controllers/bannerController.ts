@@ -6,6 +6,8 @@ import mongoose from "mongoose";
 import { Banner } from '../models/Banner';
 import AppSettings from '../models/AppSettings';
 import { asyncHandler } from '../utils/asyncHandler';
+import { uploadImage } from '../services/cloudinaryService';
+import { CLOUDINARY_FOLDERS } from '../config/cloudinary';
 
 /**
  * @desc    Get all banners
@@ -112,7 +114,7 @@ export const deleteBanner = asyncHandler(async (req: Request, res: Response) => 
  * @access  Public
  */
 export const getFlashDeals = asyncHandler(async (req: Request, res: Response) => {
-  let settings: any = await AppSettings.findOne().select('flashDeal dealOfTheDay featuredDeal');
+  let settings: any = await AppSettings.findOne().select('flashDeal.targetDate flashDeal.active flashDeal.productIds flashDeal.image dealOfTheDay featuredDeal');
 
   if (!settings) {
      settings = await AppSettings.getSettings();
@@ -177,7 +179,7 @@ export const getFlashDeals = asyncHandler(async (req: Request, res: Response) =>
 export const updateFlashDeals = asyncHandler(async (req: Request, res: Response) => {
   const { flashDealTargetDate, flashDealImage, isActive, flashDealProductIds, dealOfTheDayProductIds, featuredDealProductIds } = req.body;
 
-  let settings: any = await AppSettings.findOne();
+  let settings: any = await AppSettings.findOne().select('+flashDeal.image');
   if (!settings) {
       settings = await AppSettings.create({
           appName: "Unnati Stores",
@@ -186,11 +188,23 @@ export const updateFlashDeals = asyncHandler(async (req: Request, res: Response)
       });
   }
 
+  // A picture sent as text (data:image/...) is stored on Cloudinary and only its link is saved:
+  // kept inside the settings record it made every settings read download megabytes
+  let flashImage = flashDealImage;
+  if (typeof flashImage === 'string' && flashImage.startsWith('data:image/')) {
+      try {
+          flashImage = (await uploadImage(flashImage, { folder: CLOUDINARY_FOLDERS.STORES })).secureUrl;
+      } catch (error) {
+          console.error('Flash deal image upload failed:', (error as Error).message);
+          return res.status(502).json({ success: false, message: 'Could not upload the flash deal image. Please try again.' });
+      }
+  }
+
   // Update Flash Deal fields if provided
   if (flashDealTargetDate !== undefined || flashDealImage !== undefined || isActive !== undefined || flashDealProductIds !== undefined) {
       settings.flashDeal = {
           targetDate: flashDealTargetDate ? new Date(flashDealTargetDate) : settings.flashDeal?.targetDate,
-          image: flashDealImage !== undefined ? flashDealImage : settings.flashDeal?.image,
+          image: flashImage !== undefined ? flashImage : settings.flashDeal?.image,
           active: isActive !== undefined ? isActive : (settings.flashDeal?.active ?? true),
           productIds: flashDealProductIds !== undefined ? flashDealProductIds : settings.flashDeal?.productIds
       };

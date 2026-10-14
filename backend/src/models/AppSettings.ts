@@ -661,6 +661,9 @@ const AppSettingsSchema = new Schema<IAppSettings>(
       image: {
         type: String,
         trim: true,
+        // Can be a large picture: left out of every settings read except the flash deal banner
+        // (select "+flashDeal.image" where it's needed)
+        select: false,
       },
       active: {
         type: Boolean,
@@ -849,12 +852,10 @@ AppSettingsSchema.statics.getSettings = async function () {
       const currentFlash = settings.flashDeal?.productIds || [];
       const validFlash = await Product.find({ _id: { $in: currentFlash } }).select('_id');
       if (validFlash.length === 0) {
-        settings.flashDeal = {
-          targetDate: new Date(Date.now() + 86400000),
-          image: settings.flashDeal?.image || '',
-          active: true,
-          productIds: dbIds.slice(8, 10)
-        };
+        // Field by field so the banner image (not loaded here) is kept
+        settings.set('flashDeal.targetDate', new Date(Date.now() + 86400000));
+        settings.set('flashDeal.active', true);
+        settings.set('flashDeal.productIds', dbIds.slice(8, 10));
         needsSave = true;
       }
 

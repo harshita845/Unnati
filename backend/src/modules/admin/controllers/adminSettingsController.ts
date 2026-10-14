@@ -36,6 +36,14 @@ export const updateAppSettings = asyncHandler(
   async (req: Request, res: Response) => {
     const updateData = req.body;
     updateData.updatedBy = req.user?.userId;
+    // Flash deal is saved from its own screen. The settings page doesn't load the banner image, so
+    // writing its flashDeal object back would erase the image: update only the fields it sent.
+    if (updateData.flashDeal && typeof updateData.flashDeal === "object") {
+      const { image, ...rest } = updateData.flashDeal;
+      for (const [key, value] of Object.entries(rest)) updateData[`flashDeal.${key}`] = value;
+      if (typeof image === "string" && image && !image.startsWith("data:")) updateData["flashDeal.image"] = image;
+      delete updateData.flashDeal;
+    }
 
     let settings: any = await AppSettings.findOne();
 
