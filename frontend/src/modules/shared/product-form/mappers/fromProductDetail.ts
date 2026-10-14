@@ -6,6 +6,12 @@ import {
 
 export function fromProductDetail(product: any): ProductFormState {
   const variantsRaw = product?.variants ?? product?.variations ?? [];
+  // Imported / older products keep their pictures on the product, not on the variants. The apps
+  // show those pictures for variants without their own, so the form shows (and saves) them too.
+  const productGallery: string[] = Array.isArray(product?.galleryImages)
+    ? product.galleryImages.filter((u: unknown) => typeof u === "string" && u)
+    : [];
+  const productMain: string = product?.mainImage || productGallery[0] || "";
   const variants =
     variantsRaw.length > 0
       ? variantsRaw.map((v: any) => ({
@@ -21,11 +27,15 @@ export function fromProductDetail(product: any): ProductFormState {
           sku: v.sku || "",
           barcode: v.barcode || [],
           rackNumber: v.rackNumber || "",
-          mainImage: v.mainImage || v.image || "",
-          galleryImages: v.galleryImages || [],
+          mainImage: v.mainImage || v.image || productMain,
+          galleryImages: v.galleryImages?.length
+            ? v.galleryImages
+            : v.mainImage || v.image
+            ? []
+            : productGallery.filter((u) => u !== productMain),
           status: v.status || "Available",
         }))
-      : [defaultVariant()];
+      : [{ ...defaultVariant(), mainImage: productMain, galleryImages: productGallery.filter((u) => u !== productMain) }];
 
   return {
     mainInfo: defaultMainInfo({
