@@ -178,6 +178,20 @@ app.get("/", (_req: Request, res: Response) => {
 
 // API Routes
 app.use("/api/search", searchRoutes);
+// Daily schedule (Vercel Cron, see vercel.json) for seller subscriptions: expiry, reminders,
+// hiding products after the grace period and applying plan changes. Needs CRON_SECRET.
+app.get("/api/v1/cron/subscriptions", async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return res.status(503).json({ success: false, message: "CRON_SECRET is not set" });
+  if (req.headers.authorization !== `Bearer ${secret}`) return res.status(401).json({ success: false, message: "Unauthorized" });
+  try {
+    const stats = await runSubscriptionJob();
+    return res.json({ success: true, stats });
+  } catch (error: any) {
+    console.error("Scheduled subscription job failed:", error);
+    return res.status(500).json({ success: false, message: "Subscription job failed" });
+  }
+});
 app.use("/api/v1", routes);
 
 

@@ -60,6 +60,23 @@ const statusBadge = (sub: SellerSubscription) => {
     Cancelled: "bg-red-100 text-red-800",
     PendingPayment: "bg-neutral-100 text-neutral-700",
   };
+  // Status worked out from the dates by the server (Active / Expires in N days / grace / Expired ...)
+  if (sub.display) {
+    const cls: Record<string, string> = {
+      Active: map.Active,
+      ExpiringSoon: "bg-amber-100 text-amber-800",
+      Grace: "bg-orange-100 text-orange-800",
+      Expired: "bg-red-100 text-red-800",
+      Upcoming: "bg-blue-100 text-blue-800",
+      Cancelled: "bg-neutral-100 text-neutral-600",
+      PendingPayment: map.PendingPayment,
+    };
+    return (
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${cls[sub.display.key] || map.PendingPayment}`}>
+        {sub.display.label}
+      </span>
+    );
+  }
   const upcoming = sub.status === "Active" && sub.startDate && new Date(sub.startDate) > new Date();
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${map[sub.status] || map.PendingPayment}`}>
@@ -423,8 +440,9 @@ export default function AdminSellerSubscriptions() {
       <div className="bg-white rounded-lg shadow-sm border border-neutral-200 p-5">
         <h1 className="text-2xl font-bold text-neutral-900">Seller Subscriptions</h1>
         <p className="text-sm text-neutral-500 mt-1">
-          Create plans sellers buy to sell in subscription categories. Turn on "Subscription required", the grace period and the bill type
-          for each category in Category settings.
+          Create plans sellers buy to sell in subscription categories. Every category a plan includes needs a subscription for all
+          sellers: sellers already selling there get the free trial from Settings, then their products there are hidden until they pay.
+          Grace period and bill type can be set per category in Category settings.
         </p>
         <div className="flex flex-wrap gap-2 mt-4">
           {tabButton("plans", "Plans")}

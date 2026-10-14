@@ -16,6 +16,10 @@ export interface ISubscriptionSettings extends Document {
   invoiceCounter: number;
   /** Every seller must have an active plan to sell (store hidden + panel locked without one) */
   requirePlanForAllSellers: boolean;
+  /** When the expiry / reminder job last ran (it runs on a schedule and whenever subscription screens open) */
+  lastJobRunAt?: Date | null;
+  /** Main categories that need a plan because an active plan covers them (applied to existing sellers once) */
+  planRequiredCategoryIds: mongoose.Types.ObjectId[];
   updatedBy?: mongoose.Types.ObjectId;
 }
 
@@ -38,6 +42,8 @@ const SubscriptionSettingsSchema = new Schema<ISubscriptionSettings>(
     invoicePrefix: { type: String, default: "SUB", trim: true },
     invoiceCounter: { type: Number, default: 0 },
     requirePlanForAllSellers: { type: Boolean, default: false },
+    lastJobRunAt: { type: Date, default: null },
+    planRequiredCategoryIds: { type: [Schema.Types.ObjectId], ref: "Category", default: [] },
     updatedBy: { type: Schema.Types.ObjectId, ref: "Admin" },
   },
   { timestamps: true }

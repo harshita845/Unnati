@@ -36,6 +36,15 @@ const stateStyle: Record<SellerCategoryStatus["state"], { label: string; cls: st
   NotRequired: { label: "No subscription needed", cls: "bg-neutral-100 text-neutral-500" },
 };
 
+const displayCls: Record<string, string> = {
+  Active: "bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]",
+  ExpiringSoon: "bg-amber-100 text-amber-800",
+  Grace: "bg-orange-100 text-orange-800",
+  Expired: "bg-red-100 text-red-800",
+  Upcoming: "bg-blue-100 text-blue-800",
+  Cancelled: "bg-neutral-100 text-neutral-600",
+  PendingPayment: "bg-neutral-100 text-neutral-600",
+};
 const errorMessage = (err: any, fallback: string) => err?.response?.data?.message || err?.message || fallback;
 const plural = (n: number | null, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -220,6 +229,45 @@ export default function SellerSubscriptions() {
         </div>
       )}
 
+      {(() => {
+        const expiring = data.categories.filter((c) => c.state === "ExpiringSoon");
+        const grace = data.categories.filter((c) => c.state === "Grace");
+        const hidden = data.categories.filter((c) => c.required && c.sellsHere && (c.state === "Expired" || c.state === "NotSubscribed"));
+        if (!expiring.length && !grace.length && !hidden.length) return null;
+        return (
+          <div className="space-y-2">
+            {expiring.map((c) => (
+              <div key={`soon-${c.categoryId}`} className="rounded-lg border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900">
+                <b>{c.name}</b>: your {c.isTrial ? "free trial" : `plan "${c.planName}"`} expires in {plural(c.daysLeft, "day")} ({formatDateIN(c.endDate)}). Renew below to keep selling without a break.
+              </div>
+            ))}
+            {grace.map((c) => (
+              <div key={`grace-${c.categoryId}`} className="rounded-lg border border-orange-200 bg-orange-50 px-5 py-3 text-sm text-orange-900">
+                <b>{c.name}</b>: your plan has expired. Renew within {plural(c.daysLeft, "day")} or your products there will be hidden from customers.
+              </div>
+            ))}
+            {hidden.map((c) => (
+              <div key={`hidden-${c.categoryId}`} className="rounded-lg border border-red-200 bg-red-50 px-5 py-3 text-sm text-red-900">
+                <b>{c.name}</b> needs a subscription and you don't have an active plan for it, so your products there are hidden from customers.
+                {c.plansAvailable?.length ? ` Plans that include it: ${c.plansAvailable.join(", ")}.` : ""}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
+      {data.planAccess && (
+        <div className="bg-white rounded-lg shadow-sm border border-neutral-200 px-5 py-4 text-sm text-neutral-700">
+          <span className="font-semibold text-neutral-900">Panel access: </span>
+          {!data.planAccess.required
+            ? "all sections of your panel are open."
+            : `${data.planAccess.modules.length} of ${ALL_SELLER_MODULES.length} sections open — ${ALL_SELLER_MODULES.filter((m) => data.planAccess!.modules.includes(m.key)).map((m) => m.label).join(", ")}.`}
+          {data.planAccess.required && data.planAccess.endDate && (
+            <span className="text-neutral-500"> Plan valid until {formatDateIN(data.planAccess.endDate)}.</span>
+          )}
+        </div>
+      )}
+
       {/* Category status */}
       <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
         <div className="bg-[var(--primary-dark)] text-white px-5 py-3"><h2 className="font-semibold">My categories</h2></div>
@@ -238,6 +286,9 @@ export default function SellerSubscriptions() {
                     </span>
                   </div>
                   {c.planName && <p className="text-sm text-neutral-600 mt-1">{c.planName}</p>}
+                  {c.required && !c.planName && c.plansAvailable && c.plansAvailable.length > 0 && (
+                    <p className="text-xs text-neutral-600 mt-1">Included in: {c.plansAvailable.join(", ")}</p>
+                  )}
                   {c.state === "Grace" && c.daysLeft !== null && (
                     <p className="text-sm text-orange-700 mt-1">Products will be hidden in {plural(c.daysLeft, "day")}. Renew now.</p>
                   )}
@@ -283,9 +334,13 @@ export default function SellerSubscriptions() {
                 .filter((c: any) => !groupIds.has(String(c.headerCategoryId?._id || c.headerCategoryId || "")))
                 .map((c: any) => c.name)
                 .filter(Boolean);
-              const covered = groups.length ? [...groups, ...singles] : plan.categories.map((c: any) => c.name).filter(Boolean);
+              const covered = groups.length ? groups : singles.length ? singles : plan.categories.map((c: any) => c.name).filter(Boolean);
               const current = data.categories.find(
-                (c) => plan.categories.some((pc: any) => String(pc._id || pc) === c.categoryId) && c.planName === plan.name && c.state !== "Expired"
+                (c) =>
+                  ((plan.headerCategories || []).some((ph: any) => String(ph._id || ph) === c.categoryId) ||
+                    plan.categories.some((pc: any) => String(pc.headerCategoryId?._id || pc.headerCategoryId || pc._id || pc) === c.categoryId)) &&
+                  c.planName === plan.name &&
+                  c.state !== "Expired"
               );
               return (
                 <div
@@ -349,7 +404,11 @@ export default function SellerSubscriptions() {
                   <td className="px-4 py-3">{s.planSnapshot.name}</td>
                   <td className="px-4 py-3 text-xs">{s.categories.map((c) => c.name).join(", ")}</td>
                   <td className="px-4 py-3 text-xs whitespace-nowrap">{formatDateIN(s.startDate)} – {formatDateIN(s.endDate)}</td>
-                  <td className="px-4 py-3">{s.isTrial && s.status === "Active" ? "Free trial" : s.status}</td>
+                  <td className="px-4 py-3">
+                    {s.display ? (
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${displayCls[s.display.key] || ""}`}>{s.display.label}</span>
+                    ) : s.isTrial && s.status === "Active" ? "Free trial" : s.status}
+                  </td>
                   <td className="px-4 py-3">{s.payment.totalAmount ? formatINR(s.payment.totalAmount) : "—"}</td>
                   <td className="px-4 py-3">
                     {s.payment.paidAt && s.payment.method !== "Trial" && s.payment.totalAmount > 0 && (

@@ -93,6 +93,7 @@ export interface SignupPlan {
 
 export interface SellerSubscription {
   _id: string;
+  display?: SubscriptionDisplayStatus;
   seller: any;
   plan?: string | null;
   planSnapshot: {
@@ -137,6 +138,15 @@ export interface SellerCategoryStatus {
   planName: string | null;
   isTrial: boolean;
   usage: { products: number; maxProducts: number | null } | null;
+  /** Plans that include this category group */
+  plansAvailable?: string[];
+}
+
+/** Status worked out from the dates (the stored status can lag behind) */
+export interface SubscriptionDisplayStatus {
+  key: "PendingPayment" | "Cancelled" | "Upcoming" | "Active" | "ExpiringSoon" | "Grace" | "Expired";
+  label: string;
+  daysLeft: number | null;
 }
 
 export interface SellerSubscriptionOverview {

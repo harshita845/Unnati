@@ -150,25 +150,87 @@ export const resolveCoveredCategoryIds = async (source: { categories?: unknown[]
 export const withCoveredCategories = async (plans: any[], categoryFields: string) => {
   const covered = await Promise.all(plans.map((p) => resolveCoveredCategoryIds(p)));
   const allIds = [...new Set(covered.flat().map(idStr))];
-  const headerIds = [...new Set(plans.flatMap((p) => (p.headerCategories || []).map(idStr)))];
-  const [cats, headers]: any[] = await Promise.all([
-    Category.find({ _id: { $in: allIds } }).select(`${categoryFields} headerCategoryId`).populate("headerCategoryId", "name").lean(),
-    headerIds.length ? HeaderCategory.find({ _id: { $in: headerIds } }).select("name").lean() : [],
-  ]);
+  const cats: any[] = await Category.find({ _id: { $in: allIds } })
+    .select(`${categoryFields} headerCategoryId`)
+    .populate("headerCategoryId", "name")
+    .lean();
   const catById = new Map(cats.map((c: any) => [idStr(c._id), c]));
+
+  const explicitHeaderIds = plans.flatMap((p) => (p.headerCategories || []).map(idStr));
+  const categoryHeaderIds = cats.map((c) => idStr(c.headerCategoryId?._id || c.headerCategoryId)).filter(Boolean);
+  const allHeaderIds = [...new Set([...explicitHeaderIds, ...categoryHeaderIds])];
+
+  const headers: any[] = allHeaderIds.length
+    ? await HeaderCategory.find({ _id: { $in: allHeaderIds } }).select("name").lean()
+    : [];
   const headerById = new Map(headers.map((h: any) => [idStr(h._id), h]));
-  return plans.map((p, i) => ({
-    ...p,
-    explicitCategories: (p.categories || []).map(idStr),
-    headerCategories: (p.headerCategories || []).map((h: any) => headerById.get(idStr(h)) || { _id: idStr(h), name: "Category group" }),
-    categories: covered[i].map((id) => catById.get(idStr(id))).filter(Boolean),
-  }));
+
+  return plans.map((p, i) => {
+    const coveredCats = covered[i].map((id) => catById.get(idStr(id))).filter(Boolean);
+    const planHeaderIds = new Set<string>((p.headerCategories || []).map(idStr));
+    for (const c of coveredCats) {
+      const hid = idStr(c.headerCategoryId?._id || c.headerCategoryId);
+      if (hid) planHeaderIds.add(hid);
+    }
+
+    const populatedHeaders = [...planHeaderIds]
+      .map((hid) => headerById.get(hid))
+      .filter(Boolean)
+      .map((h: any) => ({ _id: idStr(h._id), name: h.name }));
+
+    return {
+      ...p,
+      explicitCategories: (p.categories || []).map(idStr),
+      headerCategories: populatedHeaders,
+      categories: coveredCats,
+    };
+  });
+};
+
+// ----------------------------------------------------------------------------
+// Plans decide which categories need a subscription
+// ----------------------------------------------------------------------------
+
+type PlanCoverage = { headerIds: Set<string>; mainIds: Set<string>; plansByHeader: Map<string, string[]> };
+let coverageCache: { at: number; value: PlanCoverage } | null = null;
+export const invalidatePlanCoverage = () => {
+  coverageCache = null;
+};
+
+/**
+ * What the active plans cover. A category group (header category) that any active plan covers,
+ * as a whole or through one of its categories, needs a subscription — so creating a plan is enough
+ * to make its categories "subscription required" everywhere (seller app, admin, customer app).
+ */
+export const getPlanCoverage = async (): Promise<PlanCoverage> => {
+  if (coverageCache && Date.now() - coverageCache.at < 30 * 1000) return coverageCache.value;
+  const plans: any[] = await SubscriptionPlan.find({ isActive: true }).select("name categories headerCategories").lean();
+  const perPlan = await Promise.all(plans.map((p) => resolveCoveredCategoryIds(p)));
+  const mainIds = new Set<string>(perPlan.flat().map(idStr));
+  const mains: any[] = mainIds.size ? await Category.find({ _id: { $in: [...mainIds] } }).select("headerCategoryId").lean() : [];
+  const headerOf = new Map(mains.map((c: any) => [idStr(c._id), c.headerCategoryId ? idStr(c.headerCategoryId) : ""]));
+  const headerIds = new Set<string>();
+  const plansByHeader = new Map<string, string[]>();
+  plans.forEach((p, i) => {
+    const hs = new Set<string>((p.headerCategories || []).map(idStr));
+    perPlan[i].forEach((id) => {
+      const h = headerOf.get(idStr(id));
+      if (h) hs.add(h);
+    });
+    hs.forEach((h) => {
+      headerIds.add(h);
+      plansByHeader.set(h, [...(plansByHeader.get(h) || []), p.name]);
+    });
+  });
+  const value = { headerIds, mainIds, plansByHeader };
+  coverageCache = { at: Date.now(), value };
+  return value;
 };
 
 /**
  * Whether the category needs a plan, its grace period and its bill type (category value or
- * global default). `categoryId` can be a main category or a subcategory under it — either way
- * the rule is read from the main category.
+ * global default). If the category belongs to a HeaderCategory (Main Category), the requirement
+ * applies to the entire HeaderCategory including all of its categories and subcategories.
  */
 export const getCategoryRules = async (categoryId: unknown, settings?: ISubscriptionSettings) => {
   const s = settings || (await getSubscriptionSettings());
@@ -179,18 +241,59 @@ export const getCategoryRules = async (categoryId: unknown, settings?: ISubscrip
     mainCategoryId: null as string | null,
     headerCategoryId: null as string | null,
   };
-  const mainCategoryId = await resolveMainCategoryId(categoryId);
-  if (!mainCategoryId) return defaults;
+
+  const catIdStr = idStr(categoryId);
+  if (!catIdStr || !mongoose.isValidObjectId(catIdStr)) return defaults;
+
+  // Check if categoryId is directly a HeaderCategory ID
+  const headerDoc: any = await HeaderCategory.findById(catIdStr).select("_id name").lean();
+  let headerCategoryId: string | null = null;
+  let mainCategoryId: string | null = null;
+
+  if (headerDoc) {
+    headerCategoryId = catIdStr;
+  } else {
+    mainCategoryId = await resolveMainCategoryId(categoryId);
+    if (!mainCategoryId) return defaults;
+    const cat: any = await Category.findById(mainCategoryId)
+      .select("subscriptionEnabled subscriptionGraceDays subscriptionBillType headerCategoryId")
+      .lean();
+    if (!cat) return defaults;
+    headerCategoryId = cat.headerCategoryId ? idStr(cat.headerCategoryId) : null;
+  }
+
+  // If this category belongs to a HeaderCategory, subscription requirement applies to the WHOLE header category
+  if (headerCategoryId) {
+    const catsUnderHeader: any[] = await Category.find({ headerCategoryId })
+      .select("subscriptionEnabled subscriptionGraceDays subscriptionBillType")
+      .lean();
+    const hasEnabled = catsUnderHeader.some((c) => c.subscriptionEnabled);
+    const customGrace = catsUnderHeader.find((c) => typeof c.subscriptionGraceDays === "number")?.subscriptionGraceDays;
+    const customBillType = catsUnderHeader.some((c) => c.subscriptionBillType === "gst")
+      ? "gst"
+      : catsUnderHeader.find((c) => c.subscriptionBillType)?.subscriptionBillType;
+
+    const coverage = await getPlanCoverage();
+    return {
+      required: !!s.requirePlanForAllSellers || hasEnabled || coverage.headerIds.has(headerCategoryId),
+      graceDays: typeof customGrace === "number" ? customGrace : s.graceDays,
+      billType: (customBillType || (s.invoiceEnabled ? "gst" : "receipt")) as "gst" | "receipt",
+      mainCategoryId,
+      headerCategoryId,
+    };
+  }
+
   const category: any = await Category.findById(mainCategoryId)
     .select("subscriptionEnabled subscriptionGraceDays subscriptionBillType headerCategoryId")
     .lean();
   if (!category) return defaults;
+  const coverage = await getPlanCoverage();
   return {
-    required: !!category.subscriptionEnabled,
+    required: !!s.requirePlanForAllSellers || !!category.subscriptionEnabled || coverage.mainIds.has(idStr(mainCategoryId)),
     graceDays: typeof category.subscriptionGraceDays === "number" ? category.subscriptionGraceDays : s.graceDays,
     billType: (category.subscriptionBillType || (s.invoiceEnabled ? "gst" : "receipt")) as "gst" | "receipt",
     mainCategoryId,
-    headerCategoryId: category.headerCategoryId ? idStr(category.headerCategoryId) : null,
+    headerCategoryId: null,
   };
 };
 
@@ -229,14 +332,25 @@ export const getCategoryAccess = async (sellerId: unknown, categoryId: unknown) 
   if (await isAdminStore(sellerId)) return { required: false, allowed: true as const, graceDays: rules.graceDays };
 
   const now = new Date();
+  const matchCatIds: mongoose.Types.ObjectId[] = [];
+  if (rules.mainCategoryId && mongoose.isValidObjectId(rules.mainCategoryId)) {
+    matchCatIds.push(new mongoose.Types.ObjectId(rules.mainCategoryId));
+  }
+  if (rules.headerCategoryId) {
+    const catsUnderHeader: any[] = await Category.find({ headerCategoryId: rules.headerCategoryId }).select("_id").lean();
+    for (const c of catsUnderHeader) {
+      matchCatIds.push(c._id);
+    }
+  }
+
   const subscription = await SellerSubscription.findOne({
     seller: toId(sellerId),
     status: { $in: ["Active", "Expired"] },
     startDate: { $lte: now },
     endDate: { $gt: new Date(now.getTime() - rules.graceDays * DAY_MS) },
-    // Plans cover main categories, or whole header categories (which include categories added later)
+    // Plans cover main categories, whole header categories, or any category under the header
     $or: [
-      { categories: toId(rules.mainCategoryId!) },
+      ...(matchCatIds.length ? [{ categories: { $in: matchCatIds } }] : []),
       ...(rules.headerCategoryId ? [{ headerCategories: toId(rules.headerCategoryId) }] : []),
     ],
   }).sort({ endDate: -1 });
@@ -519,6 +633,92 @@ export const onCategorySubscriptionChanged = async (
     await syncSellerCategoryVisibility(sellerId, [catId]);
   }
   return { trialsGranted, sellersAffected: sellerIds.length };
+};
+
+/**
+ * Apply plan changes to existing sellers. Categories that newly need a plan because a plan now
+ * covers them are treated exactly like a category whose "Subscription required" switch was turned
+ * on: sellers already selling there get the free trial from Subscription Settings (if any) and a
+ * notification, otherwise their products there are hidden until they buy a plan. Categories no
+ * plan covers any more show the products again. Runs after a plan is saved / deleted and on the
+ * subscription job, so the first run after this change brings current data in line.
+ */
+export const reconcilePlanCoverage = async (adminId?: unknown) => {
+  invalidatePlanCoverage();
+  const settings = await getSubscriptionSettings();
+  const coverage = await getPlanCoverage();
+  const required = new Set<string>([
+    ...(await mainCategoriesUnderHeaders([...coverage.headerIds])).map(idStr),
+    ...coverage.mainIds,
+  ]);
+  // Categories that already need a plan through their own switch (or their group's) are handled by that switch
+  const switched: any[] = await Category.find({ subscriptionEnabled: true }).select("_id headerCategoryId").lean();
+  const switchedHeaders = switched.map((c) => (c.headerCategoryId ? idStr(c.headerCategoryId) : "")).filter(Boolean);
+  const alreadyRequired = new Set<string>([...switched.map((c) => idStr(c._id)), ...(await mainCategoriesUnderHeaders(switchedHeaders)).map(idStr)]);
+
+  const before = new Set<string>((settings.planRequiredCategoryIds || []).map(idStr));
+  const added = [...required].filter((id) => !before.has(id) && !alreadyRequired.has(id));
+  const removed = [...before].filter((id) => !required.has(id) && !alreadyRequired.has(id));
+  let trialsGranted = 0;
+  if (!settings.requirePlanForAllSellers) {
+    for (const id of added) trialsGranted += (await onCategorySubscriptionChanged(id, true, { adminId })).trialsGranted;
+    for (const id of removed) await onCategorySubscriptionChanged(id, false);
+  }
+  await SubscriptionSettings.updateOne({ _id: settings._id }, { $set: { planRequiredCategoryIds: [...required].map(toId) } });
+  return { nowRequired: added.length, noLongerRequired: removed.length, trialsGranted };
+};
+
+/**
+ * Run the expiry / reminder job if it hasn't run for a while (the hosting has no always-on timer,
+ * so it also runs when subscription screens open and on the daily schedule). One run at a time.
+ */
+export const ensureSubscriptionJobFresh = async (maxAgeMs = 15 * 60 * 1000) => {
+  const settings = await getSubscriptionSettings();
+  const claimed = await SubscriptionSettings.findOneAndUpdate(
+    { _id: settings._id, $or: [{ lastJobRunAt: null }, { lastJobRunAt: { $exists: false } }, { lastJobRunAt: { $lt: new Date(Date.now() - maxAgeMs) } }] },
+    { $set: { lastJobRunAt: new Date() } }
+  );
+  if (!claimed) return null;
+  try {
+    return await runSubscriptionJob();
+  } catch (error) {
+    console.error("Subscription job failed:", error);
+    return null;
+  }
+};
+
+/** Status to show for one subscription, worked out from its dates (not only the stored status). */
+export const subscriptionDisplayStatus = (
+  sub: { status: string; startDate?: Date | string | null; endDate?: Date | string | null; isTrial?: boolean },
+  settings: { graceDays?: number; reminderDays?: number[] },
+  now = new Date()
+): { key: "PendingPayment" | "Cancelled" | "Upcoming" | "Active" | "ExpiringSoon" | "Grace" | "Expired"; label: string; daysLeft: number | null } => {
+  const days = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
+  if (sub.status === "PendingPayment") return { key: "PendingPayment", label: "Payment pending", daysLeft: null };
+  if (sub.status === "Cancelled") return { key: "Cancelled", label: "Cancelled", daysLeft: null };
+  const start = sub.startDate ? new Date(sub.startDate) : null;
+  const end = sub.endDate ? new Date(sub.endDate) : null;
+  const trial = sub.isTrial ? "Free trial · " : "";
+  if (start && start > now) {
+    const d = Math.ceil((start.getTime() - now.getTime()) / DAY_MS);
+    return { key: "Upcoming", label: `Starts in ${days(d)}`, daysLeft: d };
+  }
+  if (end && end > now) {
+    const d = Math.ceil((end.getTime() - now.getTime()) / DAY_MS);
+    const soon = d <= Math.max(0, ...(settings.reminderDays?.length ? settings.reminderDays : [7]));
+    return soon
+      ? { key: "ExpiringSoon", label: `${trial}Expires in ${days(d)}`, daysLeft: d }
+      : { key: "Active", label: `${trial}Active · ${days(d)} left`, daysLeft: d };
+  }
+  if (end) {
+    const graceEnd = end.getTime() + (settings.graceDays || 0) * DAY_MS;
+    if (graceEnd > now.getTime()) {
+      const d = Math.ceil((graceEnd - now.getTime()) / DAY_MS);
+      return { key: "Grace", label: `Expired · renew within ${days(d)}`, daysLeft: d };
+    }
+    return { key: "Expired", label: "Expired", daysLeft: 0 };
+  }
+  return { key: sub.status === "Expired" ? "Expired" : "Active", label: sub.status, daysLeft: null };
 };
 
 /** Super Admin gives a seller a free trial for chosen categories and dates. */
@@ -857,6 +1057,13 @@ export const adminCancelSubscription = async (subscriptionId: unknown, reason?: 
 
 export const runSubscriptionJob = async (now = new Date()) => {
   const settings = await getSubscriptionSettings();
+  await SubscriptionSettings.updateOne({ _id: settings._id }, { $set: { lastJobRunAt: now } });
+  // 0. Plans saved since the last run: bring categories they cover in line for existing sellers
+  try {
+    await reconcilePlanCoverage();
+  } catch (error) {
+    console.error("Applying plan coverage failed:", error);
+  }
   const reminderDays = [...(settings.reminderDays || [])].filter((d) => d > 0).sort((a, b) => b - a);
   const stats = { reminders: 0, expired: 0, hidden: 0, pendingCleared: 0 };
   // Stores locked before this run, so every store that becomes locked during it is told (whichever step locks it)
@@ -970,91 +1177,182 @@ export const runSubscriptionJob = async (now = new Date()) => {
 const daysBetween = (from: Date, to: Date) => Math.ceil((to.getTime() - from.getTime()) / DAY_MS);
 
 export const getSellerSubscriptionOverview = async (sellerId: unknown) => {
+  // Expiry / reminders / plan changes are up to date before showing anything
+  await ensureSubscriptionJobFresh();
   const settings = await getSubscriptionSettings();
+  const coverage = await getPlanCoverage();
   const now = new Date();
   const sid = toId(sellerId);
 
-  const [plans, history, requiredCategories, sellerCategoryIds] = await Promise.all([
-    SubscriptionPlan.find({ isActive: true }).sort({ sortOrder: 1, price: 1 }).lean().then((p: any[]) => withCoveredCategories(p, "name")),
-    SellerSubscription.find({ seller: sid, status: { $ne: "PendingPayment" } }).populate("categories", "name").sort({ createdAt: -1 }).limit(100).lean(),
-    Category.find({ subscriptionEnabled: true, status: "Active", parentId: null }).select("name").lean(),
+  const [plans, rawHistory, headerCategoryDocs, sellerCategoryIds, sellerDoc] = await Promise.all([
+    SubscriptionPlan.find({ isActive: true })
+      .sort({ sortOrder: 1, price: 1 })
+      .lean()
+      .then((p: any[]) => withCoveredCategories(p, "name")),
+    SellerSubscription.find({ seller: sid, status: { $ne: "PendingPayment" } })
+      .populate("categories", "name headerCategoryId")
+      .populate("headerCategories", "name")
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean(),
+    HeaderCategory.find({ status: "Published" })
+      .sort({ order: 1, createdAt: -1 })
+      .lean(),
     Product.distinct("category", { seller: sid }),
+    Seller.findById(sid).select("categories category selectedPlan").lean(),
   ]);
 
-  // Products can be filed directly under a main category or under one of its subcategories;
-  // either way the seller "sells in" the main category, so roll every product's category up to it.
-  const sellerCats = new Set<string>();
+  // Main Categories: Show ONLY Main Categories (HeaderCategory) to seller
+  // Exclude internal navigation-only headers like 'all' / 'home'
+  const mainHeaders = (headerCategoryDocs as any[]).filter(
+    (h) => h.slug !== "all" && h.name?.toLowerCase() !== "all" && h.relatedCategory !== "home"
+  );
+
+  // Map each product category ID to its HeaderCategory ID and count products
+  const productCountByHeader = new Map<string, number>();
   for (const catId of sellerCategoryIds) {
-    const mainId = await resolveMainCategoryId(catId);
-    if (mainId) sellerCats.add(mainId);
+    if (!catId) continue;
+    const catDoc: any = await Category.findById(catId).select("headerCategoryId parentId").lean();
+    if (!catDoc) continue;
+    let hid = catDoc.headerCategoryId ? idStr(catDoc.headerCategoryId) : null;
+    if (!hid && catDoc.parentId) {
+      const parentMainId = await resolveMainCategoryId(catDoc.parentId);
+      if (parentMainId) {
+        const parentDoc: any = await Category.findById(parentMainId).select("headerCategoryId").lean();
+        hid = parentDoc?.headerCategoryId ? idStr(parentDoc.headerCategoryId) : null;
+      }
+    }
+    if (hid) {
+      const count = await Product.countDocuments({ seller: sid, category: catId });
+      productCountByHeader.set(hid, (productCountByHeader.get(hid) || 0) + count);
+    }
   }
-  const requiredIds = new Set((requiredCategories as any[]).map((c) => String(c._id)));
-  // Every category the seller actually sells in, even ones that don't require a plan,
-  // so a seller in any city always sees all of their own categories here.
-  const extraIds = [...sellerCats].filter((id) => !requiredIds.has(id));
-  const extraCategories = extraIds.length ? await Category.find({ _id: { $in: extraIds }, status: "Active" }).select("name").lean() : [];
-  const allCategories = [
-    ...(requiredCategories as any[]).map((c) => ({ ...c, required: true })),
-    ...extraCategories.map((c: any) => ({ ...c, required: false })),
-  ];
+
+  // Seller onboarding categories
+  const sellerSelectedCats = new Set<string>(
+    [
+      ...((sellerDoc as any)?.categories || []),
+      (sellerDoc as any)?.category,
+    ]
+      .filter(Boolean)
+      .map((s: string) => String(s).trim().toLowerCase())
+  );
+
+  // Subscriptions in history rolled up to main category names
+  const history = (rawHistory as any[]).map((sub) => {
+    const mainNames = new Set<string>();
+    (sub.headerCategories || []).forEach((h: any) => {
+      if (h?.name) mainNames.add(h.name);
+    });
+    (sub.categories || []).forEach((c: any) => {
+      const hName = c?.headerCategoryId?.name;
+      if (hName) mainNames.add(hName);
+      else if (c?.name) mainNames.add(c.name);
+    });
+    const displayCats = [...mainNames].map((name) => ({ name, _id: name }));
+    return {
+      ...sub,
+      categories: displayCats.length ? displayCats : sub.categories,
+      display: subscriptionDisplayStatus(sub, settings, now),
+    };
+  });
 
   const categories = [];
-  for (const cat of allCategories) {
-    if (!cat.required) {
-      categories.push({
-        categoryId: String(cat._id),
-        name: cat.name,
-        sellsHere: true,
-        required: false,
-        state: "NotRequired" as const,
-        daysLeft: null,
-        graceDays: 0,
-        endDate: null,
-        planName: null,
-        isTrial: false,
-        usage: null,
-      });
-      continue;
-    }
-    const access = await getCategoryAccess(sid, cat._id);
-    const sub = access.allowed ? access.subscription : null;
-    let state: "Active" | "ExpiringSoon" | "Grace" | "Expired" | "NotSubscribed" | "Upcoming" = "NotSubscribed";
+
+  for (const header of mainHeaders) {
+    const hid = idStr(header._id);
+    const headerNameLower = header.name.toLowerCase();
+
+    // Find all categories under this header
+    const catsUnderHeader: any[] = await Category.find({ headerCategoryId: header._id })
+      .select("_id name subscriptionEnabled subscriptionGraceDays subscriptionBillType")
+      .lean();
+    const catIdsUnderHeader = catsUnderHeader.map((c) => c._id);
+
+    // Needs a plan: store-wide rule, the category's own switch, or any active plan covers this group
+    const isRequired =
+      !!settings.requirePlanForAllSellers || catsUnderHeader.some((c) => c.subscriptionEnabled) || coverage.headerIds.has(hid);
+    const customGrace = catsUnderHeader.find((c) => typeof c.subscriptionGraceDays === "number")?.subscriptionGraceDays;
+    const graceDays = typeof customGrace === "number" ? customGrace : settings.graceDays;
+
+    const productCount = productCountByHeader.get(hid) || 0;
+    const sellsHere = productCount > 0 || sellerSelectedCats.has(headerNameLower) || sellerSelectedCats.has(hid);
+
+    // Look for active / in-grace subscription covering this HeaderCategory
+    const sub = await SellerSubscription.findOne({
+      seller: sid,
+      status: { $in: ["Active", "Expired"] },
+      startDate: { $lte: now },
+      endDate: { $gt: new Date(now.getTime() - graceDays * DAY_MS) },
+      $or: [
+        { headerCategories: header._id },
+        { categories: { $in: catIdsUnderHeader } },
+      ],
+    }).sort({ endDate: -1 }).lean();
+
+    let state: "Active" | "ExpiringSoon" | "Grace" | "Expired" | "NotSubscribed" | "Upcoming" | "NotRequired" = "NotSubscribed";
     let daysLeft: number | null = null;
-    if (sub?.endDate) {
+
+    if (!isRequired) {
+      state = "NotRequired";
+    } else if (sub?.endDate) {
       daysLeft = daysBetween(now, sub.endDate);
       if (sub.endDate <= now) {
         state = "Grace";
-        daysLeft = daysBetween(now, new Date(sub.endDate.getTime() + access.graceDays * DAY_MS));
+        daysLeft = daysBetween(now, new Date(sub.endDate.getTime() + graceDays * DAY_MS));
       } else {
         state = daysLeft <= Math.max(0, ...(settings.reminderDays || [7])) ? "ExpiringSoon" : "Active";
       }
     } else {
-      const upcoming = await SellerSubscription.findOne({ seller: sid, status: "Active", categories: cat._id, startDate: { $gt: now } }).sort({ startDate: 1 }).lean();
+      const upcoming = await SellerSubscription.findOne({
+        seller: sid,
+        status: "Active",
+        startDate: { $gt: now },
+        $or: [
+          { headerCategories: header._id },
+          { categories: { $in: catIdsUnderHeader } },
+        ],
+      }).sort({ startDate: 1 }).lean();
+
       if (upcoming) {
         state = "Upcoming";
         daysLeft = daysBetween(now, (upcoming as any).startDate);
-      } else if (history.some((h: any) => h.categories.some((c: any) => String(c._id || c) === String(cat._id)))) {
-        state = "Expired";
+      } else {
+        const hadSub = (rawHistory as any[]).some((h) =>
+          (h.headerCategories || []).some((hc: any) => idStr(hc._id || hc) === hid) ||
+          (h.categories || []).some((c: any) => catIdsUnderHeader.some((cid) => idStr(cid) === idStr(c._id || c)))
+        );
+        state = hadSub ? "Expired" : "NotSubscribed";
       }
     }
+
     let usage: { products: number; maxProducts: number | null } | null = null;
     if (sub) {
-      const matchIds = await expandCategoryWithDescendants(sub.categories);
-      const count = await Product.countDocuments({ seller: sid, category: { $in: matchIds } });
-      usage = { products: count, maxProducts: sub.planSnapshot?.limits?.maxProducts ?? null };
+      usage = {
+        products: productCount,
+        maxProducts: (sub as any).planSnapshot?.limits?.maxProducts ?? null,
+      };
+    } else if (productCount > 0) {
+      usage = {
+        products: productCount,
+        maxProducts: null,
+      };
     }
+
     categories.push({
-      categoryId: String(cat._id),
-      name: cat.name,
-      sellsHere: sellerCats.has(String(cat._id)),
-      required: true,
+      categoryId: hid,
+      name: header.name,
+      sellsHere,
+      required: isRequired,
       state,
       daysLeft,
-      graceDays: access.graceDays,
-      endDate: sub?.endDate || null,
-      planName: sub?.planSnapshot?.name || null,
-      isTrial: !!sub?.isTrial,
+      graceDays,
+      endDate: sub?.endDate ? sub.endDate.toISOString() : null,
+      planName: (sub as any)?.planSnapshot?.name || null,
+      isTrial: !!(sub as any)?.isTrial,
       usage,
+      /** Plans that include this category group */
+      plansAvailable: coverage.plansByHeader.get(hid) || [],
     });
   }
 
@@ -1067,17 +1365,18 @@ export const getSellerSubscriptionOverview = async (sellerId: unknown) => {
   }
 
   const planAccess = await getSellerPlanAccess(sid, { fresh: true });
-  const sellerDoc: any = await Seller.findById(sid).select("selectedPlan").lean();
 
   return {
     settings: {
       graceDays: settings.graceDays,
       paymentMethods: settings.paymentMethods,
       gstPercent: settings.gstPercent,
+      invoiceEnabled: settings.invoiceEnabled,
+      invoicePrefix: settings.invoicePrefix,
+      requirePlanForAllSellers: !!settings.requirePlanForAllSellers,
     },
-    // Store-wide rule status for this seller (locked = store hidden until a plan is active)
     planAccess,
-    selectedPlanId: sellerDoc?.selectedPlan ? String(sellerDoc.selectedPlan) : null,
+    selectedPlanId: (sellerDoc as any)?.selectedPlan ? String((sellerDoc as any).selectedPlan) : null,
     categories,
     plans: plansWithBilling,
     history,

@@ -18,6 +18,9 @@ import {
   onStoreWidePlanRuleChanged,
   parseDateRange,
   withCoveredCategories,
+  reconcilePlanCoverage,
+  ensureSubscriptionJobFresh,
+  subscriptionDisplayStatus,
 } from "../../../services/sellerSubscriptionService";
 
 const handle = (res: Response, error: any) => {
@@ -189,12 +192,23 @@ export const listPlans = asyncHandler(async (_req: Request, res: Response) => {
   });
 });
 
+/** After a plan is saved or removed: categories it covers need a plan for existing sellers too (trial per settings) */
+const applyPlanChange = async (adminId?: unknown) => {
+  try {
+    return await reconcilePlanCoverage(adminId);
+  } catch (error) {
+    console.error("Applying plan change to sellers failed:", error);
+    return null;
+  }
+};
+
 export const createPlan = asyncHandler(async (req: Request, res: Response) => {
   const { errors, data } = await parsePlanBody(req.body);
   if (errors.length) return res.status(400).json({ success: false, message: errors.join(". ") });
   try {
     const plan = await SubscriptionPlan.create({ ...data, createdBy: req.user?.userId });
-    return res.status(201).json({ success: true, message: "Plan created", data: plan });
+    const applied = await applyPlanChange(req.user?.userId);
+    return res.status(201).json({ success: true, message: "Plan created", data: plan, applied });
   } catch (error) {
     return handle(res, error);
   }
@@ -207,7 +221,8 @@ export const updatePlan = asyncHandler(async (req: Request, res: Response) => {
     // Sellers keep what they already bought (stored on their subscription); changes apply to new purchases
     const plan = await SubscriptionPlan.findByIdAndUpdate(req.params.id, data, { new: true, runValidators: true });
     if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
-    return res.status(200).json({ success: true, message: "Plan updated", data: plan });
+    const applied = await applyPlanChange(req.user?.userId);
+    return res.status(200).json({ success: true, message: "Plan updated", data: plan, applied });
   } catch (error) {
     return handle(res, error);
   }
@@ -218,16 +233,20 @@ export const deletePlan = asyncHandler(async (req: Request, res: Response) => {
   if (used) {
     // Keep history intact: a plan sellers have bought is switched off instead of deleted
     await SubscriptionPlan.findByIdAndUpdate(req.params.id, { isActive: false });
+    await applyPlanChange(req.user?.userId);
     return res.status(200).json({ success: true, message: "Plan has subscribers, so it was deactivated instead of deleted" });
   }
   const deleted = await SubscriptionPlan.findByIdAndDelete(req.params.id);
   if (!deleted) return res.status(404).json({ success: false, message: "Plan not found" });
+  await applyPlanChange(req.user?.userId);
   return res.status(200).json({ success: true, message: "Plan deleted" });
 });
 
 // ---------- Seller subscriptions ----------
 
 export const listSubscriptions = asyncHandler(async (req: Request, res: Response) => {
+  await ensureSubscriptionJobFresh();
+  const settings = await getSubscriptionSettings();
   const { status, sellerId, planId, expiringInDays, page = "1", limit = "20" } = req.query;
   const query: any = { status: { $ne: "PendingPayment" } };
   if (status && status !== "All") query.status = status;
@@ -266,7 +285,7 @@ export const listSubscriptions = asyncHandler(async (req: Request, res: Response
 
   return res.status(200).json({
     success: true,
-    data: items,
+    data: items.map((sub: any) => ({ ...sub, display: subscriptionDisplayStatus(sub, settings) })),
     stats: stats[0] || { active: 0, expired: 0, trials: 0, revenue: 0 },
     pagination: { page: pageNum, limit: pageSize, total, pages: Math.ceil(total / pageSize) },
   });

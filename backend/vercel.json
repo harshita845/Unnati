@@ -1,3 +1,11 @@
 {
-  "regions": ["bom1"]
+  "regions": [
+    "bom1"
+  ],
+  "crons": [
+    {
+      "path": "/api/v1/cron/subscriptions",
+      "schedule": "30 0 * * *"
+    }
+  ]
 }
