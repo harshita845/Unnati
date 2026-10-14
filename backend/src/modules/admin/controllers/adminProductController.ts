@@ -455,6 +455,12 @@ export const updateCategory = asyncHandler(
     // Subscription requirement switched on/off: trials for existing sellers, hide/show products
     let subscriptionNote = "";
     if (updatedCategory && updateData.subscriptionEnabled !== undefined && !!category.subscriptionEnabled !== !!updatedCategory.subscriptionEnabled) {
+      if (updatedCategory.headerCategoryId) {
+        await Category.updateMany(
+          { headerCategoryId: updatedCategory.headerCategoryId, parentId: null },
+          { $set: { subscriptionEnabled: updateData.subscriptionEnabled } }
+        );
+      }
       const { trialsGranted, sellersAffected } = await onCategorySubscriptionChanged(id, !!updatedCategory.subscriptionEnabled, {
         ...("trial" in existingSellerOption ? { trial: existingSellerOption.trial } : {}),
         adminId: req.user?.userId,

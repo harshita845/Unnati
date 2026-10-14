@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { canStaffAccessPath, getStaffSession } from "../../../utils/staffSession";
 import { getModuleUserData } from "../../../utils/moduleAuth";
@@ -470,6 +470,8 @@ export default function SellerSidebar({ onClose }: SellerSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [, setAccessibilityTick] = useState(0);
   const staffSession = getStaffSession("seller");
   const isStaffMode = !!staffSession;
@@ -484,6 +486,18 @@ export default function SellerSidebar({ onClose }: SellerSidebarProps) {
       window.removeEventListener(SELLER_ACCESSIBILITY_UPDATED_EVENT, handleAccessibilityUpdate);
       window.removeEventListener("storage", handleAccessibilityUpdate);
     };
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   const filterVisibleSubItems = (items: SubMenuItem[]): SubMenuItem[] => {
@@ -541,6 +555,46 @@ export default function SellerSidebar({ onClose }: SellerSidebarProps) {
         return acc;
       }, [])
     : sellerAllowedMenuItems;
+
+  // Filter menu items based on search query
+  const query = searchQuery.trim().toLowerCase();
+
+  const filterSubItemsBySearch = (items: SubMenuItem[]): SubMenuItem[] => {
+    return items.reduce<SubMenuItem[]>((acc, sub) => {
+      const subLabelMatches = sub.label.toLowerCase().includes(query);
+      const filteredNested = sub.submenuItems
+        ? filterSubItemsBySearch(sub.submenuItems)
+        : undefined;
+      const hasMatchingNested = !!(filteredNested && filteredNested.length > 0);
+
+      if (subLabelMatches || hasMatchingNested) {
+        acc.push({
+          ...sub,
+          submenuItems: hasMatchingNested ? filteredNested : sub.submenuItems,
+        });
+      }
+      return acc;
+    }, []);
+  };
+
+  const filteredMenuItems = query
+    ? visibleMenuItems.reduce<MenuItem[]>((acc, item) => {
+        const itemLabelMatches = item.label.toLowerCase().includes(query);
+        const filteredSub = item.submenuItems
+          ? filterSubItemsBySearch(item.submenuItems)
+          : undefined;
+        const hasMatchingSub = !!(filteredSub && filteredSub.length > 0);
+
+        if (itemLabelMatches || hasMatchingSub) {
+          acc.push({
+            ...item,
+            hasSubmenu: item.hasSubmenu,
+            submenuItems: hasMatchingSub ? filteredSub : item.submenuItems,
+          });
+        }
+        return acc;
+      }, [])
+    : visibleMenuItems;
 
   const isActive = (path: string) => {
     const [pathBase, pathQuery] = path.split("?");
@@ -626,6 +680,7 @@ export default function SellerSidebar({ onClose }: SellerSidebarProps) {
   };
 
   const isExpanded = (path: string) => {
+    if (query) return true;
     return (
       expandedMenus.has(path) ||
       isSubmenuActive(
@@ -664,166 +719,219 @@ export default function SellerSidebar({ onClose }: SellerSidebarProps) {
           </svg>
         </button>
       </div>
+
+      {/* Search Bar on top in sidebar */}
+      <div className="p-3 sm:p-4 border-b border-white/10">
+        <div className="relative">
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search Menu (Ctrl + F)"
+            className="w-full px-3 py-2 pl-9 pr-8 bg-black/20 border border-white/10 rounded-lg text-white placeholder-white/60 text-sm focus:outline-none focus:ring-2 focus:ring-[#6DBB2D] focus:border-[#6DBB2D] transition-colors"
+          />
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/50 pointer-events-none">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="M21 21L16.65 16.65"></path>
+          </svg>
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-1/2 transform -translate-y-1/2 text-white/50 hover:text-white p-0.5 rounded transition-colors"
+              title="Clear search"
+              aria-label="Clear search">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+
       <nav className="flex-1 py-4 sm:py-6 overflow-y-auto">
-        <ul className="space-y-0.5 px-2 sm:px-4">
-          {visibleMenuItems.map((item) => {
-            const expanded = isExpanded(item.path);
-            const active =
-              isActive(item.path) || isSubmenuActive(item.submenuItems);
+        {filteredMenuItems.length === 0 ? (
+          <div className="px-4 py-8 text-center text-white/60">
+            <p className="text-sm">No menu items found</p>
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="mt-2 text-xs text-[#6DBB2D] hover:underline">
+              Clear search
+            </button>
+          </div>
+        ) : (
+          <ul className="space-y-0.5 px-2 sm:px-4">
+            {filteredMenuItems.map((item) => {
+              const expanded = isExpanded(item.path);
+              const active =
+                isActive(item.path) || isSubmenuActive(item.submenuItems);
 
-            return (
-              <li key={item.path}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (item.hasSubmenu && item.submenuItems) {
-                      toggleMenu(item.path);
-                    } else {
-                      handleNavigation(item.path);
-                    }
-                  }}
-                  className={`w-full flex items-center justify-between px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-left transition-all duration-150 ${active
-                    ? "bg-[#1a2620] text-white border-l-[3px] border-[#6DBB2D] pl-2.5 font-semibold"
-                    : "text-white/80 hover:bg-[#6DBB2D]/10 hover:text-white"
-                    }`}>
-                  <div className="flex items-center gap-2">
-                    {item.icon && (
-                      <span className="flex-shrink-0">{item.icon}</span>
-                    )}
-                    <span className="text-sm">
-                      {item.label}
-                    </span>
-                  </div>
-                  {item.hasSubmenu && (
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                      className={`transition-transform ${expanded ? "rotate-90" : ""} ${
-                        active ? "text-white" : "text-white/60"
+              return (
+                <li key={item.path}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (item.hasSubmenu && item.submenuItems) {
+                        toggleMenu(item.path);
+                      } else {
+                        handleNavigation(item.path);
+                      }
+                    }}
+                    className={`w-full flex items-center justify-between px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-left transition-all duration-150 ${active
+                      ? "bg-[#1a2620] text-white border-l-[3px] border-[#6DBB2D] pl-2.5 font-semibold"
+                      : "text-white/80 hover:bg-[#6DBB2D]/10 hover:text-white"
                       }`}>
-                      <path
-                        d="M6 9L12 15L18 9"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  )}
-                </button>
-                {item.hasSubmenu && item.submenuItems && expanded && (
-                  <ul className="mt-0.5 space-y-0.5 ml-4">
-                    {item.submenuItems.map((subItem) => {
-                      if (subItem.submenuItems) {
-                        const expanded = isExpanded(subItem.path);
-                        const active =
-                          isSubmenuActive(subItem.submenuItems) ||
-                          isActive(subItem.path);
+                    <div className="flex items-center gap-2">
+                      {item.icon && (
+                        <span className="flex-shrink-0">{item.icon}</span>
+                      )}
+                      <span className="text-sm">
+                        {item.label}
+                      </span>
+                    </div>
+                    {item.hasSubmenu && (
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        className={`transition-transform ${expanded ? "rotate-90" : ""} ${
+                          active ? "text-white" : "text-white/60"
+                        }`}>
+                        <path
+                          d="M6 9L12 15L18 9"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    )}
+                  </button>
+                  {item.hasSubmenu && item.submenuItems && expanded && (
+                    <ul className="mt-0.5 space-y-0.5 ml-4">
+                      {item.submenuItems.map((subItem) => {
+                        if (subItem.submenuItems) {
+                          const expanded = isExpanded(subItem.path);
+                          const active =
+                            isSubmenuActive(subItem.submenuItems) ||
+                            isActive(subItem.path);
 
+                          return (
+                            <li key={subItem.path}>
+                              <button
+                                type="button"
+                                onClick={() => toggleMenu(subItem.path)}
+                                className={`w-full flex items-center justify-between px-3 sm:px-4 py-2 sm:py-2 rounded-lg text-left transition-all duration-150 ${
+                                  active
+                                    ? "bg-[#1a2620] text-white border-l-[3px] border-[#6DBB2D] pl-2.5 font-semibold"
+                                    : "text-white/70 hover:bg-[#6DBB2D]/10 hover:text-white"
+                                }`}>
+                                <div className="flex items-center gap-2">
+                                  <span className="flex-shrink-0">
+                                    {subItem.icon}
+                                  </span>
+                                  <span className="text-sm">
+                                    {subItem.label}
+                                  </span>
+                                </div>
+                                <svg
+                                  width="14"
+                                  height="14"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  className={`transition-transform ${expanded ? "rotate-90" : ""} ${
+                                    active ? "text-white" : "text-white/60"
+                                  }`}>
+                                  <path
+                                    d="M6 9L12 15L18 9"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                              </button>
+                              {expanded && (
+                                <ul className="mt-0.5 space-y-0.5 ml-4 border-l border-white/5 pl-2">
+                                  {subItem.submenuItems.map((nestedItem) => {
+                                      const nestedActive =
+                                        location.pathname === nestedItem.path ||
+                                        location.pathname.startsWith(
+                                          nestedItem.path + "/"
+                                        );
+                                      return (
+                                        <li key={nestedItem.path}>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handleNavigation(nestedItem.path)
+                                            }
+                                            className={`w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2 rounded-lg text-left transition-all duration-150 ${
+                                              nestedActive
+                                                ? "bg-[#1a2620] text-white border-l-[3px] border-[#6DBB2D] pl-2.5 font-semibold"
+                                                : "text-white/60 hover:bg-[#6DBB2D]/10 hover:text-white"
+                                            }`}>
+                                            <span className="flex-shrink-0 scale-75">
+                                              {nestedItem.icon}
+                                            </span>
+                                            <span className="text-xs">
+                                              {nestedItem.label}
+                                            </span>
+                                          </button>
+                                        </li>
+                                      );
+                                  })}
+                                </ul>
+                              )}
+                            </li>
+                          );
+                        }
+
+                        const subActive =
+                          location.pathname === subItem.path ||
+                          location.pathname.startsWith(subItem.path + "/");
                         return (
                           <li key={subItem.path}>
                             <button
                               type="button"
-                              onClick={() => toggleMenu(subItem.path)}
-                              className={`w-full flex items-center justify-between px-3 sm:px-4 py-2 sm:py-2 rounded-lg text-left transition-all duration-150 ${
-                                active
+                              onClick={() => handleNavigation(subItem.path)}
+                              className={`w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2 rounded-lg text-left transition-all duration-150 ${
+                                subActive
                                   ? "bg-[#1a2620] text-white border-l-[3px] border-[#6DBB2D] pl-2.5 font-semibold"
                                   : "text-white/70 hover:bg-[#6DBB2D]/10 hover:text-white"
                               }`}>
-                              <div className="flex items-center gap-2">
-                                <span className="flex-shrink-0">
-                                  {subItem.icon}
-                                </span>
-                                <span className="text-sm">
-                                  {subItem.label}
-                                </span>
-                              </div>
-                              <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                                className={`transition-transform ${expanded ? "rotate-90" : ""} ${
-                                  active ? "text-white" : "text-white/60"
-                                }`}>
-                                <path
-                                  d="M6 9L12 15L18 9"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
+                              <span className="flex-shrink-0">
+                                {subItem.icon}
+                              </span>
+                              <span className="text-sm">
+                                {subItem.label}
+                              </span>
                             </button>
-                            {expanded && (
-                              <ul className="mt-0.5 space-y-0.5 ml-4 border-l border-white/5 pl-2">
-                                {subItem.submenuItems.map((nestedItem) => {
-                                    const nestedActive =
-                                      location.pathname === nestedItem.path ||
-                                      location.pathname.startsWith(
-                                        nestedItem.path + "/"
-                                      );
-                                    return (
-                                      <li key={nestedItem.path}>
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            handleNavigation(nestedItem.path)
-                                          }
-                                          className={`w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2 rounded-lg text-left transition-all duration-150 ${
-                                            nestedActive
-                                              ? "bg-[#1a2620] text-white border-l-[3px] border-[#6DBB2D] pl-2.5 font-semibold"
-                                              : "text-white/60 hover:bg-[#6DBB2D]/10 hover:text-white"
-                                          }`}>
-                                          <span className="flex-shrink-0 scale-75">
-                                            {nestedItem.icon}
-                                          </span>
-                                          <span className="text-xs">
-                                            {nestedItem.label}
-                                          </span>
-                                        </button>
-                                      </li>
-                                    );
-                                })}
-                              </ul>
-                            )}
                           </li>
                         );
-                      }
-
-                      const subActive =
-                        location.pathname === subItem.path ||
-                        location.pathname.startsWith(subItem.path + "/");
-                      return (
-                        <li key={subItem.path}>
-                          <button
-                            type="button"
-                            onClick={() => handleNavigation(subItem.path)}
-                            className={`w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2 rounded-lg text-left transition-all duration-150 ${
-                              subActive
-                                ? "bg-[#1a2620] text-white border-l-[3px] border-[#6DBB2D] pl-2.5 font-semibold"
-                                : "text-white/70 hover:bg-[#6DBB2D]/10 hover:text-white"
-                            }`}>
-                            <span className="flex-shrink-0">
-                              {subItem.icon}
-                            </span>
-                            <span className="text-sm">
-                              {subItem.label}
-                            </span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                      })}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </nav>
       </div>
     </aside>

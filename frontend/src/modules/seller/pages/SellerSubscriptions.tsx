@@ -206,19 +206,14 @@ export default function SellerSubscriptions() {
 
   const methods = data.settings.paymentMethods;
 
-  // The admin's own store never needs a plan
-  if (data.exempt) {
+  if (data.isAdminStore) {
     return (
       <div className="space-y-6">
         <div className="bg-white rounded-lg shadow-sm border border-neutral-200 p-5">
           <h1 className="text-2xl font-bold text-neutral-900">Subscriptions</h1>
-          <p className="text-sm text-neutral-500 mt-1">Subscription plans are for partner stores.</p>
-        </div>
-        <div className="rounded-lg border border-[var(--primary-alpha-30)] bg-[var(--primary-alpha-10)] px-5 py-4">
-          <p className="font-semibold text-[var(--primary-darker)]">This is Unnati's own store, so no subscription is needed</p>
-          <p className="text-sm text-neutral-700 mt-1">
-            You can sell in every category and use every part of this panel without a plan. All your products stay visible to
-            customers, and nothing here ever expires.
+          <p className="text-sm text-neutral-600 mt-2">
+            This is the Unnati own store. It doesn't need a subscription plan: it can sell in every category, all sections of
+            the panel are open, and its products are always shown to customers. Plans apply only to other sellers.
           </p>
         </div>
       </div>

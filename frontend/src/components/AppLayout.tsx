@@ -457,28 +457,28 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 </Link>
 
                 {/* Delivering to Location */}
-                {userLocation && (userLocation.address || userLocation.city) && (
-                  <div
-                    onClick={() => setShowLocationChangeModal(true)}
-                    className="flex items-center gap-1.5 cursor-pointer hover:outline hover:outline-1 hover:outline-white/40 px-2.5 py-1 rounded transition-all max-w-[190px]"
-                    style={{ color: '#ffffff' }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 opacity-90 text-[#F2B134]">
-                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      <circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-[10px] text-white leading-none font-normal">Delivering to</span>
-                      <span className="text-[12px] font-bold leading-tight truncate text-neutral-300" title={userLocation?.address || ''}>
-                        {userLocation?.address
-                          ? userLocation.address.length > 20
-                            ? `${userLocation.address.substring(0, 20)}...`
-                            : userLocation.address
-                          : userLocation?.city || ''}
-                      </span>
-                    </div>
+                <div
+                  onClick={() => setShowLocationChangeModal(true)}
+                  className="flex items-center gap-1.5 cursor-pointer hover:outline hover:outline-1 hover:outline-white/40 px-2.5 py-1 rounded transition-all max-w-[190px]"
+                  style={{ color: '#ffffff' }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 opacity-90 text-[#F2B134]">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] text-white leading-none font-normal">Delivering to</span>
+                    <span className="text-[12px] font-bold leading-tight truncate text-neutral-300" title={userLocation?.address || ''}>
+                      {userLocation && (userLocation.address || userLocation.city)
+                        ? (userLocation.address
+                            ? userLocation.address.length > 20
+                              ? `${userLocation.address.substring(0, 20)}...`
+                              : userLocation.address
+                            : userLocation.city || '')
+                        : 'Select Location'}
+                    </span>
                   </div>
-                )}
+                </div>
               </div>
 
                       {/* Center: Search Bar */}
@@ -966,6 +966,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             <LocationPermissionRequest
               onLocationGranted={() => setShowLocationChangeModal(false)}
               skipable={true}
+              isChangeMode={true}
               title="Change Location"
               description="Update your location to see products available near you."
             />

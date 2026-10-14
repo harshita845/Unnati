@@ -138,8 +138,10 @@ router.use("/customer/free-gift-rules", customerFreeGiftRoutes);
 
 // Public Config Route
 import { getPublicConfig } from "../modules/customer/controllers/customerConfigController";
+import { getAvailableCities } from "../modules/customer/controllers/customerHomeController";
 router.get("/customer/config/public", getPublicConfig);
 router.get("/customer/config", getPublicConfig);
+router.get("/customer/cities", getAvailableCities);
 
 router.use("/customer", customerRoutes);
 

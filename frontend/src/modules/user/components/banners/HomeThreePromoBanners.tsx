@@ -1,47 +1,76 @@
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { bannerService } from "../../../../services/bannerService";
+import { getCategories } from "../../../../services/api/customerProductService";
 
-const BANNERS_DATA = [
-  {
-    id: "banner-1",
-    title: "Fresh Grocery",
-    subtitle: "Daily essentials at best prices",
-    priceText: "Only",
-    price: "₹99",
-    imageUrl: "/dairy.jpg", 
-    bgColor: "#E4F0EB", // Soft brand green
-    link: "/category/grocery",
-  },
-  {
-    id: "banner-2",
-    title: "Personal Care",
-    subtitle: "Pamper yourself with top brands",
-    priceText: "Only",
-    price: "₹149",
-    imageUrl: "/personal.jpg", 
-    bgColor: "#FAF0D4", // Soft brand gold
-    link: "/category/beauty",
-  },
-  {
-    id: "banner-3",
-    title: "Smart Devices",
-    subtitle: "Upgrade to modern living",
-    priceText: "Only",
-    price: "₹299",
-    imageUrl: "/electronics.jpg", 
-    bgColor: "#E4F2EE", // Soft brand mint/teal
-    link: "/category/electronics",
-  }
-];
+const BG_COLORS = ["#E4F0EB", "#FAF0D4", "#E4F2EE"];
 
 export default function HomeThreePromoBanners() {
   const navigate = useNavigate();
+  const [banners, setBanners] = useState<any[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadBanners = async () => {
+      try {
+        // 1. Try to load banners configured for Main Section Banner
+        const promoBanners = await bannerService.getBannersByPosition("Main Section Banner");
+        if (isMounted && promoBanners && promoBanners.length >= 3) {
+          const mapped = promoBanners.slice(0, 3).map((b, idx) => ({
+            id: b.id,
+            title: b.title || b.categoryName || "Special Offer",
+            subtitle: b.subtitle || "Handpicked for you",
+            priceText: "Shop",
+            price: "Now",
+            imageUrl: b.image || b.imageUrl,
+            bgColor: BG_COLORS[idx % BG_COLORS.length],
+            link: b.redirectType === 'CATEGORY' && b.redirectValue 
+              ? `/category/${b.redirectValue}` 
+              : b.redirectType === 'PRODUCT' && b.redirectValue 
+              ? `/product/${b.redirectValue}` 
+              : '/categories',
+          }));
+          setBanners(mapped);
+          return;
+        }
+
+        // 2. Fallback: dynamically load top categories from database
+        const catRes = await getCategories(false);
+        if (isMounted && catRes.success && Array.isArray(catRes.data) && catRes.data.length >= 3) {
+          const activeCats = catRes.data.filter((c: any) => c.status !== 'Inactive' && c.isActive !== false);
+          if (activeCats.length >= 3) {
+            const mapped = activeCats.slice(0, 3).map((c: any, idx: number) => ({
+              id: c._id || c.id,
+              title: c.name,
+              subtitle: c.description || `Explore top ${c.name} items`,
+              priceText: "Explore",
+              price: "Deals",
+              imageUrl: c.image || "/assets/unnati_logo.png",
+              bgColor: BG_COLORS[idx % BG_COLORS.length],
+              link: `/category/${c.slug || c._id || c.id}`,
+            }));
+            setBanners(mapped);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load promo banners:", err);
+      }
+    };
+    loadBanners();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  if (banners.length === 0) {
+    return null;
+  }
 
   return (
     <div className="px-2 md:px-4 lg:px-4 py-2 mt-2 mb-4">
-      {/* Grid wrapper for three columns */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
-        {BANNERS_DATA.map((banner) => (
+        {banners.map((banner) => (
           <motion.div
             key={banner.id}
             whileHover={{ y: -4, scale: 1.01 }}
@@ -50,9 +79,7 @@ export default function HomeThreePromoBanners() {
             style={{ backgroundColor: banner.bgColor }}
           >
             {/* Left Column Information */}
-            <div className="flex flex-col items-start text-left max-w-[55%] z-10 font-sans" style={{ fontFamily: "'Quicksand', 'Nunito', 'Inter', sans-serif" }}>
-              
-              {/* Titles */}
+            <div className="flex flex-col items-start text-left max-w-[58%] z-10 font-sans" style={{ fontFamily: "'Quicksand', 'Nunito', 'Inter', sans-serif" }}>
               <h3 className="text-[#253D4E] font-black text-sm md:text-lg leading-tight truncate w-full">
                 {banner.title}
               </h3>
@@ -60,7 +87,6 @@ export default function HomeThreePromoBanners() {
                 {banner.subtitle}
               </p>
 
-              {/* Price Details */}
               <div className="flex flex-col items-start mb-3">
                 <span className="text-[#253D4E] text-[9px] md:text-[10px] font-semibold leading-none opacity-75">
                   {banner.priceText}
@@ -70,17 +96,14 @@ export default function HomeThreePromoBanners() {
                 </span>
               </div>
 
-              {/* Shop Now Action Button */}
-              <span
-                className="bg-white hover:bg-[var(--customer-primary)] hover:text-white text-[#253D4E] font-black text-[9px] md:text-xs px-4 md:px-5 py-1.5 md:py-2 rounded-full transition-all shadow-sm active:scale-95"
-              >
+              <span className="bg-white hover:bg-[#163F2E] hover:text-white text-[#253D4E] font-black text-[9px] md:text-xs px-4 md:px-5 py-1.5 md:py-2 rounded-full transition-all shadow-sm active:scale-95">
                 Shop Now
               </span>
             </div>
 
             {/* Right Column Product Graphic */}
-            <div className="w-[40%] h-full relative flex items-center justify-end z-10">
-              <div className="w-[85px] h-[85px] md:w-[105px] md:h-[105px] rounded-full overflow-hidden bg-white/20 flex items-center justify-center p-0.5 shadow-inner">
+            <div className="w-[38%] h-full relative flex items-center justify-end z-10">
+              <div className="w-[85px] h-[85px] md:w-[105px] md:h-[105px] rounded-full overflow-hidden bg-white/40 flex items-center justify-center p-1 shadow-inner">
                 <img
                   src={banner.imageUrl}
                   alt={banner.title}
@@ -89,7 +112,6 @@ export default function HomeThreePromoBanners() {
                 />
               </div>
             </div>
-
           </motion.div>
         ))}
       </div>

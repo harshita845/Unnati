@@ -651,7 +651,7 @@ export default function AdminScanBill() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm font-semibold text-gray-900">
-                            {b.scan?.partyName || `Bill ${i + 1}`} <span className="font-normal text-gray-400">· {DOC_TYPE_LABEL[b.docType]}</span>
+                            {b.scan?.partyName || `Bill ${i + 1}`} <span className="font-normal text-gray-400">· {DOC_TYPE_LABEL[b.scan?.docType ?? b.docType]}</span>
                           </div>
                           <div className="text-[11px] text-gray-500">
                             {b.state === 'pending' && 'Waiting…'}

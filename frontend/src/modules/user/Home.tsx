@@ -13,6 +13,7 @@ import HomeThreePromoBanners from "./components/banners/HomeThreePromoBanners";
 import DealOfTheDay from "./components/banners/DealOfTheDay";
 import FirstOrderOfferBanner from "./components/banners/FirstOrderOfferBanner";
 import FeaturedCategoriesSection from "./components/FeaturedCategoriesSection";
+import ShopByStoreSection from "./components/ShopByStoreSection";
 import { getCachedHomeContent, getHomeContent } from "../../services/api/customerHomeService";
 import { getHeaderCategoriesPublic } from "../../services/api/headerCategoryService";
 import { getCachedProducts, getProducts as getCustomerProducts } from "../../services/api/customerProductService";
@@ -151,13 +152,17 @@ export default function Home() {
     }
   );
 
-  const [products, setProducts] = useState<any[]>(cachedHomeResponse?.data?.bestsellers || []);
+  // Bestseller entries are category cards (their id is a card id), not products, so never list them here
+  const [products, setProducts] = useState<any[]>([]);
   const [tabProducts, setTabProducts] = useState<any[]>(cachedTabProductsResponse?.data || []);
   const [totalPages, setTotalPages] = useState(cachedTabProductsResponse?.pagination?.pages || 1);
   const restoreTimeoutRef = useRef<number | null>(null);
   const didMountRef = useRef(false);
 
   useEffect(() => {
+    // The first request often goes out before the saved location is restored; its answer
+    // (no location = no stores) can arrive last and must not replace the located one
+    let stale = false;
     const fetchData = async () => {
       try {
         if (!cachedHomeResponse?.data) {
@@ -165,6 +170,7 @@ export default function Home() {
         }
         setError(null);
         const response = await getHomeContent(undefined, location?.latitude, location?.longitude, true, 5 * 60 * 1000, true, location?.city);
+        if (stale) return;
         if (response.success && response.data) {
           const finalData = { ...response.data };
 
@@ -217,21 +223,17 @@ export default function Home() {
               longitude: location?.longitude,
               city: location?.city,
             });
-            if (allProductsRes.success && Array.isArray(allProductsRes.data) && allProductsRes.data.length > 0) {
-              setProducts(allProductsRes.data);
-            } else if (finalData.bestsellers) {
-              setProducts(finalData.bestsellers);
-            }
+            if (stale) return;
+            setProducts(allProductsRes.success && Array.isArray(allProductsRes.data) ? allProductsRes.data : []);
           } catch (e) {
             console.debug("Failed to fetch popular products:", e);
-            if (finalData.bestsellers) {
-              setProducts(finalData.bestsellers);
-            }
+            setProducts([]);
           }
         } else {
           setError("Failed to load content. Please try again.");
         }
       } catch (error: any) {
+        if (stale) return;
         console.error("Failed to fetch home content", error);
 
         // Provide more specific error messages
@@ -246,11 +248,14 @@ export default function Home() {
         }
         setError(errorMessage);
       } finally {
-        setLoading(false);
+        if (!stale) setLoading(false);
       }
     };
 
     fetchData();
+    return () => {
+      stale = true;
+    };
   }, [location?.latitude, location?.longitude, location?.city]);
 
   useEffect(() => {
@@ -403,16 +408,18 @@ export default function Home() {
   };
 
   useEffect(() => {
+    let stale = false;
     const loadTabProducts = async () => {
       if (!activeTab || activeTab === "all") {
         setTabProducts([]);
         // Restore default home content
-        const defaultHome = getCachedHomeContent(undefined, location?.latitude, location?.longitude);
+        const defaultHome = getCachedHomeContent(undefined, location?.latitude, location?.longitude, location?.city);
         if (defaultHome?.data) {
           setHomeData(defaultHome.data);
         } else {
           try {
-            const response = await getHomeContent(undefined, location?.latitude, location?.longitude, false, 0, true);
+            const response = await getHomeContent(undefined, location?.latitude, location?.longitude, false, 0, true, location?.city);
+            if (stale) return;
             if (response.success && response.data) {
               setHomeData(response.data);
             }
@@ -431,6 +438,7 @@ export default function Home() {
           latitude: location?.latitude,
           longitude: location?.longitude,
         });
+        if (stale) return;
         if ((res as any).success && Array.isArray((res as any).data)) {
           setTabProducts((res as any).data);
           if ((res as any).pagination) {
@@ -442,6 +450,7 @@ export default function Home() {
 
         // Fetch home content for tab (categories, shops, sections)
         const homeRes = await getHomeContent(activeTab, location?.latitude, location?.longitude, true, 5 * 60 * 1000, true, location?.city);
+        if (stale) return;
         if (homeRes.success && homeRes.data) {
           setHomeData((prev: any) => ({
             ...homeRes.data,
@@ -456,7 +465,10 @@ export default function Home() {
       }
     };
     void loadTabProducts();
-  }, [activeTab, location?.latitude, location?.longitude, currentPage]);
+    return () => {
+      stale = true;
+    };
+  }, [activeTab, location?.latitude, location?.longitude, location?.city, currentPage]);
 
   const getFilteredProducts = (tabId: string) => {
     if (tabId === "all") return products;
@@ -666,58 +678,10 @@ export default function Home() {
         )}
 
         {/* Shop by Store Section */}
-        <div className="mb-6 mt-6 md:mb-8 md:mt-8">
-          <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 mb-3 md:mb-6 px-2 md:px-4 lg:px-4 tracking-tight">
-            Shop by Store
-          </h2>
-          <div className="px-2 md:px-4 lg:px-4">
-            <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 md:gap-4">
-              {(homeData.shops || []).map((tile: any) => {
-                    const hasImages =
-                      tile.image ||
-                      (tile.productImages &&
-                        tile.productImages.filter(Boolean).length > 0);
-
-                    return (
-                      <div key={tile.id} className="flex flex-col">
-                        <div
-                          onClick={() => {
-                            const storeSlug =
-                              tile.slug || tile.id.replace("-store", "");
-                            navigate(`/store/${storeSlug}`);
-                          }}
-                          className="block bg-white rounded-xl shadow-sm border border-neutral-200 hover:shadow-md transition-shadow cursor-pointer overflow-hidden">
-                          {hasImages ? (
-                            <img
-                              src={
-                                tile.image ||
-                                (tile.productImages
-                                  ? tile.productImages[0]
-                                  : "")
-                              }
-                              alt={tile.name}
-                              className="w-full h-16 object-cover"
-                            />
-                          ) : (
-                            <div
-                              className={`w-full h-16 flex items-center justify-center text-3xl text-neutral-300 ${tile.bgColor || "bg-neutral-50"
-                                }`}>
-                              {tile.name.charAt(0)}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="mt-1.5 text-center">
-                          <span className="text-xs font-semibold text-neutral-900 line-clamp-2 leading-tight">
-                            {tile.name}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+        <ShopByStoreSection
+          shops={homeData.shops || []}
+          currentCity={location?.city}
+        />
 
       </div>
     </div>

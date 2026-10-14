@@ -1,59 +1,56 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getProducts } from "../../../services/api/customerProductService";
-import { Product } from "../../../types/domain";
 import { useLocation } from "../../../hooks/useLocation";
-
-// A list of high-quality mock product images matching the user's heels, watches, sneakers mockup
-const MOCK_NEW_ARRIVALS = [
-  { id: "arrival-1", imageUrl: "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=150&auto=format&fit=crop&q=80" }, // Designer Heels
-  { id: "arrival-2", imageUrl: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=150&auto=format&fit=crop&q=80" }, // Minimalist Watch
-  { id: "arrival-3", imageUrl: "https://images.unsplash.com/photo-1524592094714-0f0654e20314?w=150&auto=format&fit=crop&q=80" }, // Leather Strap Watch
-  { id: "arrival-4", imageUrl: "https://images.unsplash.com/photo-1608231387042-66d1773070a5?w=150&auto=format&fit=crop&q=80" }, // Clean White Athletic Shoes
-  { id: "arrival-5", imageUrl: "https://images.unsplash.com/photo-1597045566677-8cf032ed6634?w=150&auto=format&fit=crop&q=80" }, // Athletic Sport Sneakers
-  { id: "arrival-6", imageUrl: "https://images.unsplash.com/photo-1600185365483-26d7a4cc7519?w=150&auto=format&fit=crop&q=80" }, // Classic Retro Shoes
-  { id: "arrival-7", imageUrl: "https://images.unsplash.com/photo-1539185441755-769473a23570?w=150&auto=format&fit=crop&q=80" }  // Premium Orange & White Running Shoes
-];
 
 export default function NewArrivalsSection() {
   const navigate = useNavigate();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { location } = useLocation();
   const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
     const fetchNewArrivals = async () => {
+      setLoading(true);
       try {
         const response = await getProducts({
-          limit: 10,
+          limit: 12,
+          sort: 'price_asc', // or newest
           latitude: location?.latitude,
           longitude: location?.longitude,
           city: location?.city,
         });
-        if (response.success && Array.isArray(response.data) && response.data.length > 0) {
-          // Map real products to image array, filtering those that have mainImage/imageUrl
+        if (isMounted && response.success && Array.isArray(response.data) && response.data.length > 0) {
           const mapped = response.data
             .filter((p: any) => p.mainImage || p.imageUrl)
             .map((p: any) => ({
               id: p._id || p.id,
-              imageUrl: p.mainImage || p.imageUrl
+              name: p.productName || p.name,
+              imageUrl: p.mainImage || p.imageUrl,
+              price: p.price,
             }));
-          
-          if (mapped.length >= 3) {
-            setProducts(mapped);
-          } else {
-            setProducts(MOCK_NEW_ARRIVALS);
-          }
+          setProducts(mapped);
         } else {
-          setProducts(MOCK_NEW_ARRIVALS);
+          if (isMounted) setProducts([]);
         }
       } catch (error) {
         console.error("Error fetching new arrivals:", error);
-        setProducts(MOCK_NEW_ARRIVALS);
+        if (isMounted) setProducts([]);
+      } finally {
+        if (isMounted) setLoading(false);
       }
     };
     fetchNewArrivals();
-  }, []);
+    return () => {
+      isMounted = false;
+    };
+  }, [location?.latitude, location?.longitude, location?.city]);
+
+  if (!loading && products.length === 0) {
+    return null;
+  }
 
   return (
     <div className="px-2 md:px-4 lg:px-4 mt-4 mb-6">
@@ -102,24 +99,20 @@ export default function NewArrivalsSection() {
           {products.map((product) => (
             <div
               key={product.id}
-              onClick={() => navigate(product.id.startsWith("arrival-") ? "/new-arrivals" : `/product/${product.id}`)}
+              onClick={() => navigate(`/product/${product.id}`)}
               className="flex-shrink-0 w-[90px] h-[90px] md:w-28 md:h-28 rounded-xl md:rounded-2xl bg-neutral-50 flex items-center justify-center overflow-hidden border border-neutral-150/60 shadow-sm cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all"
               style={{ scrollSnapAlign: "start" }}
+              title={product.name}
             >
               <img
                 src={product.imageUrl}
-                alt="New Arrival"
+                alt={product.name || "New Arrival"}
                 className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
                 loading="lazy"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.src = "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=150&auto=format&fit=crop&q=80"; // Fallback to watch image
-                }}
               />
             </div>
           ))}
         </div>
-
       </div>
     </div>
   );

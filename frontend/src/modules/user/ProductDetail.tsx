@@ -154,6 +154,12 @@ export default function ProductDetail() {
           setError(response.message || "Product not found");
         }
       } catch (error: any) {
+        // Old links to a bestseller card (not a product): open that card's category instead
+        const redirectCategory = error.response?.data?.redirectCategory;
+        if (redirectCategory) {
+          navigate(`/category/${redirectCategory}`, { replace: true });
+          return;
+        }
         console.error("Failed to fetch product", error);
         setProduct(null);
         setError(

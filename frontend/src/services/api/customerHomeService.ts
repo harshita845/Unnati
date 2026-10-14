@@ -111,3 +111,12 @@ export const getStoreProducts = async (
   const response = await api.get(`/customer/home/store/${storeId}`, { params });
   return response.data;
 };
+
+export const getAvailableCitiesService = async (): Promise<{ success: boolean; data: Array<{ city: string; latitude?: number; longitude?: number }> }> => {
+  try {
+    const response = await api.get("/customer/home/cities");
+    return response.data;
+  } catch (err) {
+    return { success: false, data: [] };
+  }
+};

@@ -108,6 +108,27 @@ export const deleteBanner = asyncHandler(async (req: Request, res: Response) => 
   });
 });
 
+// One upload at a time, even when several pages ask for the deals together
+let inlineFlashImageMigration: Promise<string> | null = null;
+
+const migrateInlineFlashDealImage = (settingsId: unknown, dataUrl: string): Promise<string> => {
+  if (!inlineFlashImageMigration) {
+    inlineFlashImageMigration = (async () => {
+      try {
+        const url = (await uploadImage(dataUrl, { folder: CLOUDINARY_FOLDERS.STORES })).secureUrl;
+        await AppSettings.updateOne({ _id: settingsId }, { $set: { 'flashDeal.image': url } });
+        return url;
+      } catch (error) {
+        console.error('Moving the flash deal image to Cloudinary failed:', (error as Error).message);
+        return dataUrl;
+      } finally {
+        inlineFlashImageMigration = null;
+      }
+    })();
+  }
+  return inlineFlashImageMigration;
+};
+
 /**
  * @desc    Get flash deal settings
  * @route   GET /flash-deals
@@ -118,6 +139,13 @@ export const getFlashDeals = asyncHandler(async (req: Request, res: Response) =>
 
   if (!settings) {
      settings = await AppSettings.getSettings();
+  }
+
+  // An image saved as text (data:image/...) before uploads went to Cloudinary made every read
+  // download megabytes (requests timed out): move it to Cloudinary once and keep only the link
+  let flashDealImage: string = settings.flashDeal?.image || '';
+  if (flashDealImage.startsWith('data:image/')) {
+    flashDealImage = await migrateInlineFlashDealImage(settings._id, flashDealImage);
   }
 
   let flashDealProductIds: string[] = (settings.flashDeal?.productIds || []).map(String);
@@ -155,7 +183,7 @@ export const getFlashDeals = asyncHandler(async (req: Request, res: Response) =>
     flashDealTargetDate: settings.flashDeal?.targetDate
       ? new Date(settings.flashDeal.targetDate).toISOString()
       : new Date(Date.now() + 86400000).toISOString(),
-    flashDealImage: settings.flashDeal?.image || '',
+    flashDealImage,
     isActive: settings.flashDeal?.active ?? true,
     // Flash Deal Products (separate from Deal of the Day)
     flashDealProductIds,

@@ -60,9 +60,15 @@ export default function SellerSignUp() {
     const fetchCats = async () => {
       try {
         const res = await getHeaderCategoriesPublic();
-        if (Array.isArray(res)) {
-          setCategories(res.filter(cat => cat.status === 'Published'));
-        }
+          setCategories(
+            res.filter(
+              (cat) =>
+                cat.status === 'Published' &&
+                cat.slug !== 'all' &&
+                cat.relatedCategory !== 'home' &&
+                cat.name?.toLowerCase() !== 'all'
+            )
+          );
       } catch (err) {
         console.error('Error fetching categories:', err);
       }

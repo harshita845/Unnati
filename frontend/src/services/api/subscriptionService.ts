@@ -152,8 +152,8 @@ export interface SubscriptionDisplayStatus {
 export interface SellerSubscriptionOverview {
   settings: { graceDays: number; paymentMethods: { online: boolean; manual: boolean; wallet: boolean }; gstPercent: number };
   planAccess?: SellerPlanAccess;
-  /** Admin's own store: subscription plans don't apply */
-  exempt?: boolean;
+  /** The admin's own store: never needs a plan */
+  isAdminStore?: boolean;
   selectedPlanId?: string | null;
   categories: SellerCategoryStatus[];
   /** Plans the seller has right now (same data the admin panel shows) */

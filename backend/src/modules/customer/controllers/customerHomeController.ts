@@ -270,6 +270,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
     // Find sellers within user's location range
     const userLat = latitude ? parseFloat(latitude as string) : null;
     const userLng = longitude ? parseFloat(longitude as string) : null;
+    const userCity = req.query.city ? String(req.query.city).trim() : null;
 
     const adminSellers = await Seller.find({
       $or: [
@@ -281,11 +282,26 @@ export const getHomeContent = async (req: Request, res: Response) => {
     const adminSellerIds = adminSellers.map(s => s._id.toString());
 
     let nearbySellerIds: mongoose.Types.ObjectId[] = [];
-    const locationProvided = (userLat !== null && userLng !== null);
+    const locationProvided = (userLat !== null && userLng !== null && !isNaN(userLat) && !isNaN(userLng));
     if (locationProvided) {
       nearbySellerIds = await findSellersWithinRange(userLat, userLng);
+      if (nearbySellerIds.length === 0 && userCity) {
+        const citySellers = await Seller.find({
+          city: { $regex: new RegExp(`^${userCity}$`, "i") },
+          status: "Approved",
+          subscriptionLocked: { $ne: true },
+        }).select("_id");
+        nearbySellerIds = citySellers.map(s => s._id as mongoose.Types.ObjectId);
+      }
+    } else if (userCity) {
+      const citySellers = await Seller.find({
+        city: { $regex: new RegExp(`^${userCity}$`, "i") },
+        status: "Approved",
+        subscriptionLocked: { $ne: true },
+      }).select("_id");
+      nearbySellerIds = citySellers.map(s => s._id as mongoose.Types.ObjectId);
     } else {
-      // If no location provided, return empty sellers list to enforce filtering
+      // If no location provided, return empty sellers list to enforce user setting location
       nearbySellerIds = [];
     }
 
@@ -367,11 +383,15 @@ export const getHomeContent = async (req: Request, res: Response) => {
       locationProvided
     );
 
-    // 3. Categories for Tiles (Grocery, Snacks, etc)
-    const categoryFilterQuery: any = { status: "Active" };
+    // 3. Categories for Tiles (Grocery, Snacks, etc) - Root categories only (no subcategories)
+    const categoryFilterQuery: any = {
+      status: "Active",
+      $or: [{ parentId: null }, { parentId: { $exists: false } }],
+    };
     if (headerCategorySlug && headerCategorySlug !== "all") {
+      const slugStr = String(headerCategorySlug).trim();
       const headerCategory = await HeaderCategory.findOne({
-        slug: headerCategorySlug,
+        slug: { $in: [slugStr, slugStr.replace(/-$/, ""), `${slugStr}-`] },
         status: "Published",
       }).lean();
       if (headerCategory) {
@@ -383,32 +403,26 @@ export const getHomeContent = async (req: Request, res: Response) => {
       .select("name image icon color slug")
       .sort({ order: 1 });
 
-    // 4. Shop By Store - Fetch active Seller stores strictly based on location/city
+    // 4. Shop By Store - Fetch active Seller stores strictly based on location/city.
+    // The admin's own store is listed like any other store that delivers to the user.
     let shopSellerQuery: any = {
       status: "Approved",
       isEnabled: true,
-      category: { $ne: "Admin" }
     };
 
-    const userCity = req.query.city ? String(req.query.city).trim() : null;
-
-    const nonAdminNearbyIds = nearbySellerIds.filter(
-      (id) => !adminSellerIds.includes(id.toString())
-    );
-
-    if (locationProvided && nonAdminNearbyIds.length > 0) {
-      shopSellerQuery._id = { $in: nonAdminNearbyIds };
+    if (locationProvided && nearbySellerIds.length > 0) {
+      shopSellerQuery._id = { $in: nearbySellerIds };
     } else if (userCity) {
       shopSellerQuery.city = { $regex: new RegExp(`^${userCity}$`, "i") };
     } else if (locationProvided) {
-      shopSellerQuery._id = { $in: nonAdminNearbyIds };
+      shopSellerQuery._id = { $in: nearbySellerIds };
     } else {
       // Location unknown: no stores (never default to another city)
       shopSellerQuery._id = { $in: [] };
     }
 
     const sellerStores = await Seller.find(shopSellerQuery)
-      .select("storeName sellerName logo storeBanner image category city address location")
+      .select("storeName sellerName logo storeBanner image category city address location serviceableArea rating workingHours")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -419,11 +433,29 @@ export const getHomeContent = async (req: Request, res: Response) => {
           status: "Active",
           publish: true, subscriptionHidden: { $ne: true },
         })
-          .select("mainImage")
-          .limit(4)
+          .select("title mainImage price regularPrice")
+          .limit(6)
           .lean();
 
         const productImages = sellerProducts.map((p: any) => p.mainImage).filter(Boolean);
+        const productsPreview = sellerProducts.map((p: any) => ({
+          id: p._id.toString(),
+          title: p.title || p.productName || "Product",
+          image: p.mainImage,
+          price: p.price,
+          regularPrice: p.regularPrice,
+        }));
+
+        const addressStr = typeof seller.address === "string" && seller.address.trim()
+          ? seller.address.trim()
+          : (seller.serviceableArea || seller.city || "Local Area");
+
+        const totalProductCount = await Product.countDocuments({
+          seller: seller._id,
+          status: "Active",
+          publish: true,
+          subscriptionHidden: { $ne: true },
+        });
 
         return {
           id: seller._id.toString(),
@@ -432,9 +464,15 @@ export const getHomeContent = async (req: Request, res: Response) => {
           logo: seller.logo || seller.image || "",
           image: seller.storeBanner || seller.logo || seller.image || (productImages.length > 0 ? productImages[0] : ""),
           productImages,
+          productsPreview,
           slug: seller._id.toString(),
-          category: seller.category,
+          category: seller.category || "Grocery & Daily Needs",
           city: seller.city,
+          address: addressStr,
+          serviceableArea: seller.serviceableArea || "",
+          rating: seller.rating || 4.8,
+          totalProducts: totalProductCount,
+          deliveryTime: "15-25 mins",
           bgColor: "bg-neutral-50",
         };
       })
@@ -443,7 +481,14 @@ export const getHomeContent = async (req: Request, res: Response) => {
     // Sellers whose subscription plan includes "featured store" are listed first
     const featuredSellerIds = new Set(await getFeaturedSellerIds());
     shops.forEach((shop: any) => (shop.isFeatured = featuredSellerIds.has(shop.id)));
-    shops.sort((a: any, b: any) => Number(!!b.isFeatured) - Number(!!a.isFeatured));
+    shops.sort((a: any, b: any) => {
+      if (!!b.isFeatured !== !!a.isFeatured) {
+        return Number(!!b.isFeatured) - Number(!!a.isFeatured);
+      }
+      const bHasProducts = (b.totalProducts || 0) > 0 ? 1 : 0;
+      const aHasProducts = (a.totalProducts || 0) > 0 ? 1 : 0;
+      return bHasProducts - aHasProducts;
+    });
 
     // 5. Trending Items (Fetch some popular categories or products)
     const trendingCategories = await Category.find({
@@ -981,3 +1026,34 @@ async function getCategoryIdByName(name: string) {
   });
   return cat ? cat._id : null;
 }
+
+// Get distinct available cities where sellers operate
+export const getAvailableCities = async (_req: Request, res: Response) => {
+  try {
+    const sellers = await Seller.find({
+      status: "Approved",
+      city: { $exists: true, $ne: "" },
+      subscriptionLocked: { $ne: true }
+    }).select("city location address").lean();
+
+    const cityMap = new Map<string, { city: string; latitude?: number; longitude?: number }>();
+    sellers.forEach((s: any) => {
+      const cityName = String(s.city || "").trim();
+      if (!cityName) return;
+      const key = cityName.toLowerCase();
+      if (!cityMap.has(key)) {
+        const coords = s.location?.coordinates;
+        cityMap.set(key, {
+          city: cityName,
+          latitude: coords && coords.length === 2 && (coords[0] !== 0 || coords[1] !== 0) ? coords[1] : undefined,
+          longitude: coords && coords.length === 2 && (coords[0] !== 0 || coords[1] !== 0) ? coords[0] : undefined,
+        });
+      }
+    });
+
+    const data = Array.from(cityMap.values()).sort((a, b) => a.city.localeCompare(b.city));
+    return res.json({ success: true, data });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: "Failed to fetch cities", error: error.message });
+  }
+};

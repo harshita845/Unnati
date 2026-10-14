@@ -14,6 +14,7 @@ import { useThemeContext } from '../../../context/ThemeContext';
 import { useAppContext } from '../../../context/AppContext';
 import { useAuth } from '../../../context/AuthContext';
 import { useCart } from '../../../context/CartContext';
+import LocationPermissionRequest from '../../../components/LocationPermissionRequest';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -273,6 +274,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
 
   const checkScrollLimits = () => {
     const container = tabsContainerRef.current;
@@ -375,22 +377,13 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
     fetchCategories();
   }, []);
 
-  // Search suggestions
+  // Search suggestions derived dynamically from real catalog categories
   const searchSuggestions = useMemo(() => {
-    if (activeTab === 'all' && categories.length > 0) {
-      return categories.slice(0, 8).map(c => c.name.toLowerCase());
+    if (categories.length > 0) {
+      return categories.slice(0, 10).map(c => c.name);
     }
-    switch (activeTab) {
-      case 'wedding': return ['gift packs', 'dry fruits', 'sweets', 'decorative items', 'wedding cards', 'return gifts'];
-      case 'winter': return ['woolen clothes', 'caps', 'gloves', 'blankets', 'heater', 'winter wear'];
-      case 'electronics': return ['chargers', 'cables', 'power banks', 'earphones', 'phone cases', 'screen guards'];
-      case 'beauty': return ['lipstick', 'makeup', 'skincare', 'kajal', 'face wash', 'moisturizer'];
-      case 'grocery': return ['atta', 'milk', 'dal', 'rice', 'oil', 'vegetables'];
-      case 'fashion': return ['clothing', 'shoes', 'accessories', 'watches', 'bags', 'jewelry'];
-      case 'sports': return ['cricket bat', 'football', 'badminton', 'fitness equipment', 'sports shoes', 'gym wear'];
-      default: return ['atta', 'milk', 'dal', 'coke', 'bread', 'eggs', 'rice', 'oil'];
-    }
-  }, [activeTab, categories]);
+    return ['Products', 'Groceries', 'Categories', 'Brands'];
+  }, [categories]);
 
   useLayoutEffect(() => {
     const hero = heroRef.current;
@@ -662,43 +655,33 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                 <path d="M13.73 21a2 2 0 0 1-3.46 0" />
               </svg>
-              {/* Green notification badge as requested */}
-              <span className="absolute -top-0.5 -right-1 bg-[#163F2E] text-white text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white shadow-sm">
-                3
-              </span>
             </Link>
           </div>
         </div>
 
-        {/* Row 2: Deliver To dropdown (Half Width) */}
-        {locationDisplayText && (
-          <div
-            className="max-w-[65%] border border-neutral-100/90 rounded-2xl py-2 px-3 flex items-center justify-between bg-white cursor-pointer shadow-[0_1px_4px_rgba(0,0,0,0.015)] active:bg-neutral-50 transition-colors"
-            onClick={() => {
-              if (!isLocationLoading) {
-                requestLocation();
-              }
-            }}
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 text-[#d97706]">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-                <circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <div className="flex flex-col text-left min-w-0">
-                <span className="text-[9px] uppercase tracking-wider font-extrabold text-[#707c97] leading-none">
-                  DELIVER TO
-                </span>
-                <span className="text-[12px] font-extrabold text-[#111827] truncate max-w-[150px] mt-0.5 leading-tight">
-                  {isLocationLoading ? 'Updating Location...' : locationDisplayText}
-                </span>
-              </div>
-            </div>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 text-neutral-400 ml-2">
-              <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        {/* Row 2: Deliver To dropdown */}
+        <div
+          className="max-w-[80%] border border-neutral-100/90 rounded-2xl py-2 px-3 flex items-center justify-between bg-white cursor-pointer shadow-[0_1px_4px_rgba(0,0,0,0.015)] active:bg-neutral-50 transition-colors"
+          onClick={() => setShowLocationModal(true)}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 text-[#d97706]">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
+            <div className="flex flex-col text-left min-w-0">
+              <span className="text-[9px] uppercase tracking-wider font-extrabold text-[#707c97] leading-none">
+                DELIVER TO
+              </span>
+              <span className="text-[12px] font-extrabold text-[#111827] truncate max-w-[180px] mt-0.5 leading-tight">
+                {isLocationLoading ? 'Updating Location...' : (locationDisplayText || 'Select Delivery Location')}
+              </span>
+            </div>
           </div>
-        )}
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 text-neutral-400 ml-2">
+            <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
 
         {/* Row 3: Capsule Search Bar (Less Compact / More Spaced out) */}
         <div
@@ -721,7 +704,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                     className={`absolute inset-0 flex items-center transition-all duration-500 ${isActive ? 'translate-y-0 opacity-100' : isPrev ? '-translate-y-full opacity-0' : 'translate-y-full opacity-0'}`}
                   >
                     <span className="text-xs text-neutral-400 font-sans truncate">
-                      Search &quot;Atta, Rice, Oil, Maggi...&quot;
+                      Search &quot;{suggestion}&quot;
                     </span>
                   </div>
                 );
@@ -976,6 +959,16 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
     )}
 
       {renderStickyContent()}
+
+      {showLocationModal && (
+        <LocationPermissionRequest
+          onLocationGranted={() => setShowLocationModal(false)}
+          skipable={true}
+          isChangeMode={true}
+          title="Choose Delivery Location"
+          description="Update your location to view available stores and products near you."
+        />
+      )}
     </div>
   );
 }

@@ -327,43 +327,6 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
                 bgColor: c.color || "bg-yellow-50",
               }));
           }
-
-          // Fallback: Map bestsellers to FeaturedProducts if no PromoStrip featured products
-          if (fetchedProducts.length === 0 && response.data.bestsellers && response.data.bestsellers.length > 0) {
-            fetchedProducts = response.data.bestsellers.map((p: any) => {
-              const price = Number(p.price) || 0;
-              const mrp = Number(p.mrp) || 0;
-              const originalPrice = mrp > 0 ? mrp : (price > 0 ? Math.round(price * 1.2) : 999);
-              const discountedPrice = price > 0 ? price : 499;
-
-              // Try multiple image field names and fallbacks
-              const imageUrl =
-                p.mainImage ||
-                p.mainImageUrl ||
-                p.image ||
-                p.imageUrl ||
-                (p.galleryImageUrls && p.galleryImageUrls.length > 0 ? p.galleryImageUrls[0] : null) ||
-                (p.galleryImages && p.galleryImages.length > 0 ? p.galleryImages[0] : null) ||
-                (p.productImages && p.productImages.length > 0 ? p.productImages[0] : null) ||
-                null;
-
-              // Always prioritize productName to avoid showing category names
-              const productName = (typeof p.productName === 'string' ? p.productName : null) ||
-                                 (typeof p.name === 'string' ? p.name : null) || "Product";
-
-              return {
-                id: p._id,
-                _id: p._id,
-                name: productName,
-                productName: productName, // Always use productName, never category name
-                price: price,
-                mrp: mrp,
-                originalPrice: isNaN(originalPrice) ? 999 : originalPrice,
-                discountedPrice: isNaN(discountedPrice) ? 499 : discountedPrice,
-                imageUrl: imageUrl,
-              };
-            });
-          }
         }
 
         setCategoryCards(fetchedCards);

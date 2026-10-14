@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { getCategories } from "../../../services/api/customerProductService";
-import { Category } from "../../../types/domain";
 
-// A curated list of beautiful pastel background colors matching the reference image style
+// A curated list of beautiful pastel background colors
 const PASTEL_BG_COLORS = [
   "#F2FCE4", // Light Green
   "#FFF3EB", // Light Peach/Orange
@@ -13,53 +12,45 @@ const PASTEL_BG_COLORS = [
   "#FFF8EB", // Light Yellow
   "#F5F5FF", // Light Lavender/Blue
   "#F8F0FF", // Light Violet
-  "#FFF3EB", // Light Peach/Orange (repeated)
-  "#F2FCE4", // Light Green (repeated)
-  "#FFF8EB", // Light Yellow (repeated)
-];
-
-// Fallback high-quality categories matching the user's mockup image
-const MOCK_FEATURED_CATEGORIES = [
-  { id: "grocery", name: "Cake & Milk", itemCount: 11, image: "https://images.unsplash.com/photo-1587314168485-3236d6710814?w=150&auto=format&fit=crop&q=80" },
-  { id: "fruits", name: "Organic Kiwi", itemCount: 6, image: "https://images.unsplash.com/photo-1585059895524-72359e061381?w=150&auto=format&fit=crop&q=80" },
-  { id: "peach", name: "Peach", itemCount: 6, image: "https://images.unsplash.com/photo-1628114251410-b998cf292c30?w=150&auto=format&fit=crop&q=80" },
-  { id: "apple", name: "Red Apple", itemCount: 10, image: "https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=150&auto=format&fit=crop&q=80" },
-  { id: "snacks", name: "Snacks", itemCount: 11, image: "https://images.unsplash.com/photo-1599490659283-44626a751c6a?w=150&auto=format&fit=crop&q=80" },
-  { id: "vegetables", name: "Vegetables", itemCount: 6, image: "https://images.unsplash.com/photo-1597362925123-77861d3fbac7?w=150&auto=format&fit=crop&q=80" },
-  { id: "strawberry", name: "Strawberry", itemCount: 10, image: "https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=150&auto=format&fit=crop&q=80" },
-  { id: "plum", name: "Black Plum", itemCount: 10, image: "https://images.unsplash.com/photo-1603052875302-d376b7c0638a?w=150&auto=format&fit=crop&q=80" },
-  { id: "custard-apple", name: "Custard Apple", itemCount: 10, image: "https://images.unsplash.com/photo-1629115916386-b4851be52467?w=150&auto=format&fit=crop&q=80" },
-  { id: "electronics", name: "Coffee & Tea", itemCount: 11, image: "https://images.unsplash.com/photo-1507133750040-4a8f57021571?w=150&auto=format&fit=crop&q=80" }
 ];
 
 export default function FeaturedCategoriesSection() {
   const navigate = useNavigate();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [categories, setCategories] = useState<any[]>([]);
-  const [activeFilter, setActiveFilter] = useState("All");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
     const fetchCategories = async () => {
       try {
         const response = await getCategories(false);
-        if (response.success && Array.isArray(response.data) && response.data.length > 0) {
-          const mapped = response.data.slice(0, 12).map((cat: any, index: number) => ({
-            id: cat._id || cat.id,
-            name: cat.name,
-            itemCount: cat.productCount || Math.floor(Math.random() * 15) + 3,
-            image: cat.image || MOCK_FEATURED_CATEGORIES[index % MOCK_FEATURED_CATEGORIES.length].image,
-            slug: cat.slug || cat._id
-          }));
-          setCategories(mapped);
+        if (isMounted && response.success && Array.isArray(response.data) && response.data.length > 0) {
+          const valid = response.data
+            .filter((cat: any) => cat.status !== "Inactive" && cat.isActive !== false)
+            .slice(0, 16)
+            .map((cat: any) => ({
+              id: cat._id || cat.id,
+              name: cat.name,
+              itemCount: cat.totalProducts ?? cat.productCount ?? 0,
+              image: cat.image || "",
+              slug: cat.slug || cat._id
+            }));
+          setCategories(valid);
         } else {
-          setCategories(MOCK_FEATURED_CATEGORIES);
+          if (isMounted) setCategories([]);
         }
       } catch (error) {
         console.error("Error fetching categories for Featured Section:", error);
-        setCategories(MOCK_FEATURED_CATEGORIES);
+        if (isMounted) setCategories([]);
+      } finally {
+        if (isMounted) setLoading(false);
       }
     };
     fetchCategories();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleScroll = (direction: "left" | "right") => {
@@ -73,8 +64,9 @@ export default function FeaturedCategoriesSection() {
     }
   };
 
-  // Top sub-header filters (e.g. Cake & Milk, Coffees & Teas, etc.)
-  const filterTabs = ["All", "Cake & Milk", "Coffees & Teas", "Pet Foods", "Vegetables"];
+  if (!loading && categories.length === 0) {
+    return null;
+  }
 
   return (
     <div className="w-full bg-white py-2 pb-3.5 px-2 md:py-6 md:px-6 lg:px-8 border-b border-neutral-100 animate-fade-in">
@@ -84,7 +76,7 @@ export default function FeaturedCategoriesSection() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
           <div className="flex flex-wrap items-baseline gap-4 md:gap-6">
             <h2 
-              className="text-lg md:text-2xl lg:text-[32px] font-bold tracking-tight"
+              className="text-lg md:text-2xl lg:text-[28px] font-bold tracking-tight"
               style={{ fontFamily: "'Quicksand', 'Nunito', 'Inter', sans-serif", color: '#253D4E' }}
             >
               Featured Categories
@@ -124,7 +116,6 @@ export default function FeaturedCategoriesSection() {
         >
           {categories.map((category, index) => {
             const bgColor = PASTEL_BG_COLORS[index % PASTEL_BG_COLORS.length];
-            // Capitalize category name: First letter uppercase, others lowercase
             const formattedName = category.name
               ? category.name.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())
               : "";
@@ -133,7 +124,7 @@ export default function FeaturedCategoriesSection() {
                 key={category.id}
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.05 }}
+                transition={{ duration: 0.3, delay: index * 0.04 }}
                 whileHover={{ y: -3, scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 className="flex-shrink-0 flex flex-col items-center cursor-pointer transition-all w-[92px] md:w-[136px]"
@@ -145,24 +136,31 @@ export default function FeaturedCategoriesSection() {
                   }
                 }}
               >
-                {/* Mobile: rounded border square card. Desktop: uses fallback flex card styling */}
+                {/* Card Container */}
                 <div 
-                  className="w-[92px] h-[92px] md:w-full md:h-[120px] flex items-center justify-center border border-neutral-100 rounded-[24px] bg-white p-1 shadow-sm md:shadow-none md:border-0 md:p-3"
+                  className="w-[92px] h-[92px] md:w-full md:h-[120px] flex items-center justify-center border border-neutral-100 rounded-[24px] bg-white p-1 shadow-sm md:shadow-none md:border-0 md:p-3 overflow-hidden"
                   style={{
                     backgroundColor: window.innerWidth < 768 ? '#ffffff' : bgColor,
                     borderRadius: window.innerWidth < 768 ? '24px' : '16px'
                   }}
                 >
-                  <img
-                    src={category.image}
-                    alt={category.name}
-                    className="w-full h-full object-cover rounded-[20px] md:rounded-[14px] transition-transform duration-300 hover:scale-110"
-                    loading="lazy"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = "https://images.unsplash.com/photo-1597362925123-77861d3fbac7?w=150&auto=format&fit=crop&q=80"; // Fallback to veg image
-                    }}
-                  />
+                  {category.image ? (
+                    <img
+                      src={category.image}
+                      alt={category.name}
+                      className="w-full h-full object-cover rounded-[20px] md:rounded-[14px] transition-transform duration-300 hover:scale-110"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center rounded-[20px] md:rounded-[14px] bg-neutral-100 text-neutral-400">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                      </svg>
+                    </div>
+                  )}
                 </div>
 
                 {/* Category Text Information */}
@@ -173,9 +171,11 @@ export default function FeaturedCategoriesSection() {
                   >
                     {formattedName}
                   </h3>
-                  <span className="hidden md:inline-block text-[11px] text-neutral-400 font-semibold leading-none mt-1">
-                    {category.itemCount} items
-                  </span>
+                  {category.itemCount > 0 && (
+                    <span className="hidden md:inline-block text-[11px] text-neutral-400 font-semibold leading-none mt-1">
+                      {category.itemCount} items
+                    </span>
+                  )}
                 </div>
               </motion.div>
             );

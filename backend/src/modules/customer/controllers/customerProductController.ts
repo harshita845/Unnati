@@ -7,6 +7,7 @@ import mongoose from "mongoose";
 import Seller from "../../../models/Seller"; // Import Seller model
 import Brand from "../../../models/Brand";
 import AppSettings from "../../../models/AppSettings";
+import BestsellerCard from "../../../models/BestsellerCard";
 import { findSellersWithinRange } from "../../../utils/locationHelper";
 import { toListItem, toListItems, toDetail } from "../../product/productReadMapper";
 
@@ -492,9 +493,15 @@ export const getProductById = async (req: Request, res: Response) => {
       );
 
     if (!product) {
+      // Older home pages linked bestseller cards as products: send those links to the card's category
+      const card = mongoose.Types.ObjectId.isValid(id)
+        ? await BestsellerCard.findById(id).populate("category", "slug").select("category").lean()
+        : null;
+      const cardCategory: any = card?.category;
       return res.status(404).json({
         success: false,
         message: "Product not found or unavailable",
+        ...(cardCategory && { redirectCategory: cardCategory.slug || String(cardCategory._id || cardCategory) }),
       });
     }
 
