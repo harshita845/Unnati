@@ -48,8 +48,10 @@ export function getOcrProvider(): OcrProvider {
     case "gemini": {
       const key = process.env.GEMINI_API_KEY;
       if (!key) throw new OcrProviderError("AI scanning is set to Gemini but GEMINI_API_KEY is not set on the server.", "config");
-      const fallback = process.env.OCR_FALLBACKS === "off" ? null : (process.env.OCR_FALLBACK_MODEL || "").trim() || undefined;
-      provider = new GeminiOcrProvider(key, model, fallback);
+      const fallbacksOff = process.env.OCR_FALLBACKS === "off";
+      const fallback = fallbacksOff ? null : (process.env.OCR_FALLBACK_MODEL || "").trim() || undefined;
+      const lastResort = fallbacksOff ? null : (process.env.OCR_LAST_RESORT_MODEL || "").trim() || undefined;
+      provider = new GeminiOcrProvider(key, model, fallback, lastResort);
       break;
     }
     case "fake":
