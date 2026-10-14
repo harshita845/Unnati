@@ -91,12 +91,14 @@ export const getSocketBaseURL = (): string => {
     return normalizeBaseUrl(import.meta.env.VITE_API_URL);
   }
 
-  // In development, use localhost:5000 directly (since Vite proxy doesn't work for WebSockets)
-  if (import.meta.env.DEV) {
+  const apiBaseUrl = getApiBaseURL();
+
+  // In development, connect straight to the backend from VITE_API_BASE_URL (the Vite proxy
+  // doesn't carry WebSockets), so the socket uses the same port as the API calls
+  if (import.meta.env.DEV && !/^https?:\/\//.test(apiBaseUrl)) {
     return "http://localhost:5001";
   }
 
-  const apiBaseUrl = getApiBaseURL();
   const socketUrl = apiBaseUrl.replace(/\/api\/v\d+$|\/api$/, '');
 
   return normalizeBaseUrl(socketUrl || window.location.origin);
