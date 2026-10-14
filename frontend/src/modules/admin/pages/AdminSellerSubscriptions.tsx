@@ -18,6 +18,8 @@ import {
   formatINR,
   getPlans,
   getSellerSubscriptions,
+  getSellerPlansBySeller,
+  type SellerPlansRow,
   getSubscriptionSettings,
   grantSellerTrial,
   toDateInput,
@@ -31,7 +33,7 @@ import {
   SellerModuleDefinition,
 } from "../../../constants/sellerModules";
 
-type Tab = "plans" | "subscriptions" | "settings";
+type Tab = "plans" | "sellers" | "subscriptions" | "settings";
 
 const emptyPlan: PlanInput = {
   name: "",
@@ -114,6 +116,8 @@ export default function AdminSellerSubscriptions() {
   const [subs, setSubs] = useState<SellerSubscription[]>([]);
   const [stats, setStats] = useState<{ active: number; expired: number; trials: number; revenue: number } | null>(null);
   const [statusFilter, setStatusFilter] = useState("All");
+  const [sellerPlans, setSellerPlans] = useState<SellerPlansRow[] | null>(null);
+  const [sellerSearch, setSellerSearch] = useState("");
   const [expiringOnly, setExpiringOnly] = useState(false);
   const [activateForm, setActivateForm] = useState<{ sellerId: string; planId: string; reference: string; customDates: boolean; startDate: string; endDate: string } | null>(null);
   const [trialForm, setTrialForm] = useState<{ sellerId: string; categories: string[]; startDate: string; endDate: string } | null>(null);
@@ -176,6 +180,15 @@ export default function AdminSellerSubscriptions() {
     }
   };
 
+  const loadSellerPlans = async () => {
+    try {
+      const res = await getSellerPlansBySeller();
+      setSellerPlans(res.data || []);
+    } catch (err) {
+      showToast(errorMessage(err, "Failed to load sellers' plans"), "error");
+    }
+  };
+
   const loadSettings = async () => {
     try {
       const res = await getSubscriptionSettings();
@@ -196,6 +209,7 @@ export default function AdminSellerSubscriptions() {
 
   useEffect(() => {
     if (tab === "subscriptions") loadSubscriptions();
+    if (tab === "sellers") loadSellerPlans();
   }, [tab, statusFilter, expiringOnly]);
 
   // Group modules by category for the Plan accessibility selector
@@ -446,7 +460,8 @@ export default function AdminSellerSubscriptions() {
         </p>
         <div className="flex flex-wrap gap-2 mt-4">
           {tabButton("plans", "Plans")}
-          {tabButton("subscriptions", "Seller Subscriptions")}
+          {tabButton("sellers", "Sellers & their plans")}
+          {tabButton("subscriptions", "All subscriptions")}
           {tabButton("settings", "Settings")}
         </div>
       </div>
@@ -523,6 +538,83 @@ export default function AdminSellerSubscriptions() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ===================== SELLERS & PLANS ===================== */}
+      {tab === "sellers" && (
+        <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
+          <div className="px-5 py-3 border-b border-neutral-200 flex flex-wrap items-center gap-3">
+            <p className="text-sm text-neutral-600 flex-1 min-w-[240px]">
+              Every seller with the plans they have right now and days left to renew — the same list each seller sees under
+              Subscriptions → My plans. Free trials started together show as one entry.
+            </p>
+            <input
+              value={sellerSearch}
+              onChange={(e) => setSellerSearch(e.target.value)}
+              placeholder="Search store, name or mobile"
+              className="px-3 py-2 border border-neutral-300 rounded-lg text-sm w-64"
+            />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-neutral-50 text-xs uppercase text-neutral-500">
+                <tr>
+                  {["Seller", "Plans right now", "Categories", "Valid until", "Days left"].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-200">
+                {sellerPlans === null && <tr><td colSpan={5} className="px-4 py-6 text-center text-neutral-500">Loading…</td></tr>}
+                {(sellerPlans || [])
+                  .filter((r) => {
+                    const q = sellerSearch.trim().toLowerCase();
+                    return !q || [r.storeName, r.sellerName, r.mobile, r.city].some((v) => String(v || "").toLowerCase().includes(q));
+                  })
+                  .map((r) => {
+                    const seller = (
+                      <td className="px-4 py-3 align-top" rowSpan={Math.max(1, r.plans.length)}>
+                        <p className="font-medium text-neutral-900">{r.storeName || "—"}</p>
+                        <p className="text-xs text-neutral-500">{[r.sellerName, r.mobile, r.city].filter(Boolean).join(" · ")}</p>
+                        <p className="text-xs text-neutral-500">
+                          {r.status}
+                          {r.joinedAt ? ` · joined ${formatDateIN(r.joinedAt)}` : ""}
+                        </p>
+                      </td>
+                    );
+                    if (!r.plans.length) {
+                      return (
+                        <tr key={r._id} className="hover:bg-neutral-50">
+                          {seller}
+                          <td className="px-4 py-3 text-neutral-500" colSpan={4}>
+                            {r.isAdminStore
+                              ? "Your own store — no plan needed"
+                              : r.pendingPlanName
+                              ? `Picked "${r.pendingPlanName}" at signup — not paid yet`
+                              : "No active plan"}
+                          </td>
+                        </tr>
+                      );
+                    }
+                    return r.plans.map((p, i) => (
+                      <tr key={`${r._id}-${p.key}`} className="hover:bg-neutral-50">
+                        {i === 0 && seller}
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-neutral-900">{p.planName}</p>
+                          <p className="text-xs text-neutral-500">
+                            {p.isTrial ? "Free trial" : `${formatINR(p.payment?.totalAmount || 0)}${p.payment?.method ? ` · ${p.payment.method}` : ""}`}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3 text-xs">{p.groups.join(", ")}</td>
+                        <td className="px-4 py-3 text-xs whitespace-nowrap">{formatDateIN(p.startDate)} – {formatDateIN(p.endDate)}</td>
+                        <td className="px-4 py-3">{statusBadge({ display: p.display } as any)}</td>
+                      </tr>
+                    ));
+                  })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

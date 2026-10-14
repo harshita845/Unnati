@@ -3,6 +3,7 @@ import { ALL_SELLER_MODULES, SELLER_PLAN_CHANGED_EVENT } from "../../../constant
 import jsPDF from "jspdf";
 import { useToast } from "../../../context/ToastContext";
 import {
+  CurrentPlan,
   SellerCategoryStatus,
   SellerSubscription,
   SellerSubscriptionOverview,
@@ -54,6 +55,8 @@ export default function SellerSubscriptions() {
   const [loading, setLoading] = useState(true);
   const [buying, setBuying] = useState<SubscriptionPlan | null>(null);
   const [processing, setProcessing] = useState(false);
+  // Details popup: a plan the seller has (with dates and payment) or a plan they can buy
+  const [viewing, setViewing] = useState<{ current?: CurrentPlan; plan?: SubscriptionPlan } | null>(null);
 
   // Plan chosen at signup (?plan=<id> or saved on the account) opens ready to pay, once
   const autoOpened = useRef(false);
@@ -268,6 +271,32 @@ export default function SellerSubscriptions() {
         </div>
       )}
 
+      {/* Plans the seller has right now (the admin panel shows the same list) */}
+      <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
+        <div className="bg-[var(--primary-dark)] text-white px-5 py-3"><h2 className="font-semibold">My plans</h2></div>
+        {!data.currentPlans?.length ? (
+          <p className="p-5 text-sm text-neutral-500">You don't have an active plan or free trial right now.</p>
+        ) : (
+          <div className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-3">
+            {data.currentPlans.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => setViewing({ current: p })}
+                className="text-left border border-neutral-200 rounded-xl p-4 hover:border-[var(--primary-color)] hover:shadow-sm transition">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-neutral-900">{p.planName}</h3>
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${displayCls[p.display.key] || ""}`}>{p.display.label}</span>
+                </div>
+                <p className="text-sm text-neutral-600 mt-1">{formatDateIN(p.startDate)} – {formatDateIN(p.endDate)}</p>
+                <p className="text-xs text-neutral-500 mt-1">For: {p.groups.join(", ") || "—"}</p>
+                <p className="text-xs font-semibold text-[var(--primary-color)] mt-2">View details</p>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Category status */}
       <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
         <div className="bg-[var(--primary-dark)] text-white px-5 py-3"><h2 className="font-semibold">My categories</h2></div>
@@ -293,7 +322,9 @@ export default function SellerSubscriptions() {
                     <p className="text-sm text-orange-700 mt-1">Products will be hidden in {plural(c.daysLeft, "day")}. Renew now.</p>
                   )}
                   {(c.state === "Active" || c.state === "ExpiringSoon") && (
-                    <p className="text-sm text-neutral-600 mt-1">Valid until {formatDateIN(c.endDate)} ({plural(c.daysLeft, "day")} left)</p>
+                    <p className="text-sm text-neutral-600 mt-1">
+                      {plural(c.daysLeft, "day")} left · valid until {formatDateIN(c.endDate)}
+                    </p>
                   )}
                   {c.state === "Upcoming" && <p className="text-sm text-blue-700 mt-1">Starts in {plural(c.daysLeft, "day")}.</p>}
                   {(c.state === "Expired" || c.state === "NotSubscribed") && c.sellsHere && (
@@ -303,7 +334,9 @@ export default function SellerSubscriptions() {
                     <p className="text-xs text-neutral-500 mt-2">This category doesn't need a subscription right now.</p>
                   ) : (
                     <p className="text-xs text-neutral-500 mt-2">
-                      {c.graceDays === 0 ? "Products are hidden as soon as the plan ends." : `Grace after expiry: ${plural(c.graceDays, "day")}.`}
+                      {c.graceDays === 0
+                        ? "If not renewed, products are hidden as soon as the plan ends."
+                        : `If not renewed, you get ${plural(c.graceDays, "extra day")} after the end date before products are hidden.`}
                     </p>
                   )}
                   {c.usage && (
@@ -377,11 +410,18 @@ export default function SellerSubscriptions() {
                         .join(", ") || "Dashboard and Subscriptions only"}
                     </p>
                   )}
-                  <button
-                    onClick={() => setBuying(plan)}
-                    className="mt-4 w-full py-2 rounded-lg bg-[var(--primary-dark)] text-white text-sm font-semibold hover:bg-[var(--primary-darker)]">
-                    {current ? "Renew" : "Subscribe"}
-                  </button>
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      onClick={() => setViewing({ plan })}
+                      className="flex-1 py-2 rounded-lg border border-neutral-300 text-neutral-700 text-sm font-semibold hover:bg-neutral-50">
+                      View details
+                    </button>
+                    <button
+                      onClick={() => setBuying(plan)}
+                      className="flex-1 py-2 rounded-lg bg-[var(--primary-dark)] text-white text-sm font-semibold hover:bg-[var(--primary-darker)]">
+                      {current ? "Renew" : "Subscribe"}
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -424,11 +464,82 @@ export default function SellerSubscriptions() {
         </div>
       </div>
 
+      {/* Plan details */}
+      {viewing && (() => {
+        const cur = viewing.current;
+        const plan = viewing.plan || (cur?.planId ? data.plans.find((p) => p._id === cur.planId) : undefined);
+        const name = cur?.planName || plan?.name || "Plan";
+        const limits = cur ? cur.limits : plan?.limits;
+        const features = cur ? cur.features : plan?.features || [];
+        const modules = cur ? cur.accessibleModules : plan?.accessibleModules || [];
+        const groups = cur
+          ? cur.groups
+          : Array.from(new Set([
+              ...(plan?.headerCategories || []).map((h: any) => h.name),
+              ...(plan?.categories || []).map((c: any) => c.headerCategoryId?.name || c.name),
+            ].filter(Boolean)));
+        const unlocked = ALL_SELLER_MODULES.filter((m) => !m.isEssential && (!modules.length || modules.includes(m.key))).map((m) => m.label);
+        const row = (label: string, value: React.ReactNode) => (
+          <div className="flex justify-between gap-4 py-1.5 border-b border-neutral-100 last:border-0">
+            <span className="text-neutral-500">{label}</span>
+            <span className="text-right text-neutral-900 font-medium">{value}</span>
+          </div>
+        );
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setViewing(null)} />
+            <div className="relative rounded-lg shadow-xl p-6 space-y-4 max-h-[90vh] overflow-y-auto" style={{ background: "#fff", width: "calc(100% - 2rem)", maxWidth: 460 }}>
+              <div className="flex items-start justify-between gap-2">
+                <h2 className="text-lg font-semibold">{name}</h2>
+                {cur && <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${displayCls[cur.display.key] || ""}`}>{cur.display.label}</span>}
+              </div>
+              <div className="text-sm">
+                {cur ? (
+                  <>
+                    {row("Started", formatDateIN(cur.startDate))}
+                    {row("Valid until", formatDateIN(cur.endDate))}
+                    {cur.display.daysLeft !== null && row(cur.display.key === "Grace" ? "Renew within" : cur.display.key === "Upcoming" ? "Starts in" : "Days left", plural(cur.display.daysLeft, "day"))}
+                    {row("Extra days to renew after end", cur.graceDays ? plural(cur.graceDays, "day") : "None")}
+                    {row("Paid", cur.isTrial ? "Free trial" : `${formatINR(cur.payment?.totalAmount || 0)}${cur.payment?.method ? ` · ${cur.payment.method}` : ""}`)}
+                    {cur.payment?.paidAt && !cur.isTrial && row("Paid on", formatDateIN(cur.payment.paidAt))}
+                    {cur.invoiceNumber && row(cur.billType === "receipt" ? "Receipt no." : "Invoice no.", cur.invoiceNumber)}
+                  </>
+                ) : plan ? (
+                  <>
+                    {row("Price", `${formatINR(plan.price)}${plan.gstPercent ? ` + ${plan.gstPercent}% GST = ${formatINR(plan.totalPrice || plan.price)}` : ""}`)}
+                    {row("Duration", formatDuration(plan.durationValue, plan.durationUnit))}
+                  </>
+                ) : null}
+                {row("Categories", groups.join(", ") || "—")}
+                {row("Products", limits?.maxProducts ? `Up to ${limits.maxProducts}` : "Unlimited")}
+                {limits?.commissionPercent != null && row("Commission", `${limits.commissionPercent}%`)}
+                {limits?.featuredStore && row("Featured store", "Yes")}
+                {row("Panel sections", unlocked.length === ALL_SELLER_MODULES.filter((m) => !m.isEssential).length ? "All" : unlocked.join(", ") || "Dashboard and Subscriptions only")}
+              </div>
+              {plan?.description && <p className="text-sm text-neutral-600">{plan.description}</p>}
+              {features.length > 0 && (
+                <ul className="text-sm text-neutral-700 space-y-1">{features.map((f, i) => <li key={i}>✓ {f}</li>)}</ul>
+              )}
+              <div className="flex gap-2">
+                <button onClick={() => setViewing(null)} className="flex-1 py-2 rounded-lg border border-neutral-300 text-sm">Close</button>
+                {plan && (
+                  <button
+                    onClick={() => { setViewing(null); setBuying(plan); }}
+                    className="flex-1 py-2 rounded-lg bg-[var(--primary-dark)] text-white text-sm font-semibold">
+                    {cur ? "Renew" : "Subscribe"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Payment choice */}
       {buying && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => !processing && setBuying(null)} />
-          <div className="relative bg-white rounded-lg shadow-xl max-w-sm w-full mx-4 p-6 space-y-4">
+          <div className="relative rounded-lg shadow-xl p-6 space-y-4" style={{ background: "#fff", width: "calc(100% - 2rem)", maxWidth: 384 }}>
             <h2 className="text-lg font-semibold">{buying.name}</h2>
             <p className="text-sm text-neutral-600">
               {formatINR(buying.price)}

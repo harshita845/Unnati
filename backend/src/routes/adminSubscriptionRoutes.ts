@@ -13,6 +13,7 @@ router.put("/plans/:id", controller.updatePlan);
 router.delete("/plans/:id", controller.deletePlan);
 
 router.get("/", controller.listSubscriptions);
+router.get("/by-seller", controller.listSellerPlans);
 router.post("/activate", controller.activateForSeller);
 router.post("/trial", controller.grantTrial);
 router.put("/:id/dates", controller.updateDates);

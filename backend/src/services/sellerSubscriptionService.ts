@@ -1174,6 +1174,102 @@ export const runSubscriptionJob = async (now = new Date()) => {
 // Seller overview
 // ----------------------------------------------------------------------------
 
+/** Populate options so a subscription's categories carry their group (header) name and grace days. */
+const SUB_CATEGORY_POPULATE = {
+  path: "categories",
+  select: "name headerCategoryId subscriptionGraceDays",
+  populate: { path: "headerCategoryId", select: "name" },
+};
+
+/** Grace days for one subscription: the category's own setting if it has one, else the store default. */
+const subscriptionGraceDays = (sub: any, settings: { graceDays?: number }) => {
+  const custom = (sub.categories || []).find((c: any) => typeof c?.subscriptionGraceDays === "number")?.subscriptionGraceDays;
+  return typeof custom === "number" ? custom : settings.graceDays || 0;
+};
+
+/** Category group names a subscription covers ("Winter", "Fashion") — the names sellers see on their cards. */
+export const subscriptionGroupNames = (sub: any): string[] => {
+  const names = new Set<string>();
+  (sub.headerCategories || []).forEach((h: any) => h?.name && names.add(h.name));
+  (sub.categories || []).forEach((c: any) => {
+    const name = c?.headerCategoryId?.name || c?.name;
+    if (name) names.add(name);
+  });
+  return [...names];
+};
+
+/** One subscription as every screen shows it: group names, status and days left from the same rules. */
+export const describeSubscription = (sub: any, settings: ISubscriptionSettings | any, now = new Date()) => {
+  const graceDays = subscriptionGraceDays(sub, settings);
+  return {
+    groups: subscriptionGroupNames(sub),
+    graceDays,
+    display: subscriptionDisplayStatus(sub, { ...settings, graceDays }, now),
+  };
+};
+
+/**
+ * Plans each seller has right now (active, starting later, or expired but still in grace).
+ * Free trials started together (one per category group) are shown as one entry. The seller app
+ * and the admin panel both read this, so they always show the same plans and days left.
+ */
+export const getCurrentPlansBySeller = async (sellerIds?: unknown[]) => {
+  const settings = await getSubscriptionSettings();
+  const now = new Date();
+  const query: any = {
+    status: { $in: ["Active", "Expired"] },
+    endDate: { $gt: new Date(now.getTime() - 90 * DAY_MS) },
+  };
+  if (sellerIds) query.seller = { $in: sellerIds.map(toId) };
+  const subs: any[] = await SellerSubscription.find(query)
+    .populate(SUB_CATEGORY_POPULATE)
+    .populate("headerCategories", "name")
+    .sort({ endDate: 1 })
+    .lean();
+
+  const bySeller = new Map<string, any[]>();
+  for (const sub of subs) {
+    const { groups, graceDays, display } = describeSubscription(sub, settings, now);
+    if (!["Active", "ExpiringSoon", "Grace", "Upcoming"].includes(display.key)) continue;
+    const sellerId = idStr(sub.seller);
+    const list = bySeller.get(sellerId) || [];
+    const day = (d: Date) => new Date(d).toISOString().slice(0, 10);
+    const key = `${sub.isTrial ? "trial" : idStr(sub.plan) || sub.planSnapshot?.name}|${day(sub.startDate)}|${day(sub.endDate)}`;
+    const same = list.find((p) => p.key === key);
+    if (same) {
+      groups.forEach((g) => !same.groups.includes(g) && same.groups.push(g));
+      same.subscriptionIds.push(idStr(sub._id));
+    } else {
+      list.push({
+        key,
+        subscriptionIds: [idStr(sub._id)],
+        planId: sub.plan ? idStr(sub.plan) : null,
+        planName: sub.planSnapshot?.name || "Plan",
+        isTrial: !!sub.isTrial,
+        price: sub.planSnapshot?.price || 0,
+        durationValue: sub.planSnapshot?.durationValue,
+        durationUnit: sub.planSnapshot?.durationUnit,
+        features: sub.planSnapshot?.features || [],
+        limits: sub.planSnapshot?.limits || {},
+        accessibleModules: sub.planSnapshot?.accessibleModules || [],
+        groups,
+        startDate: sub.startDate,
+        endDate: sub.endDate,
+        graceDays,
+        display,
+        payment: sub.payment
+          ? { method: sub.payment.method, totalAmount: sub.payment.totalAmount || 0, paidAt: sub.payment.paidAt, paymentId: sub.payment.paymentId, reference: sub.payment.reference }
+          : null,
+        invoiceNumber: sub.invoiceNumber || null,
+        billType: sub.billType,
+      });
+    }
+    bySeller.set(sellerId, list);
+  }
+  for (const list of bySeller.values()) list.forEach((p) => p.groups.sort());
+  return bySeller;
+};
+
 const daysBetween = (from: Date, to: Date) => Math.ceil((to.getTime() - from.getTime()) / DAY_MS);
 
 export const getSellerSubscriptionOverview = async (sellerId: unknown) => {
@@ -1190,7 +1286,7 @@ export const getSellerSubscriptionOverview = async (sellerId: unknown) => {
       .lean()
       .then((p: any[]) => withCoveredCategories(p, "name")),
     SellerSubscription.find({ seller: sid, status: { $ne: "PendingPayment" } })
-      .populate("categories", "name headerCategoryId")
+      .populate(SUB_CATEGORY_POPULATE)
       .populate("headerCategories", "name")
       .sort({ createdAt: -1 })
       .limit(100)
@@ -1238,24 +1334,16 @@ export const getSellerSubscriptionOverview = async (sellerId: unknown) => {
       .map((s: string) => String(s).trim().toLowerCase())
   );
 
-  // Subscriptions in history rolled up to main category names
+  // History rolled up to category group names, status from the same rules as the admin panel
   const history = (rawHistory as any[]).map((sub) => {
-    const mainNames = new Set<string>();
-    (sub.headerCategories || []).forEach((h: any) => {
-      if (h?.name) mainNames.add(h.name);
-    });
-    (sub.categories || []).forEach((c: any) => {
-      const hName = c?.headerCategoryId?.name;
-      if (hName) mainNames.add(hName);
-      else if (c?.name) mainNames.add(c.name);
-    });
-    const displayCats = [...mainNames].map((name) => ({ name, _id: name }));
+    const { groups, display } = describeSubscription(sub, settings, now);
     return {
       ...sub,
-      categories: displayCats.length ? displayCats : sub.categories,
-      display: subscriptionDisplayStatus(sub, settings, now),
+      categories: groups.length ? groups.map((name) => ({ name, _id: name })) : sub.categories,
+      display,
     };
   });
+  const currentPlans = (await getCurrentPlansBySeller([sid])).get(idStr(sid)) || [];
 
   const categories = [];
 
@@ -1378,6 +1466,7 @@ export const getSellerSubscriptionOverview = async (sellerId: unknown) => {
     planAccess,
     selectedPlanId: (sellerDoc as any)?.selectedPlan ? String((sellerDoc as any).selectedPlan) : null,
     categories,
+    currentPlans,
     plans: plansWithBilling,
     history,
   };

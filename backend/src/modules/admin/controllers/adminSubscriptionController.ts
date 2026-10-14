@@ -20,8 +20,10 @@ import {
   withCoveredCategories,
   reconcilePlanCoverage,
   ensureSubscriptionJobFresh,
-  subscriptionDisplayStatus,
+  describeSubscription,
+  getCurrentPlansBySeller,
 } from "../../../services/sellerSubscriptionService";
+import Seller from "../../../models/Seller";
 
 const handle = (res: Response, error: any) => {
   if (error instanceof SubscriptionError) {
@@ -244,6 +246,37 @@ export const deletePlan = asyncHandler(async (req: Request, res: Response) => {
 
 // ---------- Seller subscriptions ----------
 
+/** Every seller with the plans they have right now and days left (same data as the seller's Subscriptions page). */
+export const listSellerPlans = asyncHandler(async (_req: Request, res: Response) => {
+  await ensureSubscriptionJobFresh();
+  const [sellers, plansBySeller] = await Promise.all([
+    Seller.find({}).select("storeName sellerName mobile city status category subscriptionLocked selectedPlan createdAt").populate("selectedPlan", "name").sort({ createdAt: -1 }).lean(),
+    getCurrentPlansBySeller(),
+  ]);
+  const data = (sellers as any[]).map((seller) => {
+    const plans = plansBySeller.get(String(seller._id)) || [];
+    return {
+      _id: seller._id,
+      storeName: seller.storeName,
+      sellerName: seller.sellerName,
+      mobile: seller.mobile,
+      city: seller.city,
+      status: seller.status,
+      isAdminStore: seller.category === "Admin",
+      joinedAt: seller.createdAt,
+      subscriptionLocked: !!seller.subscriptionLocked,
+      plans,
+      /** Plan picked at signup that isn't paid for yet */
+      pendingPlanName: !plans.length && seller.selectedPlan?.name ? seller.selectedPlan.name : null,
+      /** Fewest days left among the seller's plans: the next renewal */
+      nextRenewalDays: plans.length ? Math.min(...plans.map((p: any) => p.display.daysLeft ?? Infinity)) : null,
+    };
+  });
+  // Sellers with plans first, the ones that must renew soonest on top
+  data.sort((a, b) => (a.plans.length ? 0 : 1) - (b.plans.length ? 0 : 1) || (a.nextRenewalDays ?? 1e9) - (b.nextRenewalDays ?? 1e9));
+  return res.status(200).json({ success: true, data });
+});
+
 export const listSubscriptions = asyncHandler(async (req: Request, res: Response) => {
   await ensureSubscriptionJobFresh();
   const settings = await getSubscriptionSettings();
@@ -263,7 +296,8 @@ export const listSubscriptions = asyncHandler(async (req: Request, res: Response
   const [items, total, stats] = await Promise.all([
     SellerSubscription.find(query)
       .populate("seller", "storeName sellerName mobile city")
-      .populate("categories", "name")
+      .populate({ path: "categories", select: "name headerCategoryId subscriptionGraceDays", populate: { path: "headerCategoryId", select: "name" } })
+      .populate("headerCategories", "name")
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * pageSize)
       .limit(pageSize)
@@ -285,7 +319,11 @@ export const listSubscriptions = asyncHandler(async (req: Request, res: Response
 
   return res.status(200).json({
     success: true,
-    data: items.map((sub: any) => ({ ...sub, display: subscriptionDisplayStatus(sub, settings) })),
+    // Same group names and status the seller sees in their app
+    data: items.map((sub: any) => {
+      const { groups, display } = describeSubscription(sub, settings);
+      return { ...sub, categories: groups.length ? groups.map((name) => ({ _id: name, name })) : sub.categories, display };
+    }),
     stats: stats[0] || { active: 0, expired: 0, trials: 0, revenue: 0 },
     pagination: { page: pageNum, limit: pageSize, total, pages: Math.ceil(total / pageSize) },
   });

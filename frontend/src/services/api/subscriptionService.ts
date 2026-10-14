@@ -154,8 +154,48 @@ export interface SellerSubscriptionOverview {
   planAccess?: SellerPlanAccess;
   selectedPlanId?: string | null;
   categories: SellerCategoryStatus[];
+  /** Plans the seller has right now (same data the admin panel shows) */
+  currentPlans?: CurrentPlan[];
   plans: SubscriptionPlan[];
   history: SellerSubscription[];
+}
+
+/** A plan a seller has right now: free trials started together are one entry. */
+export interface CurrentPlan {
+  key: string;
+  subscriptionIds: string[];
+  planId: string | null;
+  planName: string;
+  isTrial: boolean;
+  price: number;
+  durationValue?: number;
+  durationUnit?: PlanDurationUnit;
+  features: string[];
+  limits: { maxProducts?: number | null; commissionPercent?: number | null; featuredStore?: boolean };
+  accessibleModules: string[];
+  groups: string[];
+  startDate: string;
+  endDate: string;
+  graceDays: number;
+  display: SubscriptionDisplayStatus;
+  payment: { method?: string; totalAmount: number; paidAt?: string; paymentId?: string; reference?: string } | null;
+  invoiceNumber: string | null;
+  billType?: "gst" | "receipt";
+}
+
+export interface SellerPlansRow {
+  _id: string;
+  storeName: string;
+  sellerName: string;
+  mobile: string;
+  city?: string;
+  status: string;
+  isAdminStore: boolean;
+  joinedAt?: string;
+  subscriptionLocked: boolean;
+  plans: CurrentPlan[];
+  pendingPlanName: string | null;
+  nextRenewalDays: number | null;
 }
 
 export const formatDuration = (value: number, unit: PlanDurationUnit) => `${value} ${unit}${value === 1 ? "" : "s"}`;
@@ -186,6 +226,8 @@ export const updatePlan = async (id: string, data: PlanInput) => (await api.put(
 export const deletePlan = async (id: string) => (await api.delete(`/admin/subscriptions/plans/${id}`)).data;
 export const getSellerSubscriptions = async (params?: Record<string, string | number | undefined>) =>
   (await api.get("/admin/subscriptions", { params })).data;
+export const getSellerPlansBySeller = async (): Promise<{ success: boolean; data: SellerPlansRow[] }> =>
+  (await api.get("/admin/subscriptions/by-seller")).data;
 export const activatePlanForSeller = async (data: { sellerId: string; planId: string; reference?: string; startDate?: string; endDate?: string }) =>
   (await api.post("/admin/subscriptions/activate", data)).data;
 export const grantSellerTrial = async (data: { sellerId: string; categories: string[]; startDate?: string; endDate?: string }) =>
