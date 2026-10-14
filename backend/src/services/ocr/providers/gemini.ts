@@ -11,12 +11,21 @@ const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 
 /** Tried once when the main model stays busy (Google 503 "high demand"). OCR_FALLBACK_MODEL overrides. */
 export const GEMINI_FALLBACK_MODEL = "gemini-3.5-flash";
-/** Waits before retrying a busy / rate-limited answer */
-const RETRY_DELAYS_MS = [2000, 5000];
+/** Wait before the next try after a busy / rate-limited / slow answer */
+const RETRY_DELAY_MS = 1500;
+/** One try may use at most this long, so a model that is slow to say "busy" can't use up the whole scan */
+const ATTEMPT_TIMEOUT_MS = 20000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/** A model that just answered "busy" is skipped (tried last) for a few minutes */
+const BUSY_COOLDOWN_MS = 5 * 60 * 1000;
+const busyUntil = new Map<string, number>();
+const isCoolingDown = (model: string) => (busyUntil.get(model) || 0) > Date.now();
+
 const isBusy = (error: unknown) =>
   error instanceof OcrProviderError &&
-  (error.kind === "rate_limit" || (error.kind === "upstream" && [500, 502, 503, 504].includes(Number(error.status))));
+  (error.kind === "rate_limit" ||
+    error.kind === "timeout" ||
+    (error.kind === "upstream" && [500, 502, 503, 504].includes(Number(error.status))));
 
 export class GeminiOcrProvider implements OcrProvider {
   readonly name = "gemini";
@@ -29,30 +38,42 @@ export class GeminiOcrProvider implements OcrProvider {
   ) {}
 
   /**
-   * Google often answers "high demand" (503) or rate limits for a few seconds: retry the main model
-   * a couple of times, then try the fallback model once, all within the time the scan allows.
+   * Google often answers "high demand" (503), rate limits, or is very slow while a model is
+   * overloaded. Alternate the main and fallback models, each try capped so one slow answer doesn't
+   * use up the scan, all within the time the scan allows.
    */
   private async callWithRetry(parts: unknown[], system: string, schema: Record<string, unknown>, timeoutMs: number): Promise<OcrResult> {
     const deadline = Date.now() + timeoutMs;
     const left = () => deadline - Date.now();
-    const attempts: string[] = [this.model, this.model, this.model];
-    if (this.fallbackModel && this.fallbackModel !== this.model) attempts.push(this.fallbackModel);
+    const hasFallback = !!this.fallbackModel && this.fallbackModel !== this.model;
+    // Start with the main model, unless it said "busy" a moment ago and the fallback didn't
+    const first = hasFallback && isCoolingDown(this.model) && !isCoolingDown(this.fallbackModel!) ? this.fallbackModel! : this.model;
+    const second = first === this.model ? this.fallbackModel : this.model;
+    const attempts: string[] = hasFallback ? [first, second!, first, second!] : [this.model, this.model, this.model];
     let lastError: unknown;
     for (let i = 0; i < attempts.length; i++) {
       if (i > 0) {
-        const wait = RETRY_DELAYS_MS[Math.min(i - 1, RETRY_DELAYS_MS.length - 1)];
-        if (left() < wait + 10000) break;
-        await sleep(wait);
+        if (left() < RETRY_DELAY_MS + 8000) break;
+        await sleep(RETRY_DELAY_MS);
       }
+      // The last try may use all the time that's left
+      const isLast = i === attempts.length - 1 || left() < ATTEMPT_TIMEOUT_MS + 8000;
+      const started = Date.now();
       try {
-        return await this.call(attempts[i], parts, system, schema, Math.max(3000, left()));
+        const result = await this.call(attempts[i], parts, system, schema, Math.max(3000, isLast ? left() : Math.min(ATTEMPT_TIMEOUT_MS, left())));
+        if (i > 0) console.log(`Scan Bill: ${attempts[i]} answered after ${i} busy tr${i === 1 ? "y" : "ies"}`);
+        busyUntil.delete(attempts[i]);
+        return result;
       } catch (error) {
         lastError = error;
         if (!isBusy(error)) throw error;
+        busyUntil.set(attempts[i], Date.now() + BUSY_COOLDOWN_MS);
+        const why = error instanceof OcrProviderError ? error.status || error.kind : "error";
+        console.warn(`Scan Bill: ${attempts[i]} busy (${why}) after ${((Date.now() - started) / 1000).toFixed(1)}s, trying again`);
       }
     }
-    throw lastError instanceof OcrProviderError && lastError.kind === "upstream"
-      ? new OcrProviderError("The AI service is busy right now. Wait a minute and try again.", "upstream", lastError.status)
+    throw isBusy(lastError)
+      ? new OcrProviderError("The AI service is busy right now. Wait a minute and try again.", "upstream", (lastError as OcrProviderError).status)
       : lastError;
   }
 
