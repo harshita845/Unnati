@@ -345,7 +345,9 @@ export default function AdminStockManagement() {
         setError("Failed to load products. Please try again.");
       }
     } finally {
-      if (!silent && fetchSeqRef.current === seq) setLoading(false);
+      if (fetchSeqRef.current === seq) {
+        setLoading(false);
+      }
     }
   };
 
@@ -402,20 +404,25 @@ export default function AdminStockManagement() {
     if (!isAuthenticated || !token) return;
 
     const handleFocus = () => {
+      if (loading) return;
       void fetchData({ force: true, silent: true });
     };
 
     window.addEventListener("focus", handleFocus);
     return () => window.removeEventListener("focus", handleFocus);
-  }, [isAuthenticated, token, debouncedSearchTerm, filterCategory, filterSeller, filterStatus, currentPage, rowsPerPage, filterRedundant]);
+  }, [isAuthenticated, token, debouncedSearchTerm, filterCategory, filterSeller, filterStatus, currentPage, rowsPerPage, filterRedundant, loading]);
 
   const handleDelete = async (productId: string) => {
     if (window.confirm("Are you sure you want to delete this product?")) {
       try {
         const response = await deleteProduct(productId);
         if (response.success || response.message === "Product deleted successfully") {
-          alert("Product deleted successfully");
-          fetchData({ force: true });
+          // Optimistically remove product from current list for immediate feedback
+          setProducts((prev) => prev.filter((p) => (p as any).productId !== productId && p._id !== productId));
+          // Clear cached entries so new queries get updated data
+          productsCache.clear();
+          // Sync server-side list and pagination
+          await fetchData({ force: true });
         } else {
           alert("Failed to delete product");
         }
