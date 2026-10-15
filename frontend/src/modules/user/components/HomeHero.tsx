@@ -552,7 +552,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                   ref={(el) => { if (el) tabRefs.current.set(tab.id, el); else tabRefs.current.delete(tab.id); }}
                   onClick={() => handleTabClick(tab.id)}
                   style={isActive && tab.theme?.startsWith('#') ? { borderColor: activeColor } : undefined}
-                  className={`flex-shrink-0 flex flex-col items-center justify-between w-[58px] h-[66px] md:w-[78px] md:h-[86px] p-1 md:p-1.5 rounded-xl transition-all duration-200 group border cursor-pointer ${
+                  className={`flex-shrink-0 flex flex-col items-center justify-between w-[56px] h-[60px] md:w-[74px] md:h-[78px] p-1.5 rounded-xl transition-all duration-200 group border cursor-pointer ${
                     isActive
                       ? 'border-[#163F2E] md:border-[#34d399] bg-[#e6f7f2] shadow-sm text-[#059669]'
                       : 'border-neutral-200 bg-white hover:border-neutral-300 shadow-[0_1px_2px_rgba(0,0,0,0.03)] text-neutral-600 hover:text-neutral-900'
@@ -562,7 +562,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                   <div className="w-full flex-1 flex items-center justify-center overflow-hidden p-0">
                     <div 
                       style={isActive && tab.theme?.startsWith('#') ? { color: activeColor } : undefined}
-                      className="w-[26px] h-[26px] md:w-[34px] md:h-[34px] flex items-center justify-center flex-shrink-0 [&>svg]:w-full [&>svg]:h-full [&>img]:w-full [&>img]:h-full [&>img]:object-contain transition-transform duration-200 group-hover:scale-105"
+                      className="w-[19px] h-[19px] md:w-[25px] md:h-[25px] flex items-center justify-center flex-shrink-0 [&>svg]:w-full [&>svg]:h-full [&>img]:w-full [&>img]:h-full [&>img]:object-contain transition-transform duration-200 group-hover:scale-105"
                     >
                       {tab.icon}
                     </div>
