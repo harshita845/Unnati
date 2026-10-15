@@ -56,7 +56,12 @@ export default function ShopByStoreSection({ shops = [], currentCity }: ShopBySt
 
   const handleStoreClick = (shop: ShopItem) => {
     const storeSlug = shop.slug || shop.id.replace('-store', '');
-    navigate(`/store/${storeSlug}`);
+    navigate(`/store/${storeSlug}`, {
+      state: {
+        storeName: shop.name,
+        storeImage: shop.image || (shop as any).storeBanner || (shop as any).banner,
+      },
+    });
   };
 
   return (

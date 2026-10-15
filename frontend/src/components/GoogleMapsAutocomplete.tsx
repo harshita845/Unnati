@@ -244,7 +244,7 @@ export default function GoogleMapsAutocomplete({
         onChange={handleInputChange}
         onFocus={() => useFallback && inputValue.length > 2 && setShowSuggestions(true)}
         placeholder={placeholder}
-        className={`w-full px-3 py-2 border border-neutral-300 rounded-lg placeholder:text-neutral-400 focus:outline-none focus:border-[var(--customer-primary)] bg-white ${className}`}
+        className={`w-full px-3 py-2 border border-neutral-300 rounded-lg placeholder:text-neutral-400 focus:outline-none focus:border-[var(--customer-primary)] bg-white text-xs sm:text-sm ${className}`}
         disabled={disabled || (!isLoaded && !useFallback)}
         required={required}
         autoComplete="off"

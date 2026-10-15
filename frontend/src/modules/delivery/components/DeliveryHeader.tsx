@@ -51,10 +51,10 @@ export default function DeliveryHeader({ userName }: DeliveryHeaderProps) {
       {/* Header Content */}
       <div className="px-4 py-3">
         {/* User Info Bar */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             {/* Profile Icon */}
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors shrink-0 ${
               isOnline ? 'bg-green-600' : 'bg-neutral-400'
             }`}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -62,16 +62,16 @@ export default function DeliveryHeader({ userName }: DeliveryHeaderProps) {
                 <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" stroke="white" strokeWidth="2" strokeLinecap="round" fill="none"/>
               </svg>
             </div>
-            <div className="flex flex-col">
+            <div className="flex flex-col min-w-0">
               <span className="text-neutral-700 text-sm">Hello</span>
-              <span className="text-neutral-900 text-xs font-medium">{displayName}</span>
+              <span className="text-neutral-900 text-xs font-medium truncate">{displayName}</span>
             </div>
           </div>
 
           {/* Toggle Switch */}
           <button
             onClick={() => setIsOnline(!isOnline)}
-            className="custom-switch-btn"
+            className="custom-switch-btn shrink-0"
             style={{
               backgroundColor: isOnline ? '#22c55e' : '#cbd5e1',
             }}

@@ -126,16 +126,27 @@ export default function Home() {
         })
       : null;
 
-  // Web view: always start Home with "All" selected (mobile jaisa default).
+  // Handle tab from URL query params (e.g., /?tab=grocery)
+  useEffect(() => {
+    const searchParams = new URLSearchParams(routerLocation.search);
+    const tabParam = searchParams.get("tab");
+    if (tabParam && tabParam !== activeCategory) {
+      setActiveCategory(tabParam);
+    }
+  }, [routerLocation.search, activeCategory, setActiveCategory]);
+
+  // Web view: always start Home with "All" selected unless a tab is explicitly requested in URL
   const didInitActiveTabRef = useRef(false);
   useEffect(() => {
     if (didInitActiveTabRef.current) return;
     didInitActiveTabRef.current = true;
 
-    if (window.innerWidth >= 768 && activeTab !== "all") {
+    const searchParams = new URLSearchParams(routerLocation.search);
+    const tabParam = searchParams.get("tab");
+    if (!tabParam && window.innerWidth >= 768 && activeTab !== "all") {
       setActiveTab("all");
     }
-  }, [activeTab, setActiveTab]);
+  }, [activeTab, setActiveTab, routerLocation.search]);
 
   // State for dynamic data
   const [loading, setLoading] = useState(!cachedHomeResponse?.data);

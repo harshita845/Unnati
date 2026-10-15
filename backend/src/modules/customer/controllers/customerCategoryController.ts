@@ -251,11 +251,13 @@ export const getCategoryById = async (req: Request, res: Response) => {
         }
       }
 
-      // Check if it is a HeaderCategory slug
-      const headerCategory = await HeaderCategory.findOne({
-        slug: id,
-        status: "Published",
-      }).lean();
+      // Check if it is a HeaderCategory slug or ID
+      const isObjectId = mongoose.Types.ObjectId.isValid(id);
+      const headerCategory = await HeaderCategory.findOne(
+        isObjectId
+          ? { $or: [{ _id: id }, { slug: id }], status: "Published" }
+          : { slug: id, status: "Published" }
+      ).lean();
 
       if (headerCategory) {
         console.log(`[getCategoryById] Item ${id} is a HeaderCategory. Finding its main categories.`);

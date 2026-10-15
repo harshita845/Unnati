@@ -1,13 +1,20 @@
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link, useLocation as useRouterLocation } from 'react-router-dom';
 import { Product } from '../../types/domain';
 import { useEffect, useState } from 'react';
 import { getStoreProducts } from '../../services/api/customerHomeService';
 import { useLocation } from '../../hooks/useLocation';
 import ProductCard from './components/ProductCard';
 
+const isMongoId = (val?: string | null): boolean => {
+    if (!val) return false;
+    return /^[0-9a-fA-F]{24}$/.test(val.trim());
+};
+
 export default function StorePage() {
     const { slug } = useParams<{ slug: string }>();
     const navigate = useNavigate();
+    const routerLocation = useRouterLocation();
+    const locationState = (routerLocation.state as any) || {};
     const { location } = useLocation();
     const [products, setProducts] = useState<Product[]>([]);
     const [shopData, setShopData] = useState<any>(null);
@@ -63,17 +70,24 @@ export default function StorePage() {
         setCurrentPage(1); // Reset page when store changes
     }, [slug]);
 
-    const storeName = shopData?.name || (slug ? slug.charAt(0).toUpperCase() + slug.slice(1).replace('-', ' ') : 'Store');
+    // Sanitize store name: never display raw 24-character hexadecimal Mongo IDs
+    const rawName = shopData?.name || shopData?.storeName || locationState.storeName;
+    const hasValidName = rawName && !isMongoId(rawName);
+    const formattedSlug = slug && !isMongoId(slug)
+        ? slug.charAt(0).toUpperCase() + slug.slice(1).replace(/[-_]/g, ' ')
+        : null;
+    const storeName = hasValidName ? rawName : (formattedSlug || '');
+
     const [bannerImage, setBannerImage] = useState<string | null>(null);
     const [imageError, setImageError] = useState(false);
 
     // Determine banner image source
     useEffect(() => {
-        const banner = shopData?.storeBanner || shopData?.banner || shopData?.image;
+        const banner = shopData?.storeBanner || shopData?.banner || shopData?.image || locationState.storeImage;
         if (banner) {
             setBannerImage(banner);
             setImageError(false);
-        } else if (slug) {
+        } else if (slug && !isMongoId(slug)) {
             // Try multiple possible image paths
             const possiblePaths = [
                 `/assets/shopbystore/${slug}/${slug}header.png`,
@@ -87,14 +101,14 @@ export default function StorePage() {
             setBannerImage(null);
             setImageError(true);
         }
-    }, [shopData, slug]);
+    }, [shopData, slug, locationState.storeImage]);
 
     const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
         const target = e.target as HTMLImageElement;
         const currentSrc = target.src;
 
         // Try fallback paths if current one fails
-        if (slug && currentSrc.includes('/assets/shopbystore/')) {
+        if (slug && !isMongoId(slug) && currentSrc.includes('/assets/shopbystore/')) {
             const fallbackPaths = [
                 `/assets/shopbystore/${slug}/header.png`,
                 `/assets/shopbystore/${slug}.png`,
@@ -103,7 +117,6 @@ export default function StorePage() {
             const currentIndex = fallbackPaths.findIndex(path => currentSrc.includes(path));
 
             if (currentIndex < fallbackPaths.length - 1) {
-                // Try next fallback path
                 target.src = fallbackPaths[currentIndex + 1];
                 return;
             }
@@ -116,21 +129,30 @@ export default function StorePage() {
 
     return (
         <div className="min-h-screen bg-white">
-            {/* Store Banner */}
-            <div className="relative w-full aspect-[2/1] bg-neutral-100 overflow-hidden">
+            {/* Store Banner: Full-width coverage */}
+            <div className="relative w-full h-44 sm:h-56 md:h-64 bg-neutral-100 overflow-hidden">
                 {bannerImage && !imageError ? (
                     <img
                         src={bannerImage}
-                        alt={storeName}
-                        className="w-full h-full object-contain object-center bg-neutral-50"
+                        alt={storeName || 'Store Banner'}
+                        className="w-full h-full object-cover object-center"
                         onError={handleImageError}
                         loading="eager"
                     />
                 ) : (
-                    <div className="banner-fallback w-full h-full bg-gradient-to-br from-cyan-50 to-teal-100 flex items-center justify-center">
-                        <div className="text-4xl font-bold text-neutral-400">
-                            {storeName.charAt(0).toUpperCase()}
-                        </div>
+                    <div className="banner-fallback w-full h-full bg-gradient-to-br from-emerald-50 via-teal-100 to-cyan-100 flex items-center justify-center">
+                        {storeName && !isMongoId(storeName) ? (
+                            <div className="text-3xl sm:text-4xl font-extrabold text-teal-800">
+                                {storeName.charAt(0).toUpperCase()}
+                            </div>
+                        ) : (
+                            <div className="w-14 h-14 rounded-full bg-white/80 shadow-sm flex items-center justify-center text-teal-800">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                                    <polyline points="9 22 9 12 15 12 15 22" />
+                                </svg>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -140,6 +162,7 @@ export default function StorePage() {
                         <button
                             onClick={() => navigate(-1)}
                             className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-lg bg-white/70 shadow-sm hover:bg-white/80 transition-colors flex-shrink-0 border border-white/20"
+                            aria-label="Back"
                         >
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                                 <path d="M15 18L9 12L15 6" stroke="#000000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -147,13 +170,20 @@ export default function StorePage() {
                         </button>
 
                         <div className="flex-1 min-w-0 px-2">
-                            <h1 className="text-sm font-bold text-neutral-900 drop-shadow-sm">{storeName}</h1>
+                            {loading && !storeName ? (
+                                <div className="h-4 w-32 bg-white/70 rounded animate-pulse" />
+                            ) : (
+                                <h1 className="text-sm font-bold text-neutral-900 drop-shadow-sm truncate">
+                                    {storeName || 'Store'}
+                                </h1>
+                            )}
                         </div>
 
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                             <button
                                 onClick={() => navigate('/search')}
                                 className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-lg bg-white/70 shadow-sm hover:bg-white/80 transition-colors border border-white/20"
+                                aria-label="Search"
                             >
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                                     <circle cx="11" cy="11" r="8" stroke="#000000" strokeWidth="2" />
@@ -164,12 +194,18 @@ export default function StorePage() {
                     </div>
                 </header>
 
-                <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white via-white/40 to-transparent pointer-events-none" />
             </div>
 
             {/* Products Section */}
             <div className="px-4 py-4">
-                <h3 className="text-lg font-semibold text-neutral-900 mb-4">Top buys in {storeName}</h3>
+                <h3 className="text-lg font-semibold text-neutral-900 mb-4 min-h-[28px] flex items-center">
+                    {loading && !storeName ? (
+                        <span className="h-5 w-44 bg-neutral-200 rounded animate-pulse inline-block" />
+                    ) : (
+                        `Top buys in ${storeName || 'store'}`
+                    )}
+                </h3>
 
                 {loading ? (
                     <div className="flex justify-center p-8">

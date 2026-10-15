@@ -30,7 +30,7 @@ interface Tab {
   icon: React.ReactNode;
 }
 
-const getCategoryTabIcon = (c: any) => {
+export const getCategoryTabIcon = (c: any) => {
   // 1. If explicit custom image exists and is non-empty, render image
   if (c.image && typeof c.image === 'string' && c.image.trim()) {
     return <img src={c.image} alt={c.name || 'Category'} className="w-full h-full object-contain rounded-md" />;
@@ -609,23 +609,23 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
       style={{ backgroundColor: '#ffffff', paddingBottom: 0, marginBottom: 0 }}
     >
       <div className="md:hidden bg-white pb-2 pt-2.5 px-4 flex flex-col gap-2.5 border-b border-neutral-100">
-        {/* Row 1: Logo & Multivendor Text (Left) + Lang & Notif (Right) */}
+        {/* Row 1: Logo & Branding Text (Left) + Lang & Notif (Right) */}
         <div className="flex items-center justify-between">
-          {/* Logo & Multivendor Text */}
+          {/* Logo & Branding Text */}
           <div className="flex items-center gap-2.5">
             <div className="w-11 h-11 rounded-full overflow-hidden border border-neutral-200 bg-white flex items-center justify-center p-0.5 shadow-sm">
               <img
                 src={config?.appLogo || "/assets/unnati_logo.png"}
-                alt="Multivendor"
+                alt={config?.appName || "Unnati"}
                 className="w-full h-full object-contain"
               />
             </div>
-            <div className="flex flex-col text-left">
-              <span className="text-base font-extrabold tracking-tight leading-none text-[#163F2E]">
-                Multivendor
+            <div className="flex flex-col text-left min-w-0">
+              <span className="text-[12px] min-[360px]:text-[13px] sm:text-sm font-extrabold tracking-tight leading-tight text-[#163F2E] whitespace-nowrap">
+                Everything You Need,
               </span>
-              <span className="text-base font-extrabold text-[#d97706] mt-0.5 ml-2.5 opacity-90 leading-none">
-                E-Commerce
+              <span className="text-[12px] min-[360px]:text-[13px] sm:text-sm font-extrabold text-[#d97706] mt-0.5 ml-1 opacity-90 leading-tight whitespace-nowrap">
+                All in One Place.
               </span>
             </div>
           </div>
