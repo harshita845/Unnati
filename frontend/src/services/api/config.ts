@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
+import { devLogOnce, devWarnOnce } from "../../utils/devLog";
 import {
   detectModuleFromPath,
   getCurrentModuleToken,
@@ -139,7 +140,7 @@ api.interceptors.request.use(
       typedConfig.url = typedConfig.url.substring(1);
     }
 
-    console.log('🌐 API Request:', {
+    devLogOnce(`request:${typedConfig.method}:${typedConfig.url}`, '🌐 API Request:', {
       url: typedConfig.url,
       fullUrl: typedConfig.baseURL ? `${typedConfig.baseURL}/${typedConfig.url}` : typedConfig.url,
       method: typedConfig.method,
@@ -150,9 +151,9 @@ api.interceptors.request.use(
 
     if (token && typedConfig.headers) {
       typedConfig.headers.Authorization = `Bearer ${token}`;
-      console.log('✅ Token attached to request');
+      devLogOnce('token-attached', '✅ Token attached to request');
     } else {
-      console.warn('⚠️ No token available for request');
+      devWarnOnce('no-token', '⚠️ No token available for request');
     }
     return typedConfig;
   },

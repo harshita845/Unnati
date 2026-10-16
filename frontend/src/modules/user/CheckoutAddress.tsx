@@ -243,23 +243,23 @@ export default function CheckoutAddress() {
     address.pincode.trim().length >= 6;
 
   return (
-    <div className="pb-24 bg-neutral-50 min-h-screen">
+    <div className="pb-24 bg-[var(--brand-cream,#FDF9F2)] min-h-screen">
       {/* Header */}
-      <div className="sticky top-0 z-50 bg-white border-b border-neutral-200 shadow-sm">
+      <div className="sticky top-0 z-50 bg-white border-b border-[var(--brand-border,#E9E2D3)] shadow-sm">
         <div className="px-4 md:px-6 lg:px-8 py-3 flex items-center justify-between">
           <div className="flex items-center">
             <button
               onClick={() => navigate(-1)}
-              className="flex items-center justify-center p-1.5 text-neutral-700 hover:bg-neutral-100 rounded-full transition-all md:gap-2 md:text-[#0c5236] md:bg-[#eef6f3] md:border md:border-[#0c5236] md:hover:bg-[#e2f0eb] md:shadow-sm md:px-5 md:py-2 md:rounded-xl md:mr-2 md:font-bold"
+              className="flex items-center justify-center p-1.5 text-neutral-700 hover:bg-neutral-100 rounded-full transition-all md:gap-2 md:text-[var(--brand-green,#236B34)] md:bg-[var(--brand-leaf-tint,#EAF5E0)] md:border md:border-[var(--brand-green,#236B34)] md:hover:bg-[var(--brand-leaf-tint,#EAF5E0)]/80 md:shadow-sm md:px-5 md:py-2 md:rounded-xl md:mr-2 md:font-bold"
               aria-label="Go back"
             >
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 md:w-5 md:h-5 text-neutral-700 md:text-[#0c5236]">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 md:w-5 md:h-5 text-neutral-700 md:text-[var(--brand-green,#236B34)]">
                 <path d="M19 12H5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M12 19L5 12L12 5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <span className="hidden md:inline text-lg font-bold tracking-wide">Back</span>
             </button>
-            <h1 className="text-sm md:text-base font-bold text-neutral-900 md:hidden">Enter complete address</h1>
+            <h1 className="text-sm md:text-base font-display font-bold text-[var(--brand-green-deep,#14401F)] md:hidden">Enter complete address</h1>
           </div>
           <button
             onClick={() => navigate(-1)}

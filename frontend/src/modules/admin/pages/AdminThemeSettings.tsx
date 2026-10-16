@@ -15,7 +15,33 @@ import { checkContrast, getContrastBadgeColor } from "../../../utils/contrastChe
 import { isValidHex, withAlpha, lighten, darken } from "../../../utils/colorUtils";
 
 // ─── Theme Presets ───
-const PRESETS: Record<string, { global: Partial<GlobalThemeData>; label: string; emoji: string }> = {
+const PRESETS: Record<string, { global: Partial<GlobalThemeData>; customer?: Partial<CustomerThemeData>; label: string; emoji: string }> = {
+  unnati: {
+    label: "Unnati Brand",
+    emoji: "🌿",
+    global: {
+      primary: "#236B34",
+      secondary: "#5FA82E",
+      accent: "#F97316",
+      sidebar: "#14401F",
+      navbar: "#14401F",
+      background: "#FDF9F2",
+      text: "#1C2B20",
+      success: "#236B34",
+      warning: "#FFB020",
+      danger: "#ef4444",
+    },
+    customer: {
+      primary: "#236B34",
+      secondary: "#5FA82E",
+      accent: "#F97316",
+      background: "#FDF9F2",
+      text: "#1C2B20",
+      success: "#236B34",
+      warning: "#FFB020",
+      danger: "#ef4444",
+    },
+  },
   blue: { label: "Blue", emoji: "🔵", global: { primary: "#2563eb", secondary: "#1e40af", accent: "#f59e0b", sidebar: "#1e293b", navbar: "#1e293b" } },
   green: { label: "Green", emoji: "🟢", global: { primary: "#059669", secondary: "#047857", accent: "#f59e0b", sidebar: "#064e3b", navbar: "#064e3b" } },
   purple: { label: "Purple", emoji: "🟣", global: { primary: "#7c3aed", secondary: "#6d28d9", accent: "#f59e0b", sidebar: "#2e1065", navbar: "#2e1065" } },
@@ -25,8 +51,8 @@ const PRESETS: Record<string, { global: Partial<GlobalThemeData>; label: string;
   red: { label: "Quick Commerce Red", emoji: "🔴", global: { primary: "#dc2626", secondary: "#b91c1c", accent: "#fbbf24", sidebar: "#450a0a", navbar: "#450a0a" } },
 };
 
-const DEFAULTS_GLOBAL: GlobalThemeData = { primary: "#2563eb", secondary: "#1e40af", accent: "#f59e0b", background: "#ffffff", sidebar: "#1e293b", navbar: "#1e293b", text: "#111827", success: "#10b981", warning: "#f59e0b", danger: "#ef4444" };
-const DEFAULTS_CUSTOMER: CustomerThemeData = { primary: "#ef4444", secondary: "#dc2626", accent: "#f97316", background: "#ffffff", text: "#111827", success: "#10b981", warning: "#f59e0b", danger: "#ef4444" };
+const DEFAULTS_GLOBAL: GlobalThemeData = { primary: "#236B34", secondary: "#5FA82E", accent: "#F97316", background: "#FDF9F2", sidebar: "#14401F", navbar: "#14401F", text: "#1C2B20", success: "#236B34", warning: "#FFB020", danger: "#ef4444" };
+const DEFAULTS_CUSTOMER: CustomerThemeData = { primary: "#236B34", secondary: "#5FA82E", accent: "#F97316", background: "#FDF9F2", text: "#1C2B20", success: "#236B34", warning: "#FFB020", danger: "#ef4444" };
 
 type ColorField = { key: string; label: string; icon: string };
 const GLOBAL_FIELDS: ColorField[] = [
@@ -222,7 +248,19 @@ export default function AdminThemeSettings() {
     const preset = PRESETS[key];
     if (!preset) return;
     setGlobalDraft((prev) => ({ ...prev, ...DEFAULTS_GLOBAL, ...preset.global }));
-    toast.success(`Applied ${preset.label} preset — save to apply`);
+    if (preset.customer) {
+      setCustomerDraft((prev) => ({ ...prev, ...DEFAULTS_CUSTOMER, ...preset.customer }));
+    } else {
+      setCustomerDraft((prev) => ({
+        ...prev,
+        primary: preset.global.primary || prev.primary,
+        secondary: preset.global.secondary || prev.secondary,
+        accent: preset.global.accent || prev.accent,
+        background: preset.global.background || prev.background,
+        text: preset.global.text || prev.text,
+      }));
+    }
+    toast.success(`Applied ${preset.label} preset — click Save to apply`);
   };
 
   if (loading) {
@@ -327,6 +365,20 @@ export default function AdminThemeSettings() {
             </>
           ) : (
             <>
+              {/* Presets */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#475569", marginBottom: 8 }}>Quick Presets</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {Object.entries(PRESETS).map(([key, preset]) => (
+                    <button key={key} onClick={() => applyPreset(key)}
+                      style={{ background: preset.customer?.primary || preset.global.primary, color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "transform 0.15s" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}>
+                      {preset.emoji} {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {CUSTOMER_FIELDS.map((f) => (
                   <ColorInput key={f.key} label={f.label} icon={f.icon} value={(customerDraft as any)[f.key]}

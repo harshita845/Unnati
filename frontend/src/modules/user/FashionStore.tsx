@@ -33,7 +33,7 @@ export default function FashionStore() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-[var(--brand-cream,#FDF9F2)] text-[var(--brand-ink,#1C2B20)]">
       <div className="relative w-full">
         <img
           src="/assets/shopbystore/fashion.jpg"

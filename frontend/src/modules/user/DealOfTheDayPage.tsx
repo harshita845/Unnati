@@ -6,9 +6,8 @@ import { bannerService } from "../../services/bannerService";
 import { useLocation } from "../../hooks/useLocation";
 import BannerSlider from "./components/banners/BannerSlider";
 
-// Drive the hero band and CTA off the admin-managed Customer App Theme rather
-// than the previously hardcoded orange (#FF6D00 / #FF9100 / #E65100).
-const BRAND_GRADIENT = "linear-gradient(135deg, var(--customer-primary) 0%, var(--customer-primary-light) 100%)";
+// Drive the hero band and CTA off the Unnati brand tokens
+const BRAND_GRADIENT = "var(--gradient-signature, linear-gradient(135deg, #FFB020 0%, #F97316 60%, #E8590C 100%))";
 
 // Products whose store doesn't deliver to the user's location are left out (the API returns 404)
 async function fetchProductsByIds(ids: string[], location?: { latitude?: number; longitude?: number } | null) {
@@ -64,21 +63,21 @@ export default function DealOfTheDayPage() {
   }, [location?.latitude, location?.longitude]);
 
   return (
-    <div className="min-h-screen bg-neutral-50 pb-20">
+    <div className="min-h-screen bg-[var(--brand-cream,#FDF9F2)] text-[var(--brand-ink,#1C2B20)] pb-20">
       {/* Header */}
-      <div className="sticky top-0 z-40 bg-white border-b border-neutral-200">
+      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[var(--brand-border,#E9E2D3)]">
         <div className="px-4 md:px-6 lg:px-8 py-3 md:py-4 flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
-            className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center text-neutral-700 hover:bg-neutral-100 rounded-full transition-colors"
+            className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center text-[var(--brand-ink,#1C2B20)] hover:bg-[var(--brand-cream-soft,#F6EFE2)] rounded-full transition-colors"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M15 18L9 12L15 6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
           <div className="flex flex-col">
-            <h1 className="text-base md:text-xl font-bold text-neutral-900 leading-tight">Deal of the Day</h1>
-            <p className="text-[10px] md:text-xs text-neutral-500 font-medium tracking-tight">Handpicked savings just for today</p>
+            <h1 className="text-base md:text-xl font-display font-bold text-[var(--brand-green-deep,#14401F)] leading-tight">Deal of the Day</h1>
+            <p className="text-[10px] md:text-xs text-[var(--brand-ink-muted,#5B6B60)] font-medium tracking-tight">Handpicked savings just for today</p>
           </div>
         </div>
       </div>
@@ -97,8 +96,8 @@ export default function DealOfTheDayPage() {
         style={{ background: BRAND_GRADIENT }}
       >
         <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-3xl md:text-5xl font-black mb-2 tracking-tighter uppercase">DEAL OF THE DAY</h2>
-            <p className="text-white/80 text-sm md:text-base font-medium italic">Handpicked deals at unbeatable prices, only for 24 hours!</p>
+            <h2 className="text-3xl md:text-5xl font-display font-extrabold mb-2 tracking-tight uppercase drop-shadow-sm">DEAL OF THE DAY</h2>
+            <p className="text-white/90 text-sm md:text-base font-medium italic">Handpicked deals at unbeatable prices, only for 24 hours!</p>
         </div>
       </div>
 
@@ -107,12 +106,12 @@ export default function DealOfTheDayPage() {
         {loading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-6">
             {[...Array(10)].map((_, i) => (
-              <div key={i} className="aspect-[3/4] bg-white rounded-2xl animate-pulse border border-neutral-100 shadow-sm" />
+              <div key={i} className="aspect-[3/4] bg-white rounded-2xl animate-pulse border border-[var(--brand-border,#E9E2D3)] shadow-sm" />
             ))}
           </div>
         ) : error ? (
           <div className="text-center py-20">
-            <p className="text-neutral-500 bg-white p-6 rounded-2xl shadow-sm inline-block border border-neutral-100">
+            <p className="text-[var(--brand-ink-muted,#5B6B60)] bg-white p-6 rounded-2xl shadow-sm inline-block border border-[var(--brand-border,#E9E2D3)]">
               {error}
             </p>
           </div>
@@ -130,13 +129,13 @@ export default function DealOfTheDayPage() {
           </div>
         ) : (
           <div className="text-center py-20">
-            <div className="bg-white p-10 rounded-3xl shadow-sm border border-neutral-100 inline-block">
+            <div className="bg-white p-10 rounded-3xl shadow-sm border border-[var(--brand-border,#E9E2D3)] inline-block">
                 <span className="text-5xl mb-4 block">🔥</span>
-                <p className="text-neutral-500 font-bold text-lg">No active deals found for today.</p>
+                <p className="text-[var(--brand-ink-muted,#5B6B60)] font-bold text-lg">No active deals found for today.</p>
                 <button
                     onClick={() => navigate('/')}
                     className="mt-6 px-8 py-3 text-white rounded-xl font-bold hover:shadow-lg transition-all"
-                    style={{ backgroundColor: 'var(--customer-primary)' }}
+                    style={{ backgroundColor: 'var(--brand-green, #236B34)' }}
                 >Continue Shopping</button>
             </div>
           </div>

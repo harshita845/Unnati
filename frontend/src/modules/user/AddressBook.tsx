@@ -7,7 +7,7 @@ import {
   updateAddress,
 } from "../../services/api/customerAddressService";
 
-const iconStyle = "w-5 h-5 text-amber-600 flex-shrink-0";
+const iconStyle = "w-5 h-5 text-[var(--brand-green,#236B34)] flex-shrink-0";
 
 function buildAddressLine(address: Address) {
   const parts = [
@@ -106,7 +106,7 @@ export default function AddressBook() {
 
   const defaultBadge = useMemo(
     () => (
-      <span className="ml-2 inline-flex items-center px-2 py-0.5 text-[10px] font-semibold text-[var(--customer-primary-dark)] bg-[var(--customer-primary-alpha-10)] border border-green-100 rounded-full">
+      <span className="ml-2 inline-flex items-center px-2 py-0.5 text-[10px] font-semibold text-[var(--brand-green,#236B34)] bg-[var(--brand-leaf-tint,#EAF5E0)] border border-[var(--brand-leaf,#5FA82E)]/30 rounded-full">
         Default
       </span>
     ),
@@ -114,12 +114,12 @@ export default function AddressBook() {
   );
 
   return (
-    <div className="min-h-screen bg-white md:bg-neutral-50 pb-24 md:pb-10">
-      <div className="sticky top-0 z-10 bg-white border-b border-neutral-200 px-4 py-3 flex items-center gap-3">
+    <div className="min-h-screen bg-[var(--brand-cream,#FDF9F2)] pb-24 md:pb-10">
+      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-md border-b border-[var(--brand-border,#E9E2D3)] px-4 py-3 flex items-center gap-3">
         <button
           onClick={() => navigate(-1)}
           aria-label="Back"
-          className="p-2 rounded-full hover:bg-neutral-100 text-neutral-700"
+          className="p-2 rounded-full hover:bg-[var(--brand-cream-soft,#F6EFE2)] text-[var(--brand-ink,#1C2B20)]"
         >
           <svg
             viewBox="0 0 24 24"
@@ -134,15 +134,15 @@ export default function AddressBook() {
           </svg>
         </button>
         <div>
-          <p className="text-xs text-neutral-500">Your saved addresses</p>
-          <h1 className="text-base font-semibold text-neutral-900">
+          <p className="text-xs text-[var(--brand-ink-muted,#5B6B60)]">Your saved addresses</p>
+          <h1 className="font-display text-base font-bold text-[var(--brand-ink,#1C2B20)]">
             Address book
           </h1>
         </div>
         <div className="ml-auto">
           <button
             onClick={() => navigate("/checkout/address")}
-            className="px-3 py-1.5 text-sm font-semibold text-white bg-[var(--customer-primary-dark)] rounded-full hover:bg-[var(--customer-primary-dark)]"
+            className="px-4 py-1.5 text-xs font-semibold text-white bg-[var(--brand-green,#236B34)] rounded-full hover:bg-[var(--brand-green-dark,#1B5128)] shadow-sm"
           >
             Add new
           </button>
@@ -152,23 +152,23 @@ export default function AddressBook() {
       <div className="px-4 md:px-6 pt-4 pb-6">
         {loading ? (
           <div className="flex justify-center py-10">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[var(--customer-primary-dark)]" />
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[var(--brand-green,#236B34)]" />
           </div>
         ) : error ? (
-          <div className="bg-[var(--customer-primary-alpha-10)] text-red-700 border border-[var(--customer-primary-alpha-20)] rounded-lg p-4 text-sm">
+          <div className="bg-red-50 text-[var(--brand-error,#D6402F)] border border-red-200 rounded-xl p-4 text-sm">
             {error}
           </div>
         ) : addresses.length === 0 ? (
-          <div className="bg-white border border-dashed border-neutral-200 rounded-lg p-6 text-center">
-            <p className="text-neutral-700 font-semibold mb-1">
+          <div className="bg-white border border-dashed border-[var(--brand-border,#E9E2D3)] rounded-2xl p-8 text-center shadow-sm">
+            <p className="font-display text-[var(--brand-ink,#1C2B20)] font-bold text-base mb-1">
               No addresses yet
             </p>
-            <p className="text-sm text-neutral-500 mb-3">
+            <p className="text-sm text-[var(--brand-ink-muted,#5B6B60)] mb-4">
               Save an address to checkout faster next time.
             </p>
             <button
               onClick={() => navigate("/checkout/address")}
-              className="px-4 py-2 text-sm font-semibold text-white bg-[var(--customer-primary-dark)] rounded-full hover:bg-[var(--customer-primary-dark)]"
+              className="px-5 py-2 text-sm font-semibold text-white bg-[var(--brand-green,#236B34)] rounded-full hover:bg-[var(--brand-green-dark,#1B5128)] shadow-md shadow-[var(--brand-green,#236B34)]/20"
             >
               Add address
             </button>
@@ -180,10 +180,10 @@ export default function AddressBook() {
               return (
                 <div
                   key={addr._id || addr.phone}
-                  className="bg-white border border-neutral-200 rounded-xl shadow-[0_1px_6px_rgba(0,0,0,0.05)] p-3 transition hover:shadow-md"
+                  className="bg-white border border-[var(--brand-border,#E9E2D3)] rounded-2xl shadow-[0_4px_16px_rgba(35,107,52,0.04)] p-4 transition hover:shadow-md"
                 >
-                  <div className="flex items-start gap-2">
-                    <div className="mt-0.5">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 p-2 rounded-xl bg-[var(--brand-leaf-tint,#EAF5E0)]">
                       <svg
                         viewBox="0 0 24 24"
                         className={iconStyle}
@@ -197,29 +197,29 @@ export default function AddressBook() {
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center flex-wrap gap-1">
-                        <span className="text-sm font-semibold text-neutral-900">
+                        <span className="font-display text-sm font-bold text-[var(--brand-ink,#1C2B20)]">
                           {addr.type || "Home"}
                         </span>
                         {addr.isDefault && defaultBadge}
                       </div>
-                      <p className="text-xs text-[var(--customer-primary-dark)] font-semibold mt-0.5">
+                      <p className="text-xs text-[var(--brand-green,#236B34)] font-semibold mt-0.5">
                         Saved address
                       </p>
-                      <p className="text-sm text-neutral-800 leading-relaxed mt-2">
+                      <p className="text-sm text-[var(--brand-ink,#1C2B20)] leading-relaxed mt-2">
                         {buildAddressLine(addr)}
                       </p>
-                      <p className="text-sm text-neutral-700 mt-1">
+                      <p className="text-sm text-[var(--brand-ink-muted,#5B6B60)] mt-1">
                         Phone number: {addr.phone || "Not added"}
                       </p>
-                      <div className="flex items-center gap-3 mt-3 text-[var(--customer-primary-dark)]">
+                      <div className="flex items-center gap-4 mt-3 text-[var(--brand-green,#236B34)]">
                         <button
                           onClick={() => handleShare(addr)}
-                          className="flex items-center gap-1 text-sm font-semibold hover:text-teal-800"
+                          className="flex items-center gap-1 text-xs font-semibold hover:text-[var(--brand-green-dark,#1B5128)]"
                           disabled={isBusy}
                         >
                           <svg
                             viewBox="0 0 24 24"
-                            className="w-4 h-4"
+                            className="w-3.5 h-3.5"
                             fill="none"
                             stroke="currentColor"
                             strokeWidth="2"
@@ -236,12 +236,12 @@ export default function AddressBook() {
                         </button>
                         <button
                           onClick={() => handleMakeDefault(addr._id)}
-                          className="flex items-center gap-1 text-sm font-semibold hover:text-teal-800 disabled:text-neutral-400"
+                          className="flex items-center gap-1 text-xs font-semibold hover:text-[var(--brand-green-dark,#1B5128)] disabled:text-neutral-400"
                           disabled={isBusy || addr.isDefault}
                         >
                           <svg
                             viewBox="0 0 24 24"
-                            className="w-4 h-4"
+                            className="w-3.5 h-3.5"
                             fill="none"
                             stroke="currentColor"
                             strokeWidth="2"
@@ -255,12 +255,12 @@ export default function AddressBook() {
                         </button>
                         <button
                           onClick={() => handleDelete(addr._id)}
-                          className="flex items-center gap-1 text-sm font-semibold text-[var(--customer-primary-dark)] hover:text-red-700 disabled:text-neutral-400"
+                          className="flex items-center gap-1 text-xs font-semibold text-[var(--brand-error,#D6402F)] hover:text-red-700 disabled:text-neutral-400"
                           disabled={isBusy}
                         >
                           <svg
                             viewBox="0 0 24 24"
-                            className="w-4 h-4"
+                            className="w-3.5 h-3.5"
                             fill="none"
                             stroke="currentColor"
                             strokeWidth="2"

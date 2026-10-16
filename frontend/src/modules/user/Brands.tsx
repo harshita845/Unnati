@@ -67,9 +67,9 @@ export default function Brands() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-[var(--brand-cream,#FDF9F2)] font-sans">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white border-b border-neutral-100 shadow-sm">
+      <div className="sticky top-0 z-10 bg-white border-b border-[var(--brand-border,#E9E2D3)] shadow-xs">
         <div className="px-4 py-3 flex items-center gap-3">
             <button
                 onClick={() => navigate(-1)}
@@ -79,29 +79,27 @@ export default function Brands() {
                     <path d="M19 12H5M12 19l-7-7 7-7"/>
                 </svg>
             </button>
-            <h1 className="text-lg font-bold text-neutral-800">Shop by Brand</h1>
+            <h1 className="text-lg font-display font-bold text-[var(--brand-green-deep,#14401F)]">Shop by Brand</h1>
         </div>
       </div>
 
       {/* Brands Grid */}
-      <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 max-w-7xl mx-auto">
         {brands.map((brand) => (
           <div
             key={brand._id}
             onClick={() => navigate(`/brand/${brand._id}`)}
             className={`
-              aspect-[3/4] rounded-xl overflow-hidden cursor-pointer
+              aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer
               transition-transform hover:scale-[1.02] active:scale-95
-              flex flex-col shadow-sm border border-neutral-100
+              flex flex-col shadow-[0_4px_16px_rgba(35,107,52,0.04)] border border-[var(--brand-border,#E9E2D3)] bg-white
             `}
           >
             {/* Top Section - Logo/Name */}
             <div className={`flex-1 ${getBackgroundColor(brand.name)} flex flex-col items-center justify-center p-4 relative`}>
-                 {/* Decorative cloud-like shape (CSS simulation) could be complex, sticking to simple clean design */}
-
                  {/* Brand Name (Top) */}
                   <div className="absolute top-2 left-0 right-0 text-center px-2">
-                      <span className="text-[10px] sm:text-[11px] font-black text-white uppercase tracking-wider bg-gradient-to-r from-[var(--customer-primary)] to-red-600 px-2.5 py-1 rounded-md shadow-[0_2px_8px_rgba(239,68,68,0.2)] border border-white/20">
+                      <span className="text-[10px] sm:text-[11px] font-black text-white uppercase tracking-wider px-2.5 py-1 rounded-md shadow-xs border border-white/20" style={{ background: 'var(--gradient-signature)' }}>
                          {brand.name}
                       </span>
                   </div>
@@ -116,7 +114,7 @@ export default function Brands() {
                             className="max-w-full max-h-full object-contain drop-shadow-md"
                         />
                     ) : (
-                        <div className="text-4xl font-bold text-neutral-300 select-none">
+                        <div className="text-4xl font-display font-bold text-neutral-300 select-none">
                             {brand.name.charAt(0)}
                         </div>
                     )}
@@ -127,7 +125,7 @@ export default function Brands() {
       </div>
 
       {brands.length === 0 && (
-          <div className="text-center py-12 text-neutral-500">
+          <div className="text-center py-12 text-[var(--brand-ink-muted,#5B6B60)]">
               No brands found.
           </div>
       )}

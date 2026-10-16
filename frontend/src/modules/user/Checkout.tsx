@@ -957,10 +957,10 @@ export default function Checkout() {
         <div className="px-4 md:px-6 lg:px-8 py-2 md:py-3 flex items-center justify-between">
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center justify-center p-1.5 text-neutral-700 hover:bg-neutral-100 rounded-full transition-all md:gap-2 md:text-[#0c5236] md:bg-[#eef6f3] md:border md:border-[#0c5236] md:hover:bg-[#e2f0eb] md:shadow-sm md:px-5 md:py-2 md:rounded-xl md:font-bold"
+            className="flex items-center justify-center p-1.5 text-neutral-700 hover:bg-neutral-100 rounded-full transition-all md:gap-2 md:text-[var(--brand-green,#236B34)] md:bg-[var(--brand-leaf-tint,#EAF5E0)] md:border md:border-[var(--brand-green,#236B34)] md:hover:bg-[var(--brand-leaf-tint,#EAF5E0)]/80 md:shadow-sm md:px-5 md:py-2 md:rounded-xl md:font-bold"
             aria-label="Go back"
           >
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 md:w-5 md:h-5 text-neutral-700 md:text-[#0c5236]">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 md:w-5 md:h-5 text-neutral-700 md:text-[var(--brand-green,#236B34)]">
               <path d="M19 12H5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               <path d="M12 19L5 12L12 5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -1246,7 +1246,7 @@ export default function Checkout() {
                               e.stopPropagation();
                               if (prod) handleMoveToWishlist(prod);
                             }}
-                            className="text-xs md:text-sm text-[#d35400] font-semibold md:font-bold mt-1 md:mt-1.5 hover:text-[var(--customer-primary-dark)] transition-colors block"
+                            className="text-xs md:text-sm text-[var(--brand-orange,#F97316)] font-semibold md:font-bold mt-1 md:mt-1.5 hover:text-[var(--brand-green,#236B34)] transition-colors block"
                           >
                             Move to wishlist
                           </button>
@@ -1259,7 +1259,7 @@ export default function Checkout() {
                               Standard Qty: 1
                             </div>
                           ) : (
-                            <div className="flex items-center justify-between w-24 h-7 md:w-28 md:h-8 bg-white border-2 border-[#d35400] rounded-full px-1.5 md:px-2">
+                            <div className="flex items-center justify-between w-24 h-7 md:w-28 md:h-8 bg-white border-2 border-[var(--brand-green,#236B34)] rounded-full px-1.5 md:px-2">
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -1271,7 +1271,7 @@ export default function Checkout() {
                                   const pId = prod.id || prod._id || '';
                                   updateQuantity(pId as string, (item.quantity || 1) - 1, vId, vTitle);
                                 }}
-                                className="w-4 h-4 md:w-5 md:h-5 flex items-center justify-center text-[#d35400] font-black hover:bg-[var(--customer-primary-alpha-10)] rounded-full transition-colors text-xs md:text-sm"
+                                className="w-4 h-4 md:w-5 md:h-5 flex items-center justify-center text-[var(--brand-green,#236B34)] font-black hover:bg-[var(--customer-primary-alpha-10)] rounded-full transition-colors text-xs md:text-sm"
                               >
                                 −
                               </button>
@@ -1289,7 +1289,7 @@ export default function Checkout() {
                                    }
                                  }}
                                  onClick={(e) => e.stopPropagation()}
-                                 className="w-8 md:w-10 h-5 md:h-6 text-center font-bold text-xs md:text-sm text-[#d35400] bg-transparent outline-none focus:bg-amber-50 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                 className="w-8 md:w-10 h-5 md:h-6 text-center font-bold text-xs md:text-sm text-[var(--brand-green,#236B34)] bg-transparent outline-none focus:bg-amber-50 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                  title="Type quantity manually"
                                />
                               <button

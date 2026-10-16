@@ -92,7 +92,7 @@ function LazyProductGrid({
         <div className="w-full flex justify-center mt-6">
           <button
             onClick={() => setIsExpanded(true)}
-            className="px-8 py-2.5 bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50 hover:text-neutral-900 transition-all font-semibold rounded-lg shadow-sm text-sm"
+            className="px-8 py-2.5 bg-white border border-[var(--brand-border,#E9E2D3)] text-[var(--brand-ink,#1C2B20)] hover:bg-[var(--brand-cream-soft,#F6EFE2)] hover:border-[var(--brand-leaf,#5FA82E)] transition-all font-semibold rounded-xl shadow-sm text-sm"
           >
             View More
           </button>
@@ -517,7 +517,7 @@ export default function Home() {
   }
 
   return (
-    <div className="bg-white min-h-screen pb-20 md:pb-0" ref={contentRef}>
+    <div className="bg-[var(--brand-cream,#FDF9F2)] min-h-screen pb-20 md:pb-0" ref={contentRef}>
       {/* 1. Popup Banner (First Visit) */}
       <HomePopup />
 
@@ -549,7 +549,7 @@ export default function Home() {
       <div
         ref={contentRef}
         className="-mt-2 pt-1 space-y-5 md:space-y-8 md:pt-4 pb-12"
-        style={{ backgroundColor: '#f9fafb' }}
+        style={{ backgroundColor: 'var(--brand-cream, #FDF9F2)' }}
       >
         {/* Deal of the Day Section */}
         <DealOfTheDay />
@@ -606,13 +606,13 @@ export default function Home() {
         {/* Products Section */}
         <div data-products-section className="mt-6 mb-6 md:mt-8 md:mb-8">
           <div className="flex items-center justify-between mb-3 md:mb-6 px-2 md:px-4 lg:px-4">
-            <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 tracking-tight capitalize">
+            <h2 className="font-display text-lg md:text-2xl font-bold text-[var(--brand-green-deep,#14401F)] tracking-tight capitalize">
               {activeTab === "all" ? "Explore Products" : (activeTab === "grocery" ? "Grocery Items" : `${activeTab} Products`)}
             </h2>
             {activeTab !== "all" && (
               <button
                 onClick={() => navigate(`/category/${activeTab}`)}
-                className="text-xs md:text-sm font-semibold text-[var(--customer-primary-dark)] hover:underline flex items-center gap-1"
+                className="text-xs md:text-sm font-semibold text-[var(--brand-green,#236B34)] hover:text-[var(--brand-green-dark,#1B5128)] hover:underline flex items-center gap-1"
               >
                 View all in category &rarr;
               </button>
@@ -658,7 +658,7 @@ export default function Home() {
                 return (
                   <div key={section.id} className="mt-6 mb-6 md:mt-8 md:mb-8">
                     {section.title && (
-                      <h2 className="text-lg md:text-2xl font-semibold text-neutral-900 mb-3 md:mb-6 px-2 md:px-4 lg:px-4 tracking-tight capitalize">
+                      <h2 className="font-display text-lg md:text-2xl font-bold text-[var(--brand-green-deep,#14401F)] mb-3 md:mb-6 px-2 md:px-4 lg:px-4 tracking-tight capitalize">
                         {section.title}
                       </h2>
                     )}

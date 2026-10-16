@@ -43,28 +43,86 @@ interface BrandingThemeContextType {
 }
 
 // ─── Fallback defaults (mirrors backend defaults) ───
+// ─── Fallback defaults (mapped to Unnati Brand Logo Palette) ───
 const FALLBACK_GLOBAL: GlobalThemeData = {
-  primary: "#0B5D3B",
-  secondary: "#66B82E",
-  accent: "#F2B134",
-  background: "#F4FAF6",
-  sidebar: "#163F2E",
-  navbar: "#163F2E",
-  text: "#26332D",
-  success: "#10b981",
-  warning: "#F2B134",
-  danger: "#ef4444",
+  primary: "#236B34",
+  secondary: "#5FA82E",
+  accent: "#F97316",
+  background: "#FDF9F2",
+  sidebar: "#14401F",
+  navbar: "#14401F",
+  text: "#1C2B20",
+  success: "#5FA82E",
+  warning: "#FFB020",
+  danger: "#D6402F",
 };
 
 const FALLBACK_CUSTOMER: CustomerThemeData = {
-  primary: "#0B5D3B",
-  secondary: "#66B82E",
-  accent: "#F2B134",
-  background: "#F4FAF6",
-  text: "#26332D",
-  success: "#10b981",
-  warning: "#F2B134",
-  danger: "#ef4444",
+  primary: "#236B34",
+  secondary: "#5FA82E",
+  accent: "#F97316",
+  background: "#FDF9F2",
+  text: "#1C2B20",
+  success: "#5FA82E",
+  warning: "#FFB020",
+  danger: "#D6402F",
+};
+
+/**
+ * If the API returns empty/old default values (e.g. #0B5D3B, #F2B134),
+ * upgrade them to the official Unnati brand palette so the new logo theme takes effect.
+ */
+const normalizeCustomerTheme = (theme?: Partial<CustomerThemeData>): CustomerThemeData => {
+  if (!theme) return FALLBACK_CUSTOMER;
+  const isOldDefault =
+    !theme.primary ||
+    theme.primary.toLowerCase() === "#0b5d3b" ||
+    theme.primary.toLowerCase() === "#ef4444" ||
+    theme.primary.toLowerCase() === "#ffc94a";
+
+  if (isOldDefault) {
+    return {
+      ...FALLBACK_CUSTOMER,
+      ...(theme.primary && !isOldDefault ? theme : {}),
+      primary: FALLBACK_CUSTOMER.primary,
+      secondary: FALLBACK_CUSTOMER.secondary,
+      accent: FALLBACK_CUSTOMER.accent,
+      background: FALLBACK_CUSTOMER.background,
+      text: FALLBACK_CUSTOMER.text,
+    };
+  }
+
+  return {
+    ...FALLBACK_CUSTOMER,
+    ...theme,
+  };
+};
+
+const normalizeGlobalTheme = (theme?: Partial<GlobalThemeData>): GlobalThemeData => {
+  if (!theme) return FALLBACK_GLOBAL;
+  const isOldDefault =
+    !theme.primary ||
+    theme.primary.toLowerCase() === "#0b5d3b" ||
+    theme.primary.toLowerCase() === "#2563eb";
+
+  if (isOldDefault) {
+    return {
+      ...FALLBACK_GLOBAL,
+      ...(theme.primary && !isOldDefault ? theme : {}),
+      primary: FALLBACK_GLOBAL.primary,
+      secondary: FALLBACK_GLOBAL.secondary,
+      accent: FALLBACK_GLOBAL.accent,
+      background: FALLBACK_GLOBAL.background,
+      sidebar: FALLBACK_GLOBAL.sidebar,
+      navbar: FALLBACK_GLOBAL.navbar,
+      text: FALLBACK_GLOBAL.text,
+    };
+  }
+
+  return {
+    ...FALLBACK_GLOBAL,
+    ...theme,
+  };
 };
 
 const BrandingThemeContext = createContext<BrandingThemeContextType | undefined>(
@@ -77,7 +135,16 @@ export const BrandingThemeProvider: React.FC<{
   // Hydrate from cache instantly to prevent flash, ignoring old fallback configs
   const cached = useMemo(() => {
     const data = getCachedTheme();
-    if (data?.customerTheme?.primary === "#ef4444" || data?.customerTheme?.primary === "#EF4444" || data?.globalTheme?.primary === "#2563eb" || data?.globalTheme?.primary === "#2563EB") {
+    if (
+      data?.customerTheme?.primary === "#ef4444" ||
+      data?.customerTheme?.primary === "#EF4444" ||
+      data?.customerTheme?.primary === "#0b5d3b" ||
+      data?.customerTheme?.primary === "#0B5D3B" ||
+      data?.globalTheme?.primary === "#2563eb" ||
+      data?.globalTheme?.primary === "#2563EB" ||
+      data?.globalTheme?.primary === "#0b5d3b" ||
+      data?.globalTheme?.primary === "#0B5D3B"
+    ) {
       invalidateThemeCache();
       return null;
     }
@@ -85,10 +152,10 @@ export const BrandingThemeProvider: React.FC<{
   }, []);
 
   const [globalTheme, setGlobalTheme] = useState<GlobalThemeData>(
-    cached?.globalTheme || FALLBACK_GLOBAL
+    normalizeGlobalTheme(cached?.globalTheme)
   );
   const [customerTheme, setCustomerTheme] = useState<CustomerThemeData>(
-    cached?.customerTheme || FALLBACK_CUSTOMER
+    normalizeCustomerTheme(cached?.customerTheme)
   );
   const [isLoading, setIsLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
@@ -109,8 +176,8 @@ export const BrandingThemeProvider: React.FC<{
     try {
       setError(null);
       const data = await fetchTheme();
-      setGlobalTheme(data.globalTheme);
-      setCustomerTheme(data.customerTheme);
+      setGlobalTheme(normalizeGlobalTheme(data.globalTheme));
+      setCustomerTheme(normalizeCustomerTheme(data.customerTheme));
     } catch (err: any) {
       console.error("[BrandingTheme] Failed to fetch theme:", err);
       setError("Failed to load theme");

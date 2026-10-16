@@ -92,10 +92,10 @@ export default function Invoice() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--brand-cream,#FDF9F2)] flex items-center justify-center">
         <div className="flex flex-col items-center gap-2">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--customer-primary-dark)]"></div>
-          <p className="text-sm text-neutral-500">Loading invoice...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--brand-green,#236B34)]"></div>
+          <p className="text-sm text-[var(--brand-ink-muted,#5B6B60)]">Loading invoice...</p>
         </div>
       </div>
     );
@@ -103,9 +103,9 @@ export default function Invoice() {
 
   if (!order) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4">
+      <div className="min-h-screen bg-[var(--brand-cream,#FDF9F2)] text-[var(--brand-ink,#1C2B20)] p-4">
         <div className="max-w-lg mx-auto text-center py-20">
-          <h1 className="text-xl font-bold mb-4">Invoice Not Found</h1>
+          <h1 className="text-xl font-display font-bold mb-4 text-[var(--brand-green-deep,#14401F)]">Invoice Not Found</h1>
           <Link to="/orders">
             <Button>Back to Orders</Button>
           </Link>
@@ -120,21 +120,21 @@ export default function Invoice() {
   const totalAmount = order.totalAmount || subtotal + deliveryFee + platformFee;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[var(--brand-cream,#FDF9F2)] text-[var(--brand-ink,#1C2B20)]">
       {/* Header with actions - hidden when printing */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10 print:hidden">
+      <div className="bg-white border-b border-[var(--brand-border,#E9E2D3)] sticky top-0 z-10 print:hidden shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900">
+            className="flex items-center gap-2 text-[var(--brand-ink-muted,#5B6B60)] hover:text-[var(--brand-ink,#1C2B20)] transition-colors">
             <ArrowLeftIcon className="w-5 h-5" />
-            <span>Back</span>
+            <span className="font-medium">Back</span>
           </button>
           <div className="flex gap-3">
             <Button
               variant="outline"
               onClick={handlePrint}
-              className="flex items-center gap-2">
+              className="flex items-center gap-2 border-[var(--brand-border,#E9E2D3)]">
               <PrinterIcon className="w-4 h-4" />
               Print
             </Button>
@@ -150,26 +150,26 @@ export default function Invoice() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-lg shadow-sm print:shadow-none p-8 print:p-6">
+          className="bg-white rounded-2xl border border-[var(--brand-border,#E9E2D3)] shadow-[0_4px_16px_rgba(35,107,52,0.06)] print:shadow-none print:border-none p-8 print:p-6">
           {/* Invoice Header */}
-          <div className="border-b border-gray-200 pb-6 mb-6">
+          <div className="border-b border-[var(--brand-border,#E9E2D3)] pb-6 mb-6">
             <div className="flex justify-between items-start">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                  Ecommerce
+                <h1 className="text-3xl font-display font-extrabold text-[var(--brand-green-deep,#14401F)] mb-1">
+                  Unnati
                 </h1>
-                <p className="text-gray-600">
-                  Fast Delivery E-Commerce Platform
+                <p className="text-xs sm:text-sm font-medium text-[var(--brand-orange,#F97316)]">
+                  Everything You Need, All in One Place.
                 </p>
-                <p className="text-gray-600 mt-1">Invoice</p>
+                <p className="text-xs text-[var(--brand-ink-muted,#5B6B60)] mt-1 uppercase tracking-wider font-semibold">Tax Invoice / Bill of Supply</p>
               </div>
               <div className="text-right">
-                <p className="text-sm text-gray-600 mb-1">Invoice Number</p>
-                <p className="text-lg font-semibold text-gray-900">
+                <p className="text-sm text-[var(--brand-ink-muted,#5B6B60)] mb-1">Invoice Number</p>
+                <p className="text-lg font-semibold font-price text-[var(--brand-ink,#1C2B20)]">
                   {order.orderNumber || order.id?.split("-").slice(-1)[0] || "N/A"}
                 </p>
-                <p className="text-sm text-gray-600 mt-3 mb-1">Date</p>
-                <p className="text-sm font-medium text-gray-900">
+                <p className="text-sm text-[var(--brand-ink-muted,#5B6B60)] mt-3 mb-1">Date</p>
+                <p className="text-sm font-medium text-[var(--brand-ink,#1C2B20)]">
                   {order.createdAt ? formatDate(order.createdAt) : "N/A"}
                 </p>
               </div>
@@ -200,23 +200,23 @@ export default function Invoice() {
               </div>
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-3">
+              <h2 className="text-sm font-semibold text-[var(--brand-ink,#1C2B20)] uppercase tracking-wide mb-3">
                 Order Information
               </h2>
-              <div className="text-gray-700 space-y-1">
+              <div className="text-[var(--brand-ink-muted,#5B6B60)] space-y-1">
                 <p>
-                  <span className="font-medium">Order ID:</span>{" "}
+                  <span className="font-medium text-[var(--brand-ink,#1C2B20)]">Order ID:</span>{" "}
                   {order.orderNumber || order.id || "N/A"}
                 </p>
                 <p>
-                  <span className="font-medium">Status:</span>{" "}
-                  <span className="inline-block px-2 py-1 bg-[var(--customer-primary-alpha-20)] text-green-800 rounded text-sm font-medium">
+                  <span className="font-medium text-[var(--brand-ink,#1C2B20)]">Status:</span>{" "}
+                  <span className="inline-block px-2.5 py-1 bg-[var(--brand-leaf-tint,#EAF5E0)] text-[var(--brand-green-dark,#1B5128)] border border-[var(--brand-leaf,#5FA82E)]/25 rounded-md text-xs font-semibold">
                     {order.status || "Placed"}
                   </span>
                 </p>
                 {order.paymentMethod && (
                   <p>
-                    <span className="font-medium">Payment:</span>{" "}
+                    <span className="font-medium text-[var(--brand-ink,#1C2B20)]">Payment:</span>{" "}
                     {order.paymentMethod}
                   </p>
                 )}
@@ -225,20 +225,20 @@ export default function Invoice() {
           </div>
 
           {/* Order Items Table */}
-          <div className="mb-8">
+          <div className="mb-8 overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b-2 border-gray-200">
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-900">
+                <tr className="border-b-2 border-[var(--brand-border,#E9E2D3)]">
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-[var(--brand-ink,#1C2B20)]">
                     Item
                   </th>
-                  <th className="text-center py-3 px-4 text-sm font-semibold text-gray-900">
+                  <th className="text-center py-3 px-4 text-sm font-semibold text-[var(--brand-ink,#1C2B20)]">
                     Quantity
                   </th>
-                  <th className="text-right py-3 px-4 text-sm font-semibold text-gray-900">
+                  <th className="text-right py-3 px-4 text-sm font-semibold text-[var(--brand-ink,#1C2B20)]">
                     Unit Price
                   </th>
-                  <th className="text-right py-3 px-4 text-sm font-semibold text-gray-900">
+                  <th className="text-right py-3 px-4 text-sm font-semibold text-[var(--brand-ink,#1C2B20)]">
                     Total
                   </th>
                 </tr>
@@ -253,35 +253,35 @@ export default function Invoice() {
                   const itemTotal = item.total || unitPrice * quantity;
 
                   return (
-                    <tr key={index} className="border-b border-gray-100">
+                    <tr key={index} className="border-b border-[var(--brand-border-light,#F2ECE0)]">
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-3">
                           {item.product?.image || item.product?.mainImage ? (
                             <img
                               src={item.product.image || item.product.mainImage}
                               alt={productName}
-                              className="w-12 h-12 object-cover rounded"
+                              className="w-12 h-12 object-cover rounded-xl border border-[var(--brand-border,#E9E2D3)]"
                             />
                           ) : null}
                           <div>
-                            <p className="font-medium text-gray-900">
+                            <p className="font-medium text-[var(--brand-ink,#1C2B20)]">
                               {productName}
                             </p>
                             {item.variant && (
-                              <p className="text-sm text-gray-500">
+                              <p className="text-xs text-[var(--brand-ink-muted,#5B6B60)]">
                                 {item.variant}
                               </p>
                             )}
                           </div>
                         </div>
                       </td>
-                      <td className="text-center py-4 px-4 text-gray-700">
+                      <td className="text-center py-4 px-4 font-price text-[var(--brand-ink,#1C2B20)]">
                         {quantity}
                       </td>
-                      <td className="text-right py-4 px-4 text-gray-700">
+                      <td className="text-right py-4 px-4 font-price text-[var(--brand-ink-muted,#5B6B60)]">
                         {formatCurrency(unitPrice)}
                       </td>
-                      <td className="text-right py-4 px-4 font-medium text-gray-900">
+                      <td className="text-right py-4 px-4 font-price font-bold text-[var(--brand-green-deep,#14401F)]">
                         {formatCurrency(itemTotal)}
                       </td>
                     </tr>
@@ -294,37 +294,37 @@ export default function Invoice() {
           {/* Summary */}
           <div className="flex justify-end mb-8">
             <div className="w-full md:w-80 space-y-3">
-              <div className="flex justify-between text-gray-700">
+              <div className="flex justify-between text-[var(--brand-ink-muted,#5B6B60)]">
                 <span>Subtotal</span>
-                <span className="font-medium">{formatCurrency(subtotal)}</span>
+                <span className="font-medium font-price text-[var(--brand-ink,#1C2B20)]">{formatCurrency(subtotal)}</span>
               </div>
               {deliveryFee > 0 && (
-                <div className="flex justify-between text-gray-700">
+                <div className="flex justify-between text-[var(--brand-ink-muted,#5B6B60)]">
                   <span>Delivery Fee</span>
-                  <span className="font-medium">
+                  <span className="font-medium font-price text-[var(--brand-ink,#1C2B20)]">
                     {formatCurrency(deliveryFee)}
                   </span>
                 </div>
               )}
               {platformFee > 0 && (
-                <div className="flex justify-between text-gray-700">
+                <div className="flex justify-between text-[var(--brand-ink-muted,#5B6B60)]">
                   <span>Platform Fee</span>
-                  <span className="font-medium">
+                  <span className="font-medium font-price text-[var(--brand-ink,#1C2B20)]">
                     {formatCurrency(platformFee)}
                   </span>
                 </div>
               )}
-              <div className="border-t-2 border-gray-200 pt-3 flex justify-between text-lg font-bold text-gray-900">
+              <div className="border-t-2 border-[var(--brand-border,#E9E2D3)] pt-3 flex justify-between text-lg font-display font-bold text-[var(--brand-green-deep,#14401F)]">
                 <span>Total</span>
-                <span>{formatCurrency(totalAmount)}</span>
+                <span className="font-price">{formatCurrency(totalAmount)}</span>
               </div>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="border-t border-gray-200 pt-6 text-center text-sm text-gray-600">
-            <p className="mb-2">Thank you for your business!</p>
-            <p>For any queries, please contact our customer support.</p>
+          <div className="border-t border-[var(--brand-border,#E9E2D3)] pt-6 text-center text-sm text-[var(--brand-ink-muted,#5B6B60)]">
+            <p className="mb-1 font-medium text-[var(--brand-ink,#1C2B20)]">Thank you for your order with Unnati!</p>
+            <p>For any queries, please visit Help &amp; Support.</p>
           </div>
         </motion.div>
       </div>

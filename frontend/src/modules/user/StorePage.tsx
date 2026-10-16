@@ -128,9 +128,9 @@ export default function StorePage() {
     };
 
     return (
-        <div className="min-h-screen bg-white">
+        <div className="min-h-screen bg-[var(--brand-cream,#FDF9F2)] text-[var(--brand-ink,#1C2B20)]">
             {/* Store Banner: Full-width coverage */}
-            <div className="relative w-full h-44 sm:h-56 md:h-64 bg-neutral-100 overflow-hidden">
+            <div className="relative w-full h-44 sm:h-56 md:h-64 bg-[var(--brand-cream-soft,#F6EFE2)] overflow-hidden">
                 {bannerImage && !imageError ? (
                     <img
                         src={bannerImage}
@@ -140,13 +140,13 @@ export default function StorePage() {
                         loading="eager"
                     />
                 ) : (
-                    <div className="banner-fallback w-full h-full bg-gradient-to-br from-emerald-50 via-teal-100 to-cyan-100 flex items-center justify-center">
+                    <div className="banner-fallback w-full h-full bg-gradient-to-br from-[var(--brand-leaf-tint,#EAF5E0)] via-[var(--brand-cream-soft,#F6EFE2)] to-[var(--brand-cream,#FDF9F2)] flex items-center justify-center">
                         {storeName && !isMongoId(storeName) ? (
-                            <div className="text-3xl sm:text-4xl font-extrabold text-teal-800">
+                            <div className="text-3xl sm:text-4xl font-display font-extrabold text-[var(--brand-green-deep,#14401F)]">
                                 {storeName.charAt(0).toUpperCase()}
                             </div>
                         ) : (
-                            <div className="w-14 h-14 rounded-full bg-white/80 shadow-sm flex items-center justify-center text-teal-800">
+                            <div className="w-14 h-14 rounded-full bg-white/90 shadow-sm border border-[var(--brand-border,#E9E2D3)] flex items-center justify-center text-[var(--brand-green,#236B34)]">
                                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                                     <polyline points="9 22 9 12 15 12 15 22" />
@@ -161,11 +161,11 @@ export default function StorePage() {
                     <div className="px-3 py-2 flex items-center justify-between gap-2">
                         <button
                             onClick={() => navigate(-1)}
-                            className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-lg bg-white/70 shadow-sm hover:bg-white/80 transition-colors flex-shrink-0 border border-white/20"
+                            className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-lg bg-white/80 shadow-sm hover:bg-white transition-colors flex-shrink-0 border border-[var(--brand-border,#E9E2D3)]"
                             aria-label="Back"
                         >
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                                <path d="M15 18L9 12L15 6" stroke="#000000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M15 18L9 12L15 6" stroke="var(--brand-ink, #1C2B20)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                         </button>
 
@@ -173,7 +173,7 @@ export default function StorePage() {
                             {loading && !storeName ? (
                                 <div className="h-4 w-32 bg-white/70 rounded animate-pulse" />
                             ) : (
-                                <h1 className="text-sm font-bold text-neutral-900 drop-shadow-sm truncate">
+                                <h1 className="text-sm font-display font-bold text-[var(--brand-ink,#1C2B20)] drop-shadow-sm truncate">
                                     {storeName || 'Store'}
                                 </h1>
                             )}
@@ -182,26 +182,26 @@ export default function StorePage() {
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                             <button
                                 onClick={() => navigate('/search')}
-                                className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-lg bg-white/70 shadow-sm hover:bg-white/80 transition-colors border border-white/20"
+                                className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-lg bg-white/80 shadow-sm hover:bg-white transition-colors border border-[var(--brand-border,#E9E2D3)]"
                                 aria-label="Search"
                             >
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                                    <circle cx="11" cy="11" r="8" stroke="#000000" strokeWidth="2" />
-                                    <path d="m21 21-4.35-4.35" stroke="#000000" strokeWidth="2" strokeLinecap="round" />
+                                    <circle cx="11" cy="11" r="8" stroke="var(--brand-ink, #1C2B20)" strokeWidth="2" />
+                                    <path d="m21 21-4.35-4.35" stroke="var(--brand-ink, #1C2B20)" strokeWidth="2" strokeLinecap="round" />
                                 </svg>
                             </button>
                         </div>
                     </div>
                 </header>
 
-                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white via-white/40 to-transparent pointer-events-none" />
+                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[var(--brand-cream,#FDF9F2)] via-[var(--brand-cream,#FDF9F2)]/40 to-transparent pointer-events-none" />
             </div>
 
             {/* Products Section */}
             <div className="px-4 py-4">
-                <h3 className="text-lg font-semibold text-neutral-900 mb-4 min-h-[28px] flex items-center">
+                <h3 className="text-lg font-display font-bold text-[var(--brand-green-deep,#14401F)] mb-4 min-h-[28px] flex items-center">
                     {loading && !storeName ? (
-                        <span className="h-5 w-44 bg-neutral-200 rounded animate-pulse inline-block" />
+                        <span className="h-5 w-44 bg-[var(--brand-cream-soft,#F6EFE2)] rounded animate-pulse inline-block" />
                     ) : (
                         `Top buys in ${storeName || 'store'}`
                     )}
@@ -209,7 +209,7 @@ export default function StorePage() {
 
                 {loading ? (
                     <div className="flex justify-center p-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--customer-primary-dark)]"></div>
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--brand-green,#236B34)]"></div>
                     </div>
                 ) : products.length > 0 ? (
                   <>
@@ -229,9 +229,9 @@ export default function StorePage() {
 
                   </>
                 ) : (
-                    <div className="text-center py-20 text-neutral-500">
+                    <div className="text-center py-20 text-[var(--brand-ink-muted,#5B6B60)]">
                         <p>No products found in this store yet.</p>
-                        <Link to="/" className="text-[var(--customer-primary-dark)] font-medium mt-2 inline-block">Explore other categories</Link>
+                        <Link to="/" className="text-[var(--brand-green,#236B34)] font-medium mt-2 inline-block hover:underline">Explore other categories</Link>
                     </div>
                 )}
             </div>

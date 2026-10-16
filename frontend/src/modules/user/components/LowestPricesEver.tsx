@@ -83,13 +83,13 @@ export default function LowestPricesEver({ activeTab = 'all', products: adminPro
     <div
       className="relative"
       style={{
-        backgroundColor: '#ffffff',
+        backgroundColor: 'var(--brand-cream, #FDF9F2)',
         marginTop: '0px',
         paddingTop: '12px',
         paddingBottom: '16px',
       }}
     >
-      {/* White Scalloped Divider at Top */}
+      {/* Scalloped Divider at Top */}
       <div className="absolute top-0 left-0 right-0" style={{ height: '30px', zIndex: 10, opacity: 0.95 }}>
         <svg
           viewBox="0 0 1200 30"
@@ -124,8 +124,8 @@ export default function LowestPricesEver({ activeTab = 'all', products: adminPro
                T1150,15
                L1200,15
                L1200,30 Z"
-            fill="white"
-            stroke="white"
+            fill="var(--brand-cream, #FDF9F2)"
+            stroke="var(--brand-cream, #FDF9F2)"
             strokeWidth="0"
           />
         </svg>
@@ -134,22 +134,16 @@ export default function LowestPricesEver({ activeTab = 'all', products: adminPro
       {/* LOWEST PRICES EVER Banner */}
       <div className="px-4 relative z-10" style={{ marginTop: '30px', marginBottom: '12px' }} data-section="lowest-prices">
         <div className="flex items-center justify-center gap-2 mb-1">
-          <div className="flex-1 h-px bg-neutral-300"></div>
+          <div className="flex-1 h-px bg-[var(--brand-border,#E9E2D3)]"></div>
 
           <h2
-            className="font-bold text-center whitespace-nowrap text-xl md:text-2xl lg:text-[32px] tracking-tight"
-            style={{
-              fontFamily: "'Quicksand', 'Nunito', 'Inter', sans-serif",
-              color: '#253D4E',
-              opacity: fontLoaded ? 1 : 0,
-              transition: 'opacity 0.2s ease-in',
-            }}
+            className="font-display font-bold text-center whitespace-nowrap text-xl md:text-2xl lg:text-[32px] tracking-tight text-[var(--brand-green-deep,#14401F)]"
           >
             <span>Lowest Prices </span>
-            <span className="text-[var(--customer-primary)]">Ever</span>
+            <span className="text-[var(--brand-orange,#F97316)]">Ever</span>
           </h2>
 
-          <div className="flex-1 h-px bg-neutral-300"></div>
+          <div className="flex-1 h-px bg-[var(--brand-border,#E9E2D3)]"></div>
         </div>
       </div>
 
@@ -180,7 +174,7 @@ export default function LowestPricesEver({ activeTab = 'all', products: adminPro
         <button
           type="button"
           onClick={() => navigate('/lowest-prices-ever')}
-          className="text-xs font-bold flex items-center gap-1 transition-colors bg-white/90 backdrop-blur-sm px-4 py-2 rounded-lg border border-neutral-200 text-[var(--customer-primary)] hover:bg-white shadow-sm"
+          className="text-xs font-bold flex items-center gap-1 transition-colors bg-white/90 backdrop-blur-sm px-4 py-2 rounded-xl border border-[var(--brand-border,#E9E2D3)] text-[var(--brand-green,#236B34)] hover:bg-white shadow-sm"
         >
           View All
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

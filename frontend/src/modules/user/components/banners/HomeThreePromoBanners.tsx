@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { bannerService } from "../../../../services/bannerService";
 import { getCategories } from "../../../../services/api/customerProductService";
 
-const BG_COLORS = ["#E4F0EB", "#FAF0D4", "#E4F2EE"];
+const BG_COLORS = ["#EAF5E0", "#F6EFE2", "#EAF5E0"];
 
 export default function HomeThreePromoBanners() {
   const navigate = useNavigate();
@@ -46,7 +46,7 @@ export default function HomeThreePromoBanners() {
               subtitle: c.description || `Explore top ${c.name} items`,
               priceText: "Explore",
               price: "Deals",
-              imageUrl: c.image || "/assets/unnati_logo.png",
+              imageUrl: c.image || "/brand/unnati-logo.png",
               bgColor: BG_COLORS[idx % BG_COLORS.length],
               link: `/category/${c.slug || c._id || c.id}`,
             }));
@@ -75,35 +75,35 @@ export default function HomeThreePromoBanners() {
             key={banner.id}
             whileHover={{ y: -4, scale: 1.01 }}
             onClick={() => navigate(banner.link)}
-            className="rounded-[20px] p-6 relative overflow-hidden flex justify-between items-center shadow-sm hover:shadow-md transition-all duration-300 min-h-[145px] cursor-pointer"
+            className="rounded-2xl p-6 relative overflow-hidden flex justify-between items-center shadow-sm hover:shadow-md transition-all duration-300 min-h-[145px] cursor-pointer border border-[var(--brand-border,#E9E2D3)]"
             style={{ backgroundColor: banner.bgColor }}
           >
             {/* Left Column Information */}
-            <div className="flex flex-col items-start text-left max-w-[58%] z-10 font-sans" style={{ fontFamily: "'Quicksand', 'Nunito', 'Inter', sans-serif" }}>
-              <h3 className="text-[#253D4E] font-black text-sm md:text-lg leading-tight truncate w-full">
+            <div className="flex flex-col items-start text-left max-w-[58%] z-10 font-sans">
+              <h3 className="text-[var(--brand-green-deep,#14401F)] font-display font-extrabold text-sm md:text-lg leading-tight truncate w-full">
                 {banner.title}
               </h3>
-              <p className="text-[#253D4E] text-[11px] md:text-xs font-bold leading-normal mb-1 opacity-90 truncate w-full">
+              <p className="text-[var(--brand-ink-muted,#5B6B60)] text-[11px] md:text-xs font-medium leading-normal mb-1 truncate w-full">
                 {banner.subtitle}
               </p>
 
               <div className="flex flex-col items-start mb-3">
-                <span className="text-[#253D4E] text-[9px] md:text-[10px] font-semibold leading-none opacity-75">
+                <span className="text-[var(--brand-ink-muted,#5B6B60)] text-[9px] md:text-[10px] font-semibold leading-none">
                   {banner.priceText}
                 </span>
-                <span className="text-[#253D4E] text-base md:text-lg font-black leading-none mt-0.5">
+                <span className="text-[var(--brand-orange,#F97316)] text-base md:text-lg font-display font-extrabold leading-none mt-0.5">
                   {banner.price}
                 </span>
               </div>
 
-              <span className="bg-white hover:bg-[#163F2E] hover:text-white text-[#253D4E] font-black text-[9px] md:text-xs px-4 md:px-5 py-1.5 md:py-2 rounded-full transition-all shadow-sm active:scale-95">
+              <span className="bg-[var(--brand-green,#236B34)] hover:bg-[var(--brand-green-dark,#1B5128)] text-white font-bold text-[9px] md:text-xs px-4 md:px-5 py-1.5 md:py-2 rounded-full transition-all shadow-sm active:scale-95">
                 Shop Now
               </span>
             </div>
 
             {/* Right Column Product Graphic */}
             <div className="w-[38%] h-full relative flex items-center justify-end z-10">
-              <div className="w-[85px] h-[85px] md:w-[105px] md:h-[105px] rounded-full overflow-hidden bg-white/40 flex items-center justify-center p-1 shadow-inner">
+              <div className="w-[85px] h-[85px] md:w-[105px] md:h-[105px] rounded-full overflow-hidden bg-white/60 flex items-center justify-center p-1 shadow-inner border border-white/40">
                 <img
                   src={banner.imageUrl}
                   alt={banner.title}

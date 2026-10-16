@@ -670,9 +670,9 @@ export default function ProductDetail() {
         <div className="hidden lg:flex items-center mb-3 mt-1">
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg md:rounded-xl text-sm font-bold text-[#0c5236] bg-[#eef6f3] border border-[#0c5236] hover:bg-[#e2f0eb] transition-all shadow-sm"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg md:rounded-xl text-sm font-bold text-[var(--brand-green,#236B34)] bg-[var(--brand-leaf-tint,#EAF5E0)] border border-[var(--brand-green,#236B34)] hover:bg-[var(--brand-leaf-tint,#EAF5E0)]/80 transition-all shadow-sm"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[#0c5236]">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[var(--brand-green,#236B34)]">
               <path d="M19 12H5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M12 19L5 12L12 5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
@@ -819,16 +819,16 @@ export default function ProductDetail() {
 
             {/* Header info */}
             <div>
-              <div className="flex items-center gap-1.5 text-sm md:text-base text-[var(--customer-primary-dark)] font-semibold mb-2">
+              <div className="flex items-center gap-1.5 text-sm md:text-base text-[var(--brand-green,#236B34)] font-bold mb-2">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
                 <span>{formatDeliveryTime((product as any)?.deliveryTime, "17 MINS")} DELIVERY</span>
               </div>
-              <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-neutral-900 tracking-tight leading-tight mb-2">
+              <h1 className="text-2xl md:text-3xl lg:text-4xl font-display font-extrabold text-[var(--brand-green-deep,#14401F)] tracking-tight leading-tight mb-2">
                 {product.name}
               </h1>
               {product.brand && (
-                <p className="text-base text-neutral-500">
-                  Brand: <span className="font-semibold text-neutral-800">{typeof product.brand === 'object' ? product.brand.name : product.brand}</span>
+                <p className="text-base text-[var(--brand-ink-muted,#5B6B60)]">
+                  Brand: <span className="font-semibold text-[var(--brand-ink,#1C2B20)]">{typeof product.brand === 'object' ? product.brand.name : product.brand}</span>
                 </p>
               )}
             </div>
@@ -836,7 +836,7 @@ export default function ProductDetail() {
             {/* Variations Card list */}
             {hasVariations && (
               <div>
-                <h3 className="text-sm font-bold text-neutral-400 uppercase tracking-wider mb-2">Select Pack Size</h3>
+                <h3 className="text-sm font-bold text-[var(--brand-ink-muted,#5B6B60)] uppercase tracking-wider mb-2">Select Pack Size</h3>
                 <div className="flex flex-wrap gap-2">
                   {variantCardOptions.map((variantOption) => {
                     const isSelected = variantOption.index === effectiveVariantIndex;
@@ -850,18 +850,18 @@ export default function ProductDetail() {
                         }}
                         disabled={variantOption.isOutOfStock}
                         className={`flex-shrink-0 w-28 rounded-xl border bg-white p-2.5 text-left transition-all ${
-                          isSelected ? "border-[var(--customer-primary-dark)] ring-2 ring-green-100 shadow-sm" : "border-neutral-200 hover:border-neutral-300"
+                          isSelected ? "border-[var(--brand-green,#236B34)] ring-2 ring-[var(--brand-leaf-tint,#EAF5E0)] shadow-sm bg-[var(--brand-leaf-tint,#EAF5E0)]/20" : "border-[var(--brand-border,#E9E2D3)] hover:border-neutral-300"
                         } ${variantOption.isOutOfStock ? "opacity-50 cursor-not-allowed" : ""}`}
                       >
-                        <p className="text-xs font-bold text-neutral-900 truncate mb-1">{variantOption.title}</p>
+                        <p className="text-xs font-bold text-[var(--brand-ink,#1C2B20)] truncate mb-1">{variantOption.title}</p>
                         {!product.isEnquiryOnly && (
-                          <div className="leading-none mb-1">
-                            <span className="text-[10px] text-neutral-900">₹</span>
-                            <span className="text-base font-bold text-neutral-900">{priceParts.whole}</span>
-                            <span className="text-[9px] align-super text-neutral-700">{priceParts.fraction}</span>
+                          <div className="leading-none mb-1 font-display font-price">
+                            <span className="text-[10px] text-[var(--brand-green,#236B34)] font-bold">₹</span>
+                            <span className="text-sm font-bold text-[var(--brand-green,#236B34)]">{priceParts.whole}</span>
+                            <span className="text-[9px] align-super text-[var(--brand-green,#236B34)] font-bold">{priceParts.fraction}</span>
                           </div>
                         )}
-                        <p className={`text-[10px] font-semibold ${variantOption.inStock ? "text-green-600" : "text-red-500"}`}>
+                        <p className={`text-[10px] font-semibold ${variantOption.inStock ? "text-[var(--brand-green,#236B34)]" : "text-red-500"}`}>
                           {variantOption.inStock ? "In stock" : "Out of stock"}
                         </p>
                       </button>
@@ -872,18 +872,18 @@ export default function ProductDetail() {
             )}
 
             {/* Mobile-only Pricing block (hidden on desktop) */}
-            <div className="lg:hidden bg-neutral-50 rounded-xl p-4 border border-neutral-100">
+            <div className="lg:hidden bg-white rounded-2xl p-4 border border-[var(--brand-border,#E9E2D3)] shadow-sm">
               {product.isEnquiryOnly ? (
                 <span className="text-lg font-bold text-neutral-600 bg-neutral-100 px-3 py-1 rounded-full inline-block">Price on Enquiry</span>
               ) : (
                 <>
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-4xl font-black text-neutral-900">₹{variantPrice.toLocaleString('en-IN')}</span>
+                    <span className="text-xl font-bold font-price text-[var(--brand-green,#236B34)]">₹{variantPrice.toLocaleString('en-IN')}</span>
                   </div>
                   {hasDiscount && (
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-base text-neutral-400 line-through">MRP ₹{variantMrp.toLocaleString('en-IN')}</span>
-                      <Badge className="!bg-[var(--customer-primary)] !text-white text-sm px-2 py-0.5 rounded-full font-semibold">{discount}% OFFER</Badge>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs text-[var(--brand-ink-muted,#5B6B60)]/60 line-through font-price">MRP ₹{variantMrp.toLocaleString('en-IN')}</span>
+                      <span className="text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-xs" style={{ background: 'var(--gradient-signature)' }}>{discount}% OFF</span>
                     </div>
                   )}
                   {product.taxPreference === "excluded" ? (
@@ -1051,12 +1051,12 @@ export default function ProductDetail() {
                 ) : (
                   <>
                     <div className="flex items-baseline gap-1.5">
-                      <span className="text-3xl font-black text-neutral-900">₹{variantPrice.toLocaleString('en-IN')}</span>
+                      <span className="text-xl font-bold font-price text-[var(--brand-green,#236B34)]">₹{variantPrice.toLocaleString('en-IN')}</span>
                     </div>
                     {hasDiscount && (
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-sm text-neutral-400 line-through">MRP ₹{variantMrp.toLocaleString('en-IN')}</span>
-                        <Badge className="!bg-[var(--customer-primary)] !text-white text-xs px-2 py-0.5 rounded-full font-semibold">{discount}% OFFER</Badge>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-[var(--brand-ink-muted,#5B6B60)]/60 line-through font-price">MRP ₹{variantMrp.toLocaleString('en-IN')}</span>
+                        <span className="text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-xs" style={{ background: 'var(--gradient-signature)' }}>{discount}% OFF</span>
                       </div>
                     )}
                     {product.taxPreference === "excluded" ? (
@@ -1249,7 +1249,7 @@ export default function ProductDetail() {
               <span className="text-sm font-semibold text-neutral-600 bg-neutral-100 px-2 py-0.5 rounded-full">Price on Enquiry</span>
             ) : (
               <div className="flex items-center gap-1.5">
-                <span className="text-lg font-black text-neutral-900">₹{variantPrice.toLocaleString('en-IN')}</span>
+                <span className="text-base font-bold text-neutral-900">₹{variantPrice.toLocaleString('en-IN')}</span>
                 {hasDiscount && <span className="text-xs text-neutral-400 line-through">₹{variantMrp.toLocaleString('en-IN')}</span>}
               </div>
             )}

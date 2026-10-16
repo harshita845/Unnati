@@ -8,6 +8,7 @@ import { useLocation as useLocationContext } from '../hooks/useLocation';
 import LocationPermissionRequest from './LocationPermissionRequest';
 import { useThemeContext } from '../context/ThemeContext';
 import QRScannerModal from './QRScannerModal';
+import VoiceSearchModal from './VoiceSearchModal';
 import { openBarcodeScanner } from '../utils/scannerPlatform';
 import { useAppContext } from '../context/AppContext';
 import { useCart } from '../context/CartContext';
@@ -34,6 +35,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [showLocationRequest, setShowLocationRequest] = useState(false);
   const [showLocationChangeModal, setShowLocationChangeModal] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
   const { currentTheme } = useThemeContext();
   const { config } = useAppContext();
   const { cart } = useCart();
@@ -443,15 +445,15 @@ export default function AppLayout({ children }: AppLayoutProps) {
           {!isCheckoutPage && !isAccountPage && (
             <nav
               className="hidden md:flex fixed top-0 left-0 right-0 z-[100] items-center justify-between gap-4 px-4 lg:px-6 py-2 shadow-md h-[56px] amazon-nav-font"
-              style={{ backgroundColor: '#163F2E' }}
+              style={{ backgroundColor: 'var(--brand-green-deep, #14401F)' }}
             >
               {/* Left Side: Logo & Location */}
               <div className="flex items-center gap-4 flex-shrink-0">
                 {/* Logo */}
                 <Link to="/" className="flex-shrink-0 flex items-center">
                   <img
-                    src={config?.appLogo || "/assets/unnati_logo.png"}
-                    alt={config?.appName || "Ecommerce"}
+                    src={config?.appLogo || "/brand/unnati-logo.png"}
+                    alt={config?.appName || "Unnati"}
                     className="h-[42px] w-auto object-contain rounded-md"
                   />
                 </Link>
@@ -462,7 +464,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   className="flex items-center gap-1.5 cursor-pointer hover:outline hover:outline-1 hover:outline-white/40 px-2.5 py-1 rounded transition-all max-w-[190px]"
                   style={{ color: '#ffffff' }}
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 opacity-90 text-[#F2B134]">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 opacity-90 text-[var(--brand-amber,#FFB020)]">
                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     <circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
@@ -483,7 +485,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
                       {/* Center: Search Bar */}
               <div className="flex-1 max-w-2xl lg:max-w-4xl xl:max-w-5xl relative" ref={suggestionRef}>
-                <div className="flex items-center bg-white rounded-md focus-within:ring-2 focus-within:ring-[#F2B134] transition-all h-[38px] relative">
+                <div className="flex items-center bg-white rounded-md focus-within:ring-2 focus-within:ring-[var(--brand-leaf,#5FA82E)] transition-all h-[38px] relative">
                   {/* Category Dropdown (All) */}
                   <div 
                     onMouseEnter={() => setShowCategoryDropdown(true)}
@@ -535,7 +537,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                                     setShowCategoryDropdown(false);
                                     navigate(`/category/${cat.slug}`);
                                   }}
-                                  className={`w-full px-4 py-3.5 text-left text-[13px] font-medium transition-all hover:bg-neutral-800 ${isHovered ? 'text-[#F2B134] bg-neutral-800 border-l-4 border-[#F2B134]' : 'text-neutral-300'}`}
+                                  className={`w-full px-4 py-3.5 text-left text-[13px] font-medium transition-all hover:bg-neutral-800 ${isHovered ? 'text-[var(--brand-orange,#F97316)] bg-neutral-800 border-l-4 border-[var(--brand-orange,#F97316)]' : 'text-neutral-300'}`}
                                 >
                                   {cat.name}
                                 </button>
@@ -626,6 +628,22 @@ export default function AppLayout({ children }: AppLayoutProps) {
                     placeholder="Search for products..."
                     className="w-full px-3 py-2 text-sm bg-transparent text-neutral-800 focus:outline-none placeholder:text-neutral-400 font-sans"
                   />
+                  {/* Voice search button */}
+                  <button
+                    type="button"
+                    onClick={() => setShowVoiceModal(true)}
+                    className="px-2.5 bg-transparent hover:bg-neutral-50 text-neutral-600 flex items-center justify-center transition-colors h-full cursor-pointer"
+                    title="Voice Search"
+                    aria-label="Voice Search"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                      <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                      <line x1="12" y1="19" x2="12" y2="23" />
+                      <line x1="8" y1="23" x2="16" y2="23" />
+                    </svg>
+                  </button>
+
                   {/* Barcode scanner button */}
                   <button
                     onClick={() => openBarcodeScanner(() => setShowScanner(true))}
@@ -644,7 +662,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   {/* Search Icon button */}
                   <button
                     onClick={() => handleSearchSubmit()}
-                    className="bg-[#66B82E] hover:bg-[#549b25] w-14 flex items-center justify-center text-white transition-colors h-full rounded-r-md"
+                    className="bg-[var(--brand-leaf,#5FA82E)] hover:bg-[var(--brand-green,#236B34)] w-14 flex items-center justify-center text-white transition-colors h-full rounded-r-md"
                   >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="11" cy="11" r="8" />
@@ -703,7 +721,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   {/* Home */}
                   <Link
                     to="/"
-                    className={`px-2.5 py-1.5 rounded text-[13px] transition-all font-normal text-white hover:text-[#F2B134] hover:outline hover:outline-1 hover:outline-white/30 ${isActive('/') ? 'text-[#F2B134] font-medium border-b border-[#F2B134] rounded-none' : ''}`}
+                    className={`px-2.5 py-1.5 rounded text-[13px] transition-all font-normal text-white hover:text-[var(--brand-amber,#FFB020)] hover:outline hover:outline-1 hover:outline-white/30 ${isActive('/') ? 'text-[var(--brand-amber,#FFB020)] font-medium border-b border-[var(--brand-amber,#FFB020)] rounded-none' : ''}`}
                   >
                     Home
                   </Link>
@@ -711,7 +729,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   {/* Order Again */}
                   <Link
                     to="/order-again"
-                    className={`px-2.5 py-1.5 rounded text-[13px] transition-all font-normal text-white hover:text-[#F2B134] hover:outline hover:outline-1 hover:outline-white/30 ${isActive('/order-again') ? 'text-[#F2B134] font-medium border-b border-[#F2B134] rounded-none' : ''}`}
+                    className={`px-2.5 py-1.5 rounded text-[13px] transition-all font-normal text-white hover:text-[var(--brand-amber,#FFB020)] hover:outline hover:outline-1 hover:outline-white/30 ${isActive('/order-again') ? 'text-[var(--brand-amber,#FFB020)] font-medium border-b border-[var(--brand-amber,#FFB020)] rounded-none' : ''}`}
                   >
                     Order Again
                   </Link>
@@ -719,7 +737,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   {/* Brand */}
                   <Link
                     to="/brands"
-                    className={`px-2.5 py-1.5 rounded text-[13px] transition-all font-normal text-white hover:text-[#F2B134] hover:outline hover:outline-1 hover:outline-white/30 ${isActive('/brands') ? 'text-[#F2B134] font-medium border-b border-[#F2B134] rounded-none' : ''}`}
+                    className={`px-2.5 py-1.5 rounded text-[13px] transition-all font-normal text-white hover:text-[var(--brand-amber,#FFB020)] hover:outline hover:outline-1 hover:outline-white/30 ${isActive('/brands') ? 'text-[var(--brand-amber,#FFB020)] font-medium border-b border-[var(--brand-amber,#FFB020)] rounded-none' : ''}`}
                   >
                     Brand
                   </Link>
@@ -727,7 +745,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   {/* Categories */}
                   <Link
                     to="/categories"
-                    className={`px-2.5 py-1.5 rounded text-[13px] transition-all font-normal text-white hover:text-[#F2B134] hover:outline hover:outline-1 hover:outline-white/30 ${(isActive('/categories') || location.pathname.startsWith('/category/')) ? 'text-[#F2B134] font-medium border-b border-[#F2B134] rounded-none' : ''}`}
+                    className={`px-2.5 py-1.5 rounded text-[13px] transition-all font-normal text-white hover:text-[var(--brand-amber,#FFB020)] hover:outline hover:outline-1 hover:outline-white/30 ${(isActive('/categories') || location.pathname.startsWith('/category/')) ? 'text-[var(--brand-amber,#FFB020)] font-medium border-b border-[var(--brand-amber,#FFB020)] rounded-none' : ''}`}
                   >
                     Categories
                   </Link>
@@ -735,7 +753,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   {/* Profile Icon */}
                   <Link
                     to="/account"
-                    className={`px-2.5 py-1 flex items-center justify-center rounded transition-all font-normal text-white hover:text-[#F2B134] hover:outline hover:outline-1 hover:outline-white/30 ${isActive('/account') ? 'text-[#F2B134] font-medium border-b border-[#F2B134] rounded-none' : ''}`}
+                    className={`px-2.5 py-1 flex items-center justify-center rounded transition-all font-normal text-white hover:text-[var(--brand-amber,#FFB020)] hover:outline hover:outline-1 hover:outline-white/30 ${isActive('/account') ? 'text-[var(--brand-amber,#FFB020)] font-medium border-b border-[var(--brand-amber,#FFB020)] rounded-none' : ''}`}
                     title="Profile"
                   >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -745,7 +763,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   </Link>
                 </div>
 
-                {/* Amazon-Style Cart Button */}
+                {/* Cart Button */}
                 <Link
                   to="/cart"
                   className="flex items-end gap-1 px-2.5 py-1.5 rounded hover:outline hover:outline-1 hover:outline-white/30 transition-all text-white font-sans cursor-pointer group"
@@ -756,7 +774,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                       <circle cx="20" cy="21" r="1"></circle>
                       <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
                     </svg>
-                    <span className="absolute -top-2.5 left-3.5 bg-[#EF4444] text-white text-[9px] font-bold px-1.5 h-4 min-w-[16px] rounded-full flex items-center justify-center border border-[#163F2E] shadow-sm">
+                    <span className="absolute -top-2.5 left-3.5 bg-[var(--brand-orange,#F97316)] text-white text-[9px] font-bold px-1.5 h-4 min-w-[16px] rounded-full flex items-center justify-center border border-[var(--brand-green-deep,#14401F)] shadow-sm">
                       {cart?.itemCount || 0}
                     </span>
                   </div>
@@ -889,6 +907,22 @@ export default function AppLayout({ children }: AppLayoutProps) {
                       )}
                     </div>
 
+                    {/* Voice Search Button */}
+                    <button
+                        type="button"
+                        onClick={() => setShowVoiceModal(true)}
+                        className="bg-neutral-100 hover:bg-neutral-200 text-neutral-600 p-2.5 rounded-lg border border-neutral-200 transition-colors flex items-center justify-center cursor-pointer"
+                        title="Voice Search"
+                        aria-label="Voice Search"
+                    >
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                            <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                            <line x1="12" y1="19" x2="12" y2="23" />
+                            <line x1="8" y1="23" x2="16" y2="23" />
+                        </svg>
+                    </button>
+
                     {/* Scanner Button */}
                     <button
                         onClick={() => openBarcodeScanner(() => setShowScanner(true))}
@@ -917,11 +951,22 @@ export default function AppLayout({ children }: AppLayoutProps) {
                     setShowScanner(false);
                     if (decodedText) {
                         handleSearchChange(decodedText);
+                        navigate(`/search?q=${encodeURIComponent(decodedText)}`);
                     }
                 }}
                 onClose={() => setShowScanner(false)}
             />
           )}
+
+          {/* Voice Search Modal */}
+          <VoiceSearchModal
+            isOpen={showVoiceModal}
+            onClose={() => setShowVoiceModal(false)}
+            onSearchResult={(query) => {
+              handleSearchChange(query);
+              navigate(`/search?q=${encodeURIComponent(query)}`);
+            }}
+          />
 
           {/* Scrollable Main Content */}
           <main
@@ -978,7 +1023,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           {/* Fixed Bottom Navigation - Mobile Only, Hidden on checkout pages */}
            {showFooter && (
              <nav
-               className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-neutral-100/80 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] z-50 md:hidden pb-safe"
+               className="fixed bottom-0 left-0 right-0 bg-[#FDF9F2]/95 backdrop-blur-md border-t border-[var(--brand-border,#E9E2D3)] shadow-[0_-8px_24px_rgba(35,107,52,0.06)] z-50 md:hidden pb-safe"
              >
                 <div className="flex justify-around items-center h-16 px-2">
                   
@@ -1035,11 +1080,15 @@ export default function AppLayout({ children }: AppLayoutProps) {
                           )}
                         </motion.svg>
                       </div>
-                      <span className={`text-[10px] mt-1 relative z-10 transition-colors duration-200 ${isActive('/') ? 'font-semibold text-[var(--customer-primary-dark)]' : 'font-medium text-neutral-400'}`}>
+                      <span className={`text-[10px] mt-1 relative z-10 transition-colors duration-200 ${isActive('/') ? 'font-bold text-[var(--brand-green,#236B34)]' : 'font-medium text-[var(--brand-ink-muted,#5B6B60)]'}`}>
                         Home
                       </span>
                       {isActive('/') && (
-                        <motion.div layoutId="activeDot" className="absolute bottom-1.5 w-1 h-1 rounded-full bg-[var(--customer-primary)]" />
+                        <motion.div
+                          layoutId="activeDot"
+                          transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                          className="absolute bottom-1.5 w-1.5 h-1.5 rounded-full bg-[var(--brand-orange,#F97316)]"
+                        />
                       )}
                     </Link>
                   </motion.div>
@@ -1102,11 +1151,15 @@ export default function AppLayout({ children }: AppLayoutProps) {
                           </AnimatePresence>
                         </motion.svg>
                       </div>
-                      <span className={`text-[10px] mt-1 relative z-10 whitespace-nowrap transition-colors duration-200 ${isActive('/order-again') ? 'font-semibold text-[var(--customer-primary-dark)]' : 'font-medium text-neutral-400'}`}>
+                      <span className={`text-[10px] mt-1 relative z-10 whitespace-nowrap transition-colors duration-200 ${isActive('/order-again') ? 'font-bold text-[var(--brand-green,#236B34)]' : 'font-medium text-[var(--brand-ink-muted,#5B6B60)]'}`}>
                         Order Again
                       </span>
                       {isActive('/order-again') && (
-                        <motion.div layoutId="activeDot" className="absolute bottom-1.5 w-1 h-1 rounded-full bg-[var(--customer-primary)]" />
+                        <motion.div
+                          layoutId="activeDot"
+                          transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                          className="absolute bottom-1.5 w-1.5 h-1.5 rounded-full bg-[var(--brand-orange,#F97316)]"
+                        />
                       )}
                     </Link>
                   </motion.div>
@@ -1152,11 +1205,15 @@ export default function AppLayout({ children }: AppLayoutProps) {
                           )}
                         </motion.svg>
                       </div>
-                      <span className={`text-[10px] mt-1 relative z-10 transition-colors duration-200 ${isActive('/brands') ? 'font-semibold text-[var(--customer-primary-dark)]' : 'font-medium text-neutral-400'}`}>
+                      <span className={`text-[10px] mt-1 relative z-10 transition-colors duration-200 ${isActive('/brands') ? 'font-bold text-[var(--brand-green,#236B34)]' : 'font-medium text-[var(--brand-ink-muted,#5B6B60)]'}`}>
                         Brand
                       </span>
                       {isActive('/brands') && (
-                        <motion.div layoutId="activeDot" className="absolute bottom-1.5 w-1 h-1 rounded-full bg-[var(--customer-primary)]" />
+                        <motion.div
+                          layoutId="activeDot"
+                          transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                          className="absolute bottom-1.5 w-1.5 h-1.5 rounded-full bg-[var(--brand-orange,#F97316)]"
+                        />
                       )}
                     </Link>
                   </motion.div>
@@ -1204,11 +1261,15 @@ export default function AppLayout({ children }: AppLayoutProps) {
                           )}
                         </motion.svg>
                       </div>
-                      <span className={`text-[10px] mt-1 relative z-10 transition-colors duration-200 ${(isActive('/categories') || location.pathname.startsWith('/category/')) ? 'font-semibold text-[var(--customer-primary-dark)]' : 'font-medium text-neutral-400'}`}>
+                      <span className={`text-[10px] mt-1 relative z-10 transition-colors duration-200 ${(isActive('/categories') || location.pathname.startsWith('/category/')) ? 'font-bold text-[var(--brand-green,#236B34)]' : 'font-medium text-[var(--brand-ink-muted,#5B6B60)]'}`}>
                         Categories
                       </span>
                       {(isActive('/categories') || location.pathname.startsWith('/category/')) && (
-                        <motion.div layoutId="activeDot" className="absolute bottom-1.5 w-1 h-1 rounded-full bg-[var(--customer-primary)]" />
+                        <motion.div
+                          layoutId="activeDot"
+                          transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                          className="absolute bottom-1.5 w-1.5 h-1.5 rounded-full bg-[var(--brand-orange,#F97316)]"
+                        />
                       )}
                     </Link>
                   </motion.div>
@@ -1254,11 +1315,15 @@ export default function AppLayout({ children }: AppLayoutProps) {
                           )}
                         </motion.svg>
                       </div>
-                      <span className={`text-[10px] mt-1 relative z-10 transition-colors duration-200 ${isActive('/account') ? 'font-semibold text-[var(--customer-primary-dark)]' : 'font-medium text-neutral-400'}`}>
+                      <span className={`text-[10px] mt-1 relative z-10 transition-colors duration-200 ${isActive('/account') ? 'font-bold text-[var(--brand-green,#236B34)]' : 'font-medium text-[var(--brand-ink-muted,#5B6B60)]'}`}>
                         {isLoggedIn ? 'Account' : 'Login'}
                       </span>
                       {isActive('/account') && (
-                        <motion.div layoutId="activeDot" className="absolute bottom-1.5 w-1 h-1 rounded-full bg-[var(--customer-primary)]" />
+                        <motion.div
+                          layoutId="activeDot"
+                          transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                          className="absolute bottom-1.5 w-1.5 h-1.5 rounded-full bg-[var(--brand-orange,#F97316)]"
+                        />
                       )}
                     </Link>
                   </motion.div>

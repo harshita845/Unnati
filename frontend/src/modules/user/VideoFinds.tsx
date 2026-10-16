@@ -32,9 +32,9 @@ const GridVideoCard = ({ product, onClick }: { product: VideoFind; onClick: () =
     <motion.div
       layoutId={`card-${product._id}`}
       onClick={onClick}
-      className="bg-white rounded-xl overflow-hidden shadow-sm border border-neutral-200 cursor-pointer relative"
+      className="bg-white rounded-2xl overflow-hidden shadow-[0_4px_16px_rgba(35,107,52,0.06)] border border-[var(--brand-border,#E9E2D3)] cursor-pointer relative"
     >
-      <div className="relative aspect-[3/4] bg-gray-100">
+      <div className="relative aspect-[3/4] bg-[var(--brand-cream-soft,#F6EFE2)]">
         <video
           ref={videoRef}
           src={product.videoUrl}
@@ -43,7 +43,7 @@ const GridVideoCard = ({ product, onClick }: { product: VideoFind; onClick: () =
           playsInline
           loop
         />
-        <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded text-white text-[10px] font-medium flex items-center gap-1">
+        <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded-md text-white text-[10px] font-medium flex items-center gap-1">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
             <circle cx="12" cy="12" r="3" />
@@ -52,11 +52,11 @@ const GridVideoCard = ({ product, onClick }: { product: VideoFind; onClick: () =
         </div>
       </div>
       <div className="p-3">
-        <h3 className="text-sm font-semibold text-gray-800 line-clamp-1 mb-1">{product.title}</h3>
+        <h3 className="text-sm font-semibold text-[var(--brand-ink,#1C2B20)] line-clamp-1 mb-1">{product.title}</h3>
         <div className="flex items-center gap-2">
-          <span className="text-sm font-bold text-gray-900">₹{product.price}</span>
+          <span className="text-sm font-bold font-price text-[var(--brand-green-deep,#14401F)]">₹{product.price}</span>
           {product.originalPrice > product.price && (
-            <span className="text-xs text-gray-400 line-through">₹{product.originalPrice}</span>
+            <span className="text-xs text-[var(--brand-ink-muted,#5B6B60)] line-through">₹{product.originalPrice}</span>
           )}
         </div>
       </div>
@@ -260,7 +260,7 @@ const ReelItem = ({
         <>
           {/* Header Branding */}
           <div className="absolute top-0 left-0 right-0 p-4 pt-12 flex justify-center items-center z-10 pointer-events-none">
-             <span className="text-white font-bold text-xl drop-shadow-md tracking-wide">Ecommerce</span>
+             <span className="text-white font-display font-bold text-xl drop-shadow-md tracking-wide">Unnati</span>
           </div>
 
            {/* Sound Toggle */}
@@ -435,11 +435,11 @@ export default function VideoFinds() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20 md:pb-8">
+    <div className="min-h-screen bg-[var(--brand-cream,#FDF9F2)] text-[var(--brand-ink,#1C2B20)] pb-20 md:pb-8">
       {/* Default Grid Header */}
-      <div className="bg-white shadow-sm sticky top-0 z-30 w-full">
+      <div className="bg-white/95 backdrop-blur-md border-b border-[var(--brand-border,#E9E2D3)] shadow-sm sticky top-0 z-30 w-full">
         <div className="px-4 py-3 flex items-center gap-3">
-             <h1 className="text-lg font-bold" style={{ color: currentTheme.primary[0] }}>Video Finds</h1>
+             <h1 className="text-lg font-display font-bold text-[var(--brand-green-deep,#14401F)]">Video Finds</h1>
         </div>
       </div>
 

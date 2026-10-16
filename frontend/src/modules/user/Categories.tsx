@@ -170,21 +170,21 @@ export default function Categories() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50/60 pb-24 overflow-x-hidden">
+    <div className="min-h-screen bg-[var(--brand-cream,#FDF9F2)] pb-24 overflow-x-hidden font-sans">
       {/* Top Header */}
-      <div className="bg-white border-b border-neutral-200/80 px-4 py-4 md:px-8 md:py-6 sticky top-0 z-20 shadow-sm backdrop-blur-md bg-white/95">
+      <div className="bg-white border-b border-[var(--brand-border,#E9E2D3)] px-4 py-4 md:px-8 md:py-6 sticky top-0 z-20 shadow-xs backdrop-blur-md bg-white/95">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-neutral-900 tracking-tight">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-display font-extrabold text-[var(--brand-green-deep,#14401F)] tracking-tight">
               All Categories
             </h1>
-            <p className="text-xs sm:text-sm text-neutral-500 mt-0.5">
+            <p className="text-xs sm:text-sm text-[var(--brand-ink-muted,#5B6B60)] mt-0.5 font-medium">
               Explore by main shopping departments
             </p>
           </div>
           <button
             onClick={() => navigate("/")}
-            className="text-xs font-semibold text-[var(--customer-primary-dark)] hover:underline flex items-center gap-1 shrink-0"
+            className="text-xs font-bold text-[var(--brand-green,#236B34)] hover:text-[var(--brand-green-dark,#1B5128)] flex items-center gap-1 shrink-0"
           >
             <span>Back to Home</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -197,8 +197,8 @@ export default function Categories() {
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
         {/* MOBILE VIEW: Clean 4-column circular grid matching user's design */}
         <div className="block md:hidden">
-          <div className="bg-white rounded-2xl p-3.5 shadow-sm border border-neutral-100">
-            <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-3 px-1">
+          <div className="bg-white rounded-3xl p-4 shadow-sm border border-[var(--brand-border,#E9E2D3)]">
+            <h2 className="text-xs font-bold text-[var(--brand-ink-muted,#5B6B60)] uppercase tracking-wider mb-3 px-1">
               Main Departments
             </h2>
             <div className="grid grid-cols-4 gap-x-2 gap-y-4">
@@ -213,7 +213,7 @@ export default function Categories() {
                   >
                     {/* Outer Circular Container with soft pastel tint */}
                     <div
-                      className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center p-3 sm:p-3.5 shadow-sm border border-neutral-100/80 group-hover:shadow-md group-hover:scale-105 transition-all duration-200 text-neutral-700 group-hover:text-[var(--customer-primary-dark)]"
+                      className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center p-3 sm:p-3.5 shadow-xs border border-[var(--brand-border,#E9E2D3)]/70 group-hover:shadow-md group-hover:scale-105 transition-all duration-200 text-neutral-700 group-hover:text-[var(--brand-green,#236B34)]"
                       style={{ backgroundColor: meta.pastelBg }}
                     >
                       <div className="w-7 h-7 sm:w-9 sm:h-9 flex items-center justify-center flex-shrink-0 [&>svg]:w-full [&>svg]:h-full [&>img]:w-full [&>img]:h-full [&>img]:object-contain transition-transform duration-200 group-hover:scale-110">
@@ -222,7 +222,7 @@ export default function Categories() {
                     </div>
 
                     {/* Category Label */}
-                    <span className="text-[11px] sm:text-xs font-bold text-neutral-800 leading-tight mt-1.5 w-full line-clamp-2 px-0.5">
+                    <span className="text-[11px] sm:text-xs font-bold text-[var(--brand-ink,#1C2B20)] leading-tight mt-1.5 w-full line-clamp-2 px-0.5">
                       {cat.name}
                     </span>
                   </button>
@@ -242,7 +242,7 @@ export default function Categories() {
                 <div
                   key={cat._id || cat.slug}
                   onClick={() => handleCategorySelect(cat)}
-                  className="group bg-white rounded-2xl p-5 shadow-sm border border-neutral-200/80 hover:border-[var(--customer-primary)] hover:shadow-lg transition-all duration-300 cursor-pointer flex flex-col justify-between overflow-hidden relative"
+                  className="group bg-white rounded-2xl p-5 shadow-[0_4px_16px_rgba(35,107,52,0.04)] border border-[var(--brand-border,#E9E2D3)] hover:border-[var(--brand-green,#236B34)] hover:shadow-lg transition-all duration-300 cursor-pointer flex flex-col justify-between overflow-hidden relative"
                 >
                   {/* Subtle top background accent */}
                   <div
@@ -253,7 +253,7 @@ export default function Categories() {
                     <div className="flex items-start justify-between gap-3 mb-4">
                       {/* Department Icon/Image Circle */}
                       <div
-                        className="w-14 h-14 rounded-2xl flex items-center justify-center p-2.5 border border-neutral-100 shadow-sm group-hover:scale-110 transition-transform duration-300 text-neutral-700 group-hover:text-[var(--customer-primary-dark)]"
+                        className="w-14 h-14 rounded-2xl flex items-center justify-center p-2.5 border border-[var(--brand-border,#E9E2D3)]/50 shadow-xs group-hover:scale-110 transition-transform duration-300 text-neutral-700 group-hover:text-[var(--brand-green,#236B34)]"
                         style={{ backgroundColor: meta.pastelBg }}
                       >
                         <div className="w-7 h-7 flex items-center justify-center flex-shrink-0 [&>svg]:w-full [&>svg]:h-full [&>img]:w-full [&>img]:h-full [&>img]:object-contain">
@@ -262,24 +262,24 @@ export default function Categories() {
                       </div>
 
                       {/* Icon tag */}
-                      <span className="text-neutral-400 group-hover:text-[var(--customer-primary-dark)] group-hover:translate-x-1 transition-all duration-300 pt-1">
+                      <span className="text-neutral-400 group-hover:text-[var(--brand-green,#236B34)] group-hover:translate-x-1 transition-all duration-300 pt-1">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                           <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                       </span>
                     </div>
 
-                    <h3 className="text-lg font-bold text-neutral-900 group-hover:text-[var(--customer-primary-dark)] transition-colors">
+                    <h3 className="text-lg font-display font-bold text-[var(--brand-green-deep,#14401F)] group-hover:text-[var(--brand-green,#236B34)] transition-colors">
                       {cat.name}
                     </h3>
-                    <p className="text-xs text-neutral-500 mt-1 line-clamp-2 leading-relaxed">
+                    <p className="text-xs text-[var(--brand-ink-muted,#5B6B60)] mt-1 line-clamp-2 leading-relaxed font-medium">
                       {meta.description}
                     </p>
                   </div>
 
                   {/* Card Footer */}
-                  <div className="mt-5 pt-3 border-t border-neutral-100 flex items-center justify-between text-xs">
-                    <span className="font-semibold text-[var(--customer-primary-dark)] group-hover:underline">
+                  <div className="mt-5 pt-3 border-t border-[var(--brand-border,#E9E2D3)] flex items-center justify-between text-xs">
+                    <span className="font-bold text-[var(--brand-green,#236B34)] group-hover:underline">
                       Shop Department &rarr;
                     </span>
                     {cat.subscriptionRequired && (

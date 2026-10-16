@@ -68,9 +68,10 @@ const AdminSalesSummary = () => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<SalesSummaryData | null>(null);
   const [filter, setFilter] = useState("7days");
+  const [prevFilter, setPrevFilter] = useState("7days");
   const [customRange, setCustomRange] = useState({
-    startDate: "",
-    endDate: ""
+    startDate: new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0]
   });
   const [showCustomModal, setShowCustomModal] = useState(false);
 
@@ -92,6 +93,13 @@ const AdminSalesSummary = () => {
   };
 
   const handleFilterChange = (val: string) => {
+    if (val === "custom") {
+      setPrevFilter(filter);
+      setFilter("custom");
+      setShowCustomModal(true);
+      return;
+    }
+    setPrevFilter(val);
     setFilter(val);
     const end = new Date();
     let start = new Date();
@@ -106,13 +114,16 @@ const AdminSalesSummary = () => {
       end.setHours(23, 59, 59, 999);
     } else if (val === "7days") {
       start.setDate(end.getDate() - 7);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
     } else if (val === "30days") {
       start.setDate(end.getDate() - 30);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
     } else if (val === "all") {
       start = new Date(2020, 0, 1);
-    } else if (val === "custom") {
-      setShowCustomModal(true);
-      return;
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
     }
 
     fetchSummary(start.toISOString(), end.toISOString());
@@ -123,8 +134,25 @@ const AdminSalesSummary = () => {
       showToast("Please select both dates", "error");
       return;
     }
+    const s = new Date(customRange.startDate);
+    s.setHours(0, 0, 0, 0);
+    const e = new Date(customRange.endDate);
+    e.setHours(23, 59, 59, 999);
+
+    if (s.getTime() > e.getTime()) {
+      showToast("Start date cannot be after end date", "error");
+      return;
+    }
+
     setShowCustomModal(false);
-    fetchSummary(customRange.startDate, customRange.endDate);
+    fetchSummary(s.toISOString(), e.toISOString());
+  };
+
+  const handleCancelCustom = () => {
+    setShowCustomModal(false);
+    if (filter === "custom") {
+      setFilter(prevFilter);
+    }
   };
 
   useEffect(() => {
@@ -143,7 +171,7 @@ const AdminSalesSummary = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6 pt-2 sm:pt-3 space-y-4 animate-fadeIn bg-gray-50 min-h-screen">
+    <div className="p-4 sm:p-6 pt-2 sm:pt-3 space-y-4 bg-gray-50 min-h-screen">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-gray-100">
         <div>
@@ -164,42 +192,46 @@ const AdminSalesSummary = () => {
               <button
                 key={opt.id}
                 onClick={() => handleFilterChange(opt.id)}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
                   filter === opt.id
-                    ? "bg-white text-[var(--primary-color)] shadow-sm"
+                    ? "bg-white text-[var(--primary-color)] shadow-sm font-semibold"
                     : "text-gray-500 hover:text-gray-700"
                 }`}
               >
-                {opt.label}
+                <span>{opt.label}</span>
+                {loading && filter === opt.id && (
+                  <FiLoader className="w-3.5 h-3.5 animate-spin text-[var(--primary-color)]" />
+                )}
               </button>
             ))}
           </div>
 
           <button
-            onClick={() => handleFilterChange(filter)}
-            className="p-2 bg-[var(--primary-alpha-10)] text-[var(--primary-color)] rounded-lg hover:bg-[var(--primary-alpha-20)] transition-colors"
+            type="button"
+            onClick={() => {
+              setPrevFilter(filter);
+              setFilter("custom");
+              setShowCustomModal(true);
+            }}
+            title="Custom Date Filter"
+            className="p-2 bg-[var(--brand-leaf-tint,#EAF5E0)] text-[var(--brand-green,#236B34)] hover:bg-[var(--brand-green,#236B34)] hover:text-white rounded-lg transition-colors cursor-pointer border border-[var(--brand-leaf,#5FA82E)]/30"
           >
             <FiFilter className="w-5 h-5" />
           </button>
         </div>
       </div>
 
-      {loading && (
-        <div className="fixed top-20 right-10 z-50 bg-white/80 backdrop-blur px-4 py-2 rounded-full shadow-lg border border-teal-100 flex items-center gap-2">
-          <FiLoader className="w-4 h-4 text-[var(--primary-color)] animate-spin" />
-          <span className="text-xs font-medium text-[var(--primary-darker)]">Updating...</span>
-        </div>
-      )}
-
-      {/* Summary Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <SummaryCard
-          title="Total Sales"
-          value={`₹${(data?.summary.totalSales || 0).toLocaleString()}`}
-          icon={<FiDollarSign className="w-6 h-6" />}
-          color="bg-[var(--primary-color)]"
-          trend={data?.summary.totalSalesChange !== undefined ? `${data.summary.totalSalesChange > 0 ? '+' : ''}${data.summary.totalSalesChange}%` : "0%"}
-        />
+      {/* Main Content Area */}
+      <div className={`space-y-4 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
+        {/* Summary Cards Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <SummaryCard
+            title="Total Sales"
+            value={`₹${(data?.summary.totalSales || 0).toLocaleString()}`}
+            icon={<FiDollarSign className="w-6 h-6" />}
+            color="bg-[var(--primary-color)]"
+            trend={data?.summary.totalSalesChange !== undefined ? `${data.summary.totalSalesChange > 0 ? '+' : ''}${data.summary.totalSalesChange}%` : "0%"}
+          />
         <SummaryCard
           title="Total Orders"
           value={(data?.summary.totalOrders || 0).toString()}
@@ -303,49 +335,53 @@ const AdminSalesSummary = () => {
           </table>
         </div>
       </div>
+      </div>
 
       {/* Custom Date Modal */}
       {showCustomModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-slideUp">
-            <div className="bg-[var(--primary-color)] p-6 text-white text-center">
-              <FiCalendar className="w-12 h-12 mx-auto mb-3 opacity-80" />
-              <h3 className="text-xl font-bold">Select Date Range</h3>
-              <p className="text-[var(--primary-dark)] text-sm">Choose start and end dates for custom report</p>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="fixed inset-0" onClick={handleCancelCustom} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-slideUp z-10 border border-[var(--brand-border,#E9E2D3)]">
+            <div className="bg-[var(--brand-green-deep,#14401F)] p-6 text-white text-center">
+              <FiCalendar className="w-10 h-10 mx-auto mb-2 text-[var(--brand-orange,#F97316)]" />
+              <h3 className="text-xl font-display font-extrabold text-white">Select Date Range</h3>
+              <p className="text-white/70 text-xs mt-1">Choose start and end dates for custom report</p>
             </div>
 
-            <div className="p-8 space-y-6">
-              <div className="grid grid-cols-1 gap-6">
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Start Date</label>
+                  <label className="block text-xs font-bold text-[var(--brand-ink-muted,#5B6B60)] uppercase mb-1.5">Start Date</label>
                   <input
                     type="date"
-                    className="w-full border-2 border-gray-100 rounded-xl px-4 py-3 focus:border-[var(--primary-color)] focus:outline-none transition-all"
+                    className="w-full border border-[var(--brand-border,#E9E2D3)] rounded-xl px-3.5 py-2.5 text-sm font-medium text-[var(--brand-ink,#1C2B20)] focus:border-[var(--brand-green,#236B34)] focus:outline-none transition-all"
                     value={customRange.startDate}
                     onChange={(e) => setCustomRange({...customRange, startDate: e.target.value})}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">End Date</label>
+                  <label className="block text-xs font-bold text-[var(--brand-ink-muted,#5B6B60)] uppercase mb-1.5">End Date</label>
                   <input
                     type="date"
-                    className="w-full border-2 border-gray-100 rounded-xl px-4 py-3 focus:border-[var(--primary-color)] focus:outline-none transition-all"
+                    className="w-full border border-[var(--brand-border,#E9E2D3)] rounded-xl px-3.5 py-2.5 text-sm font-medium text-[var(--brand-ink,#1C2B20)] focus:border-[var(--brand-green,#236B34)] focus:outline-none transition-all"
                     value={customRange.endDate}
                     onChange={(e) => setCustomRange({...customRange, endDate: e.target.value})}
                   />
                 </div>
               </div>
 
-              <div className="flex gap-4 pt-4">
+              <div className="flex gap-3 pt-2">
                 <button
-                  onClick={() => setShowCustomModal(false)}
-                  className="flex-1 py-3 font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-all"
+                  type="button"
+                  onClick={handleCancelCustom}
+                  className="flex-1 py-2.5 font-bold text-sm text-[var(--brand-ink-muted,#5B6B60)] hover:bg-[var(--brand-cream-soft,#F6EFE2)] rounded-xl transition-all cursor-pointer border border-[var(--brand-border,#E9E2D3)]"
                 >
                   Cancel
                 </button>
                 <button
+                  type="button"
                   onClick={applyCustomFilter}
-                  className="flex-1 bg-[var(--primary-color)] text-white py-3 font-bold rounded-xl shadow-lg shadow-[var(--primary-alpha-20)] hover:bg-[var(--primary-dark)] transition-all"
+                  className="flex-1 bg-[var(--brand-green,#236B34)] hover:bg-[var(--brand-green-dark,#1B5128)] text-white py-2.5 font-bold text-sm rounded-xl shadow-sm transition-all cursor-pointer"
                 >
                   Apply Filter
                 </button>

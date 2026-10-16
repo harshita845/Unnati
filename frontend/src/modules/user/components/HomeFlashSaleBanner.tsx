@@ -10,7 +10,7 @@ const FLASH_SALE_SLIDES = [
     badge: "Limited Time Offer",
     buttonText: "Up to 50% OFF",
     imageUrl: "https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=350&auto=format&fit=crop&q=80", // Premium Green Nike Sneakers
-    bgColor: "linear-gradient(135deg, #163F2E 0%, #1D543E 100%)",
+    bgColor: "linear-gradient(135deg, #14401F 0%, #236B34 100%)",
   },
   {
     title: "Weekend Deals",
@@ -18,7 +18,7 @@ const FLASH_SALE_SLIDES = [
     badge: "Special Event",
     buttonText: "Grab 40% OFF",
     imageUrl: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=350&auto=format&fit=crop&q=80", // Premium Red Sneakers
-    bgColor: "linear-gradient(135deg, #1D543E 0%, #297556 100%)",
+    bgColor: "linear-gradient(135deg, #FFB020 0%, #F97316 60%, #E8590C 100%)",
   },
   {
     title: "Super Saver",
@@ -26,7 +26,7 @@ const FLASH_SALE_SLIDES = [
     badge: "Exclusive Promo",
     buttonText: "Save 30% Now",
     imageUrl: "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=350&auto=format&fit=crop&q=80", // Purple Fashion Sneakers
-    bgColor: "linear-gradient(135deg, #0f2e21 0%, #163F2E 100%)",
+    bgColor: "linear-gradient(135deg, #1B5128 0%, #14401F 100%)",
   }
 ];
 
@@ -66,7 +66,7 @@ export default function HomeFlashSaleBanner() {
                 <span>{slide.badge}</span>
               </div>
               
-              <h2 className="text-base md:text-2xl font-black text-white leading-tight font-sans tracking-tight mb-0.5">
+              <h2 className="text-base md:text-2xl font-display font-extrabold text-white leading-tight tracking-tight mb-0.5">
                 {slide.title}
               </h2>
               
@@ -76,7 +76,7 @@ export default function HomeFlashSaleBanner() {
 
               <Link
                 to="/flash-deals"
-                className="bg-[#F2B134] hover:bg-[#E09E25] text-[#163F2E] font-extrabold text-[8px] md:text-xs px-3.5 md:px-5 py-1.5 md:py-2 rounded-full flex items-center gap-1 shadow-sm active:scale-95 transition-all"
+                className="bg-[var(--brand-amber,#FFB020)] hover:bg-[var(--brand-orange,#F97316)] text-[var(--brand-green-deep,#14401F)] font-bold text-[8px] md:text-xs px-3.5 md:px-5 py-1.5 md:py-2 rounded-full flex items-center gap-1 shadow-sm active:scale-95 transition-all"
               >
                 <span>{slide.buttonText}</span>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">

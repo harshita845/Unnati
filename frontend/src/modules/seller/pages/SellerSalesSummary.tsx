@@ -150,7 +150,7 @@ const SellerSalesSummary = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-6 animate-fadeIn bg-gray-50 min-h-screen">
+    <div className="p-4 sm:p-6 space-y-6 bg-gray-50 min-h-screen">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <div>
@@ -162,7 +162,6 @@ const SellerSalesSummary = () => {
           <div className="bg-gray-100 p-1 rounded-xl flex overflow-x-auto no-scrollbar">
             {[
               { id: "today", label: "Today" },
-              // { id: "tomorrow", label: "Tomorrow" }, // Removing odd "Tomorrow" from Seller view if not needed, but keeping generally safe.
               { id: "7days", label: "Last 7 Days" },
               { id: "30days", label: "Last 30 Days" },
               { id: "all", label: "All Time" },
@@ -171,35 +170,36 @@ const SellerSalesSummary = () => {
               <button
                 key={opt.id}
                 onClick={() => handleFilterChange(opt.id)}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
                   filter === opt.id
-                    ? "bg-white text-[var(--primary-dark)] shadow-sm"
+                    ? "bg-white text-[var(--primary-dark)] shadow-sm font-semibold"
                     : "text-gray-500 hover:text-gray-700"
                 }`}
               >
-                {opt.label}
+                <span>{opt.label}</span>
+                {loading && filter === opt.id && (
+                  <FiLoader className="w-3.5 h-3.5 animate-spin text-[var(--primary-dark)]" />
+                )}
               </button>
             ))}
           </div>
 
           <button
-            onClick={() => handleFilterChange(filter)}
-            className="p-2 bg-[var(--primary-alpha-10)] text-[var(--primary-dark)] rounded-lg hover:bg-[var(--primary-alpha-20)] transition-colors"
+            type="button"
+            onClick={() => {
+              setFilter("custom");
+              setShowCustomModal(true);
+            }}
+            title="Custom Date Filter"
+            className="p-2 bg-[var(--primary-alpha-10)] text-[var(--primary-dark)] rounded-lg hover:bg-[var(--primary-alpha-20)] transition-colors cursor-pointer"
           >
             <FiFilter className="w-5 h-5" />
           </button>
         </div>
       </div>
 
-      {loading && (
-        <div className="fixed top-20 right-10 z-50 bg-white/80 backdrop-blur px-4 py-2 rounded-full shadow-lg border border-[var(--primary-alpha-20)] flex items-center gap-2">
-          <FiLoader className="w-4 h-4 text-[var(--primary-dark)] animate-spin" />
-          <span className="text-xs font-medium text-seller-800">Updating...</span>
-        </div>
-      )}
-
       {/* Summary Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 transition-opacity duration-200 ${loading ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
         <SummaryCard
           title="Total Sales"
           value={`₹${(data?.summary.totalSales || 0).toLocaleString()}`}

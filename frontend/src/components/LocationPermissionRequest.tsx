@@ -149,12 +149,12 @@ export default function LocationPermissionRequest({
           onClick={isChangeMode || skipable ? onLocationGranted : undefined}
         />
 
-        <div className="relative w-full max-w-md my-auto bg-white rounded-2xl shadow-2xl p-5 sm:p-6 text-left transform transition-all animate-in fade-in zoom-in-95 duration-200 z-10 box-border">
+        <div className="relative w-full max-w-md my-auto bg-white rounded-2xl border border-[var(--brand-border,#E9E2D3)] shadow-2xl p-5 sm:p-6 text-left transform transition-all animate-in fade-in zoom-in-95 duration-200 z-10 box-border">
           {/* Close Button if in change mode or skipable */}
           {(isChangeMode || skipable) && (
             <button
               onClick={onLocationGranted}
-              className="absolute top-3.5 right-3.5 sm:top-4 sm:right-4 w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center text-neutral-500 hover:text-neutral-700 transition-colors z-20"
+              className="absolute top-3.5 right-3.5 sm:top-4 sm:right-4 w-8 h-8 rounded-full bg-[var(--brand-cream-soft,#F6EFE2)] hover:bg-[var(--brand-border,#E9E2D3)] flex items-center justify-center text-[var(--brand-ink-muted,#5B6B60)] hover:text-[var(--brand-ink,#1C2B20)] transition-colors z-20"
               aria-label="Close"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -165,16 +165,16 @@ export default function LocationPermissionRequest({
           )}
 
           <div className="text-center mb-4 sm:mb-5 pr-6 sm:pr-0">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-[#163F2E]/10 rounded-full flex items-center justify-center mx-auto mb-2.5 sm:mb-3 text-[#163F2E]">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-[var(--brand-leaf-tint,#EAF5E0)] border border-[var(--brand-leaf,#5FA82E)]/30 rounded-full flex items-center justify-center mx-auto mb-2.5 sm:mb-3 text-[var(--brand-green,#236B34)]">
               <svg width="24" height="24" className="sm:w-7 sm:h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
                 <circle cx="12" cy="10" r="3" />
               </svg>
             </div>
-            <h2 className="text-base sm:text-lg md:text-xl font-bold text-neutral-900 leading-snug break-words">
+            <h2 className="text-base sm:text-lg md:text-xl font-display font-extrabold text-[var(--brand-green-deep,#14401F)] leading-snug break-words">
               {title}
             </h2>
-            <p className="text-xs sm:text-sm text-neutral-500 mt-1 max-w-sm mx-auto leading-relaxed">
+            <p className="text-xs sm:text-sm text-[var(--brand-ink-muted,#5B6B60)] mt-1 max-w-sm mx-auto leading-relaxed">
               {description}
             </p>
           </div>
@@ -184,7 +184,7 @@ export default function LocationPermissionRequest({
           <button
             onClick={handleAllowLocation}
             disabled={isLocationLoading}
-            className="w-full py-2.5 sm:py-3 px-4 bg-[#163F2E] text-white rounded-xl text-xs sm:text-sm font-semibold hover:bg-[#1D543E] transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm active:scale-[0.99]"
+            className="w-full py-2.5 sm:py-3 px-4 bg-[var(--brand-green,#236B34)] text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-[var(--brand-green-dark,#1B5128)] transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] cursor-pointer"
           >
             {isLocationLoading ? (
               <>
@@ -215,15 +215,15 @@ export default function LocationPermissionRequest({
         )}
 
         <div className="relative my-3.5 sm:my-4 flex items-center justify-center">
-          <div className="border-t border-neutral-200 w-full"></div>
-          <span className="bg-white px-2.5 sm:px-3 text-[10px] sm:text-xs font-bold text-neutral-400 uppercase tracking-wider absolute">
+          <div className="border-t border-[var(--brand-border,#E9E2D3)] w-full"></div>
+          <span className="bg-white px-2.5 sm:px-3 text-[10px] sm:text-xs font-bold text-[var(--brand-ink-muted,#5B6B60)] uppercase tracking-wider absolute">
             Or Enter Manually
           </span>
         </div>
 
         {/* Address Search Field */}
         <div className="space-y-2.5 sm:space-y-3 mb-3.5 sm:mb-4">
-          <label className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-neutral-600 text-left">
+          <label className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--brand-ink-muted,#5B6B60)] text-left">
             Search Address / Locality
           </label>
           <GoogleMapsAutocomplete
@@ -235,7 +235,7 @@ export default function LocationPermissionRequest({
           {manualAddress && (
             <button
               onClick={handleSaveManualLocation}
-              className="w-full py-2.5 bg-[#163F2E] hover:bg-[#1D543E] text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95"
+              className="w-full py-2.5 bg-[var(--brand-green,#236B34)] hover:bg-[var(--brand-green-dark,#1B5128)] text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer"
             >
               Confirm & Save Location
             </button>
@@ -244,8 +244,8 @@ export default function LocationPermissionRequest({
 
         {/* Available / Popular Serviceable Cities */}
         {availableCities.length > 0 && (
-          <div className="mt-3.5 sm:mt-4 pt-3 border-t border-neutral-100 text-left">
-            <label className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-neutral-600 mb-2">
+          <div className="mt-3.5 sm:mt-4 pt-3 border-t border-[var(--brand-border-light,#F2ECE0)] text-left">
+            <label className="block text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--brand-ink-muted,#5B6B60)] mb-2">
               Serviceable Cities
             </label>
             <div className="flex flex-wrap gap-1.5 sm:gap-2 max-h-28 sm:max-h-32 overflow-y-auto pr-1">
@@ -254,7 +254,7 @@ export default function LocationPermissionRequest({
                   key={c.city}
                   type="button"
                   onClick={() => handleSelectCity(c)}
-                  className="px-2.5 sm:px-3 py-1.5 rounded-lg border border-neutral-200 bg-neutral-50 hover:bg-[#163F2E] hover:text-white hover:border-[#163F2E] text-xs font-medium text-neutral-700 transition-colors active:scale-95 flex items-center gap-1.5"
+                  className="px-2.5 sm:px-3 py-1.5 rounded-lg border border-[var(--brand-border,#E9E2D3)] bg-[var(--brand-cream-soft,#F6EFE2)]/50 hover:bg-[var(--brand-green,#236B34)] hover:text-white hover:border-[var(--brand-green,#236B34)] text-xs font-medium text-[var(--brand-ink,#1C2B20)] transition-colors active:scale-95 flex items-center gap-1.5 cursor-pointer"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />

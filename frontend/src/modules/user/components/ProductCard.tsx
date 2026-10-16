@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion, useAnimationControls } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
 import { useRef, useEffect, useState } from 'react';
 import { Product } from '../../../types/domain';
@@ -141,6 +141,22 @@ export default function ProductCard({
   const inCartQty = cartItem?.quantity || 0;
 
   const [localQty, setLocalQty] = useState<string | number>(inCartQty);
+
+  // Picture fades in once loaded (shimmer until then)
+  const [imgLoaded, setImgLoaded] = useState(false);
+  useEffect(() => {
+    if (imageRef.current?.complete) setImgLoaded(true);
+  }, []);
+
+  // The quantity number gives a small pop each time it changes
+  const qtyControls = useAnimationControls();
+  const prevQtyRef = useRef(inCartQty);
+  useEffect(() => {
+    if (prevQtyRef.current > 0 && inCartQty > 0 && prevQtyRef.current !== inCartQty) {
+      qtyControls.start({ scale: [1, 1.22, 1], transition: { duration: 0.28 } });
+    }
+    prevQtyRef.current = inCartQty;
+  }, [inCartQty, qtyControls]);
   useEffect(() => {
     setLocalQty(inCartQty);
   }, [inCartQty]);
@@ -329,22 +345,24 @@ export default function ProductCard({
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.97 }}
       transition={{ duration: 0.2 }}
-      className={`h-full ${categoryStyle ? '' : 'bg-white'} rounded-lg shadow-sm overflow-hidden flex flex-col relative border border-neutral-100 hover:shadow-md transition-shadow`}
-      style={{ backgroundColor: '#ffffff' }} // Changed from orange tint to white
+      className={`h-full ${categoryStyle ? '' : 'bg-white'} rounded-2xl shadow-[0_4px_16px_rgba(35,107,52,0.06)] overflow-hidden flex flex-col relative border border-[var(--brand-border,#E9E2D3)] hover:shadow-[0_8px_24px_rgba(35,107,52,0.12)] transition-all`}
+      style={{ backgroundColor: '#ffffff' }}
     >
       <div
         onClick={handleCardClick}
         className="cursor-pointer flex-1 flex flex-col"
       >
-        <div className={`w-full ${compact ? 'h-32 md:h-56' : categoryStyle ? 'h-36 md:h-64' : 'h-40 md:h-80'} bg-neutral-100 flex items-center justify-center overflow-hidden relative`}>
+        <div className={`w-full ${compact ? 'h-32 md:h-56' : categoryStyle ? 'h-36 md:h-64' : 'h-40 md:h-80'} bg-neutral-100 flex items-center justify-center overflow-hidden relative ${cardImageUrl && !imgLoaded ? 'skeleton-shimmer' : ''}`}>
           {cardImageUrl ? (
             <img
               ref={imageRef}
               src={cardImageUrl}
               alt={product.name || product.productName || 'Product'}
-              className="w-full h-full object-cover"
+              className={`w-full h-full object-cover transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
               referrerPolicy="no-referrer"
+              onLoad={() => setImgLoaded(true)}
               onError={(e) => {
+                setImgLoaded(true);
                 // Hide broken image and show fallback
                 const target = e.target as HTMLImageElement;
                 target.style.display = 'none';
@@ -365,8 +383,8 @@ export default function ProductCard({
 
           {categoryStyle && showBadge && discount > 0 && (
             <div
-                className="absolute top-0 left-0 z-10 text-white text-[10px] md:text-sm font-bold px-2 py-0.5 md:px-4 md:py-2 rounded-br-lg md:rounded-br-xl flex items-center gap-1 shadow-sm transition-transform hover:scale-105"
-                style={{ background: 'linear-gradient(135deg, var(--customer-primary) 0%, var(--customer-primary-dark) 100%)' }}
+                className="absolute top-0 left-0 z-10 text-white text-[10px] md:text-sm font-bold px-2 py-0.5 md:px-4 md:py-2 rounded-br-xl flex items-center gap-1 shadow-sm transition-transform hover:scale-105"
+                style={{ background: 'var(--gradient-signature, linear-gradient(135deg, #FFB020 0%, #F97316 60%, #E8590C 100%))' }}
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
                 <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
@@ -378,8 +396,8 @@ export default function ProductCard({
 
           {!categoryStyle && showBadge && (badgeText || discount > 0) && (
             <div
-              className="absolute top-0 left-0 z-10 text-white text-[10px] md:text-sm px-2 py-0.5 md:px-4 md:py-2 font-bold rounded-br-lg md:rounded-br-xl shadow-md flex items-center gap-1"
-              style={{ background: 'linear-gradient(135deg, var(--customer-primary) 0%, var(--customer-primary-dark) 100%)' }}
+              className="absolute top-0 left-0 z-10 text-white text-[10px] md:text-sm px-2 py-0.5 md:px-4 md:py-2 font-bold rounded-br-xl shadow-md flex items-center gap-1"
+              style={{ background: 'var(--gradient-signature, linear-gradient(135deg, #FFB020 0%, #F97316 60%, #E8590C 100%))' }}
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
                 <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
@@ -504,7 +522,7 @@ export default function ProductCard({
                   {/* 5. Price with discount & Inline Offer */}
                   <div className="mt-auto pt-0.5">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-sm md:text-base font-bold text-[var(--customer-primary)] leading-tight">
+                      <span className="font-display font-price text-sm md:text-base font-bold text-[var(--brand-green,#236B34)] leading-tight">
                         ₹{currentUnitPrice.toLocaleString('en-IN')}
                       </span>
                       {mrp && mrp > displayPrice && (
@@ -575,7 +593,7 @@ export default function ProductCard({
                       </div>
                     ) : (
                       <div
-                        className={`flex items-center justify-between bg-white rounded-lg ${
+                        className={`pop-in flex items-center justify-between bg-white rounded-lg ${
                           compact ? 'h-8 md:h-9' : 'h-8 md:h-11'
                         } w-full border border-[var(--customer-primary)] overflow-hidden shadow-sm`}
                       >
@@ -592,7 +610,8 @@ export default function ProductCard({
                         >
                           <span className={`${compact ? 'text-sm' : 'text-lg'} font-black select-none`}>−</span>
                         </button>
-                        <input
+                        <motion.input
+                          animate={qtyControls}
                           type="number"
                           value={localQty === 0 ? '' : localQty}
                           onChange={(e) => handleQuantityInputChange(e.target.value)}
@@ -703,7 +722,7 @@ export default function ProductCard({
 
                   <div className="mt-auto mb-2">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-base font-bold text-[var(--customer-primary)]">
+                      <span className="font-display font-price text-base font-bold text-[var(--brand-green,#236B34)]">
                         ₹{displayPrice}
                       </span>
                       {mrp && mrp > displayPrice && (
@@ -750,12 +769,12 @@ export default function ProductCard({
                   } font-black uppercase tracking-wider transition-all duration-300 shadow-sm ${
                     product.isAvailable === false
                     ? 'border-neutral-200 text-neutral-400 bg-neutral-50 cursor-not-allowed'
-                    : 'hover:bg-[var(--customer-primary-dark)] hover:text-white hover:border-[var(--customer-primary-dark)] hover:shadow-md active:scale-95'
+                    : 'hover:bg-[var(--brand-green-dark,#1B5128)] hover:text-white hover:border-[var(--brand-green-dark,#1B5128)] hover:shadow-md active:scale-95'
                   }`}
                   style={product.isAvailable !== false ? {
-                      backgroundColor: 'var(--customer-primary-alpha-10)',
-                      borderColor: 'var(--customer-primary)',
-                      color: 'var(--customer-primary)'
+                      backgroundColor: 'var(--brand-leaf-tint, #EAF5E0)',
+                      borderColor: 'var(--brand-green, #236B34)',
+                      color: 'var(--brand-green, #236B34)'
                   } : {}}
                 >
                   {product.isAvailable === false ? (
@@ -775,21 +794,22 @@ export default function ProductCard({
               </div>
             ) : (
               <div
-                className={`flex items-center justify-between bg-white rounded-lg ${
+                className={`pop-in flex items-center justify-between bg-white rounded-lg ${
                   compact ? 'h-8 md:h-9' : 'h-8 md:h-11'
-                } w-full border border-[var(--customer-primary)] overflow-hidden shadow-sm`}
+                } w-full border-2 border-[var(--brand-green,#236B34)] overflow-hidden shadow-sm`}
               >
                 <button
                   type="button"
                   onClick={handleDecrease}
                   className={`${
                     compact ? 'w-7 md:w-8' : 'w-8 md:w-11'
-                  } h-full flex items-center justify-center bg-[var(--customer-primary-alpha-10)] text-[var(--customer-primary-dark)] hover:bg-[var(--customer-primary-alpha-20)] transition-colors active:scale-95 flex-shrink-0`}
+                  } h-full flex items-center justify-center bg-[var(--brand-leaf-tint,#EAF5E0)] text-[var(--brand-green,#236B34)] hover:bg-[var(--brand-leaf-light,#8CC63F)]/30 transition-colors active:scale-95 flex-shrink-0`}
                   aria-label="Decrease quantity"
                 >
                   <span className={`${compact ? 'text-xs md:text-sm' : 'text-xs md:text-lg'} font-black select-none`}>−</span>
                 </button>
-                <input
+                <motion.input
+                  animate={qtyControls}
                   type="number"
                   value={localQty === 0 ? '' : localQty}
                   onChange={(e) => handleQuantityInputChange(e.target.value)}

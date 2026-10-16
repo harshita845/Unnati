@@ -10,10 +10,97 @@
   font-display: swap;
 }
 
+/* ==========================================================================
+   UNNATI BRAND DESIGN TOKENS
+   Mapped to the official Unnati Logo Palette & Typography
+   ========================================================================== */
+:root {
+  /* Brand Core Colors */
+  --brand-green: #236B34;
+  --brand-green-dark: #1B5128;
+  --brand-green-deep: #14401F;
+  --brand-leaf: #5FA82E;
+  --brand-leaf-light: #8CC63F;
+  --brand-leaf-tint: #EAF5E0;
+  --brand-orange: #F97316;
+  --brand-orange-deep: #E8590C;
+  --brand-amber: #FFB020;
+  --brand-cream: #FDF9F2;
+  --brand-cream-soft: #F6EFE2;
+  --brand-surface: #FFFFFF;
+  --brand-ink: #1C2B20;
+  --brand-ink-muted: #5B6B60;
+  --brand-border: #E9E2D3;
+  --brand-border-light: #F2ECE0;
+
+  /* Status Tokens */
+  --brand-success: #5FA82E;
+  --brand-warning: #FFB020;
+  --brand-error: #D6402F;
+  --brand-info: #2B7A78;
+
+  /* Signature Gradients */
+  --gradient-signature: linear-gradient(135deg, #FFB020 0%, #F97316 60%, #E8590C 100%);
+  --gradient-leaf: linear-gradient(135deg, #8CC63F 0%, #236B34 100%);
+  --gradient-hero: linear-gradient(135deg, #FDF9F2 0%, #F6EFE2 50%, #EAF5E0 100%);
+  --gradient-orange-subtle: linear-gradient(135deg, rgba(249, 115, 22, 0.08) 0%, rgba(255, 176, 32, 0.04) 100%);
+
+  /* Elevation & Shadows */
+  --shadow-card: 0 6px 20px rgba(35, 107, 52, 0.07);
+  --shadow-card-hover: 0 12px 28px rgba(35, 107, 52, 0.12);
+  --shadow-pill: 0 4px 16px rgba(35, 107, 52, 0.22);
+
+  /* Border Radii */
+  --radius-card: 18px;
+  --radius-input: 14px;
+  --radius-btn: 12px;
+
+  /* Typography Stacks */
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Plus Jakarta Sans', 'Noto Sans Devanagari', system-ui, sans-serif;
+
+  /* Customer Theme Initial Fallbacks (mirrors backend theme system) */
+  --customer-primary: #236B34;
+  --customer-primary-light: #328745;
+  --customer-primary-lighter: #5FA82E;
+  --customer-primary-dark: #1B5128;
+  --customer-primary-darker: #14401F;
+  --customer-primary-alpha-10: rgba(35, 107, 52, 0.10);
+  --customer-primary-alpha-20: rgba(35, 107, 52, 0.20);
+  --customer-primary-alpha-30: rgba(35, 107, 52, 0.30);
+  --customer-primary-alpha-40: rgba(35, 107, 52, 0.40);
+  --customer-primary-alpha-50: rgba(35, 107, 52, 0.50);
+  --customer-secondary: #5FA82E;
+  --customer-accent: #F97316;
+  --customer-background: #FDF9F2;
+  --customer-text: #1C2B20;
+  --customer-primary-text: #FFFFFF;
+  --customer-success: #5FA82E;
+  --customer-warning: #FFB020;
+  --customer-danger: #D6402F;
+}
+
+/* Typography helper classes */
+.font-display {
+  font-family: 'Fraunces', Georgia, serif !important;
+  font-optical-sizing: auto;
+}
+
+.font-price {
+  font-family: 'Fraunces', Georgia, serif !important;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+.font-body {
+  font-family: 'Plus Jakarta Sans', 'Noto Sans Devanagari', system-ui, sans-serif !important;
+}
+
 @layer base {
   body {
-    @apply bg-white md:bg-white text-neutral-900;
-    font-family: 'Poppins', sans-serif !important;
+    background-color: var(--brand-cream, #FDF9F2);
+    color: var(--brand-ink, #1C2B20);
+    font-family: 'Plus Jakarta Sans', 'Noto Sans Devanagari', system-ui, sans-serif !important;
     margin: 0;
     padding: 0;
     padding-top: env(safe-area-inset-top);
@@ -27,8 +114,8 @@
     padding: 0;
     width: 100%;
     overflow-x: hidden;
-    background: white;
-    font-size: 17.5px !important;
+    background-color: var(--brand-cream, #FDF9F2);
+    font-size: 16px !important;
   }
 
   /* Exclude top header navigation bar and subcategory slider from root font scaling */
@@ -53,7 +140,8 @@
     padding: 0;
     width: 100%;
     min-height: 100vh;
-    background: white;
+    background-color: var(--brand-cream, #FDF9F2);
+    color: var(--brand-ink, #1C2B20);
     overflow-x: hidden;
   }
 }
@@ -181,7 +269,7 @@ video {
   background: #94a3b8 !important;
 }
 
-/* GLOBAL POPPINS ENFORCEMENT FOR PREMIUM THEME */
+/* GLOBAL FONT ENFORCEMENT FOR APP THEME */
 .premium-theme:not(.receipt-font-scope),
 .premium-theme *:not(.receipt-font-scope):not(.receipt-font-scope *),
 .premium-theme button:not(.receipt-font-scope *),
@@ -191,7 +279,7 @@ video {
 .premium-theme table:not(.receipt-font-scope *),
 .premium-theme th:not(.receipt-font-scope *),
 .premium-theme td:not(.receipt-font-scope *) {
-  font-family: 'Poppins', sans-serif !important;
+  font-family: 'Plus Jakarta Sans', 'Noto Sans Devanagari', system-ui, sans-serif !important;
 }
 
 /* Thermal Receipt Print & Preview font isolation */
@@ -348,13 +436,61 @@ button[class*="border-[#0d055a]"][class*="group"]:hover {
     position: relative;
     z-index: 1;
   }
+
+  /* Dedicated Customer Authentication Enhancements for Mobile (prevents keyboard clipping & overflow) */
+  .login-page-wrapper.customer-auth-wrapper {
+    min-height: 100dvh;
+    min-height: 100vh;
+    height: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-direction: column;
+    background-color: #ffffff;
+  }
+  .customer-auth-wrapper .login-card {
+    min-height: 100dvh;
+    min-height: 100vh;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+  }
+  .customer-auth-wrapper .login-video-container {
+    height: 34vh;
+    min-height: 190px;
+    max-height: 280px;
+    width: 100%;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 0;
+  }
+  .customer-auth-wrapper .login-section-container {
+    flex: 1 1 auto;
+    min-height: 66vh;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 1.25rem 1rem 2rem;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 10;
+    background: #ffffff;
+    border-top-left-radius: 1.5rem;
+    border-top-right-radius: 1.5rem;
+    margin-top: -1.25rem;
+    box-shadow: 0 -8px 24px rgba(35, 107, 52, 0.06);
+  }
 }
 
 @media (min-width: 768px) {
   .login-page-wrapper {
     width: 100%;
     min-height: 100vh;
-    background: linear-gradient(135deg, #fef2f2 0%, #ffe4e6 100%);
+    background: linear-gradient(135deg, var(--brand-cream, #FDF9F2) 0%, var(--brand-leaf-tint, #EAF5E0) 100%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -363,8 +499,8 @@ button[class*="border-[#0d055a]"][class*="group"]:hover {
   .login-card {
     background-color: #ffffff;
     border-radius: 1.25rem;
-    box-shadow: 0 25px 50px -12px rgba(127, 29, 29, 0.12);
-    border: 1px solid rgba(220, 38, 38, 0.08);
+    box-shadow: 0 25px 50px -12px rgba(35, 107, 52, 0.12);
+    border: 1px solid var(--brand-border, #E9E2D3);
     display: flex;
     flex-direction: row;
     width: 100%;
@@ -372,6 +508,11 @@ button[class*="border-[#0d055a]"][class*="group"]:hover {
     height: 560px;
     overflow: hidden;
     position: relative;
+  }
+  .customer-auth-wrapper .login-card {
+    max-width: 940px;
+    min-height: 580px;
+    height: auto;
   }
   .login-video-container {
     width: 55%;
@@ -395,9 +536,12 @@ button[class*="border-[#0d055a]"][class*="group"]:hover {
     background-color: #ffffff;
     box-sizing: border-box;
   }
+  .customer-auth-wrapper .login-section-container {
+    overflow-y: auto;
+  }
 }
 
-/* Custom Amazon style font for navbar */
+/* Custom font for navbar */
 .amazon-nav-font,
 .amazon-nav-font *,
 .amazon-nav-font button,
@@ -405,7 +549,7 @@ button[class*="border-[#0d055a]"][class*="group"]:hover {
 .amazon-nav-font span,
 .amazon-nav-font div,
 .amazon-nav-font a {
-  font-family: 'Poppins', sans-serif !important;
+  font-family: 'Plus Jakarta Sans', 'Noto Sans Devanagari', system-ui, sans-serif !important;
 }
 
 /* Flipkart Style Category Dual-Tone Icons */
@@ -418,22 +562,22 @@ button[class*="border-[#0d055a]"][class*="group"]:hover {
   transition: all 0.3s ease;
 }
 .category-tab-icon-active svg {
-  color: #163F2E !important; /* Theme primary active color */
+  color: var(--brand-green, #236B34) !important; /* Brand green primary active color */
 }
 .category-tab-icon svg * {
   stroke-width: 1.2px !important;
 }
-/* Sub-elements inside SVG colored with Accent Gold to achieve Flipkart dual-tone effect */
+/* Sub-elements inside SVG colored with Brand Orange for warm dual-tone accent */
 .category-tab-icon svg path:nth-last-child(1),
 .category-tab-icon svg circle:nth-last-child(1),
 .category-tab-icon svg line:nth-last-child(1),
 .category-tab-icon svg polygon:nth-last-child(1),
 .category-tab-icon svg rect:nth-last-child(1) {
-  stroke: #F2B134 !important;
+  stroke: var(--brand-orange, #F97316) !important;
 }
 /* Ensure fill remains correct if required */
 .category-tab-icon svg path:nth-last-child(1)[fill="currentColor"] {
-  fill: #F2B134 !important;
+  fill: var(--brand-orange, #F97316) !important;
 }
 
 /* Scale up checkout page typography */
@@ -545,4 +689,52 @@ input.pos-compact-input {
 .premium-theme [class*="border-b"][class*="border-gray-"] .force-text-white,
 span.force-text-white {
   color: #ffffff !important;
+}
+
+/* Loading placeholder: warm cream block with soft shimmer */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--brand-cream-soft, #F6EFE2);
+}
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(253, 249, 242, 0.75), transparent);
+  animation: shimmer 1.3s ease-in-out infinite;
+}
+
+/* Users who ask their device for less motion get (almost) none from CSS animations either */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Banner slider: the active dot fills from left to right over one autoplay step */
+@keyframes banner-dot-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.banner-dot-fill {
+  transform: scaleX(0);
+  animation-name: banner-dot-fill;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+/* Quantity stepper replacing the ADD button: a short springy pop */
+@keyframes pop-in {
+  0% { opacity: 0; transform: scale(0.85); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.pop-in {
+  animation: pop-in 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }

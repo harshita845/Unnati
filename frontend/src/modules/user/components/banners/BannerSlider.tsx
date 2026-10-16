@@ -1,4 +1,9 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { spring } from '../../../../lib/motion';
+
+/** Autoplay step, also the length of the active dot's fill */
+const AUTOPLAY_MS = 5000;
 import { bannerService } from '../../../../services/bannerService';
 import { Banner, BannerPosition } from '../../../../types/banner';
 import { getBannerAspectClass } from './bannerDisplayUtils';
@@ -125,7 +130,7 @@ export default function BannerSlider({
 
     const interval = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % banners.length);
-    }, 5000);
+    }, AUTOPLAY_MS);
 
     return () => clearInterval(interval);
   }, [banners.length, isPaused, currentIndex]);
@@ -143,8 +148,24 @@ export default function BannerSlider({
     <div
       className={`w-full relative group ${className}`}
     >
-      <div
+      <motion.div
         className={`w-full relative overflow-hidden ${roundedClass} ${aspectClass} bg-transparent shadow-[0_4px_20px_rgba(0,0,0,0.08)] rounded-xl md:rounded-2xl`}
+        // Swipe left/right to change banner; it springs back into place (vertical page scroll still works)
+        drag={banners.length > 1 ? 'x' : false}
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.18}
+        dragTransition={{ bounceStiffness: 500, bounceDamping: 30 }}
+        onDragEnd={(_, info) => {
+          const swipe = info.offset.x + info.velocity.x * 0.2;
+          if (swipe < -50) setCurrentIndex((prev) => (prev + 1) % banners.length);
+          else if (swipe > 50) setCurrentIndex((prev) => (prev - 1 + banners.length) % banners.length);
+        }}
+        // Autoplay waits while a finger or the mouse is on the banner
+        onPointerDown={() => setIsPaused(true)}
+        onPointerUp={() => setIsPaused(false)}
+        onPointerCancel={() => setIsPaused(false)}
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
       >
         {banners.map((banner, index) => {
           const isActive = index === currentIndex;
@@ -159,7 +180,7 @@ export default function BannerSlider({
                 src={banner.image || banner.imageUrl}
                 alt={banner.title || 'Banner'}
                 className={`w-full h-full object-cover object-center transition-transform duration-[6000ms] ease-out ${
-                  isActive ? 'scale-100 md:scale-105' : 'scale-100'
+                  isActive ? 'scale-[1.04] md:scale-105' : 'scale-100'
                 }`}
                 loading={index === 0 ? 'eager' : 'lazy'}
                 draggable={false}
@@ -221,14 +242,28 @@ export default function BannerSlider({
         {banners.length > 1 && (
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
             {banners.map((_, idx) => (
-              <button
+              <motion.button
                 key={idx}
                 onClick={() => setCurrentIndex(idx)}
                 aria-label={`Go to banner ${idx + 1}`}
-                className={`h-1.5 rounded-full transition-all duration-300 ${
-                  idx === currentIndex ? 'bg-emerald-500 w-8' : 'bg-white/50 hover:bg-white/80 w-2.5'
+                animate={{ width: idx === currentIndex ? 32 : 10 }}
+                transition={spring.snappy}
+                className={`relative h-1.5 rounded-full overflow-hidden ${
+                  idx === currentIndex ? 'bg-emerald-500/40' : 'bg-white/50 hover:bg-white/80'
                 }`}
-              />
+              >
+                {/* The active dot fills up as the next banner approaches */}
+                {idx === currentIndex && (
+                  <span
+                    key={currentIndex}
+                    className="banner-dot-fill absolute inset-0 rounded-full bg-emerald-500 origin-left"
+                    style={{
+                      animationDuration: `${AUTOPLAY_MS}ms`,
+                      animationPlayState: isPaused ? 'paused' : 'running',
+                    }}
+                  />
+                )}
+              </motion.button>
             ))}
           </div>
         )}
@@ -256,7 +291,7 @@ export default function BannerSlider({
             </button>
           </>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }

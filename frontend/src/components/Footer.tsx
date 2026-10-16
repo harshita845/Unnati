@@ -7,7 +7,7 @@ export default function Footer() {
   const { config } = useAppContext();
 
   // Use dynamic configuration from AppContext
-  const appLogo = config?.appLogo || '/assets/unnati_logo.png';
+  const appLogo = config?.appLogo || '/brand/unnati-logo.png';
   const appName = config?.appName || 'Ecommerce Stores';
   // Contact details come from admin settings; a row is hidden when it isn't set
   const contactPhone = config?.contactPhone || '';
@@ -31,27 +31,27 @@ export default function Footer() {
   }, []);
 
   return (
-    <footer className="hidden md:block w-full relative bg-[#090b09] text-neutral-300 pt-20 pb-8 font-sans overflow-hidden mt-12 shadow-lg md:-mx-[50px] md:w-[calc(100%+100px)]">
+    <footer className="hidden md:block w-full relative bg-[var(--brand-green-deep,#14401F)] text-neutral-200 pt-20 pb-8 font-sans overflow-hidden mt-12 shadow-lg md:-mx-[50px] md:w-[calc(100%+100px)]">
       {/* Green Wave border outline */}
       <div className="absolute top-0 left-0 w-full overflow-hidden leading-[0] z-[1]">
         <svg
           viewBox="0 0 1440 60"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
-          className="w-full h-9 md:h-[52px] text-[var(--customer-primary)]"
+          className="w-full h-9 md:h-[52px] text-[var(--brand-leaf,#5FA82E)]"
           preserveAspectRatio="none"
         >
           <path d="M0 0H1440V42C1080 12 360 12 0 42V0Z" fill="currentColor" />
         </svg>
       </div>
 
-      {/* Wave top border shape - curve smile effect mask */}
+      {/* Wave top border shape - curve smile effect mask matching body cream */}
       <div className="absolute top-0 left-0 w-full overflow-hidden leading-[0] z-[2]">
         <svg
           viewBox="0 0 1440 60"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
-          className="w-full h-8 md:h-12 text-white"
+          className="w-full h-8 md:h-12 text-[var(--brand-cream,#FDF9F2)]"
           preserveAspectRatio="none"
         >
           <path d="M0 0H1440V40C1080 10 360 10 0 40V0Z" fill="currentColor" />
@@ -59,7 +59,7 @@ export default function Footer() {
       </div>
 
       <div className="footer-content-container relative z-10">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-8 lg:gap-12 pb-10 border-b border-neutral-800">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-8 lg:gap-12 pb-10 border-b border-white/10">
           
           {/* Column 1: Logo & Desc */}
           <div className="lg:col-span-4 flex flex-col gap-4 text-left">
@@ -67,9 +67,9 @@ export default function Footer() {
               <img
                 src={appLogo}
                 alt={appName}
-                className="h-10 w-auto object-contain"
+                className="h-10 w-auto object-contain brightness-0 invert"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = '/assets/unnati_logo.png';
+                  (e.target as HTMLImageElement).src = '/brand/unnati-logo.png';
                 }}
               />
             </div>
@@ -128,8 +128,8 @@ export default function Footer() {
           {/* Column 2: Quick Links */}
           <div className="lg:col-span-2 flex flex-col gap-4 text-left">
             <div className="flex items-center gap-2">
-              <span className="w-3.5 h-[3px] bg-[var(--customer-accent)] rounded-sm"></span>
-              <h4 className="text-sm font-bold text-white tracking-wider uppercase">Quick Links</h4>
+              <span className="w-3.5 h-[3px] bg-[var(--brand-orange,#F97316)] rounded-sm"></span>
+              <h4 className="font-display text-sm font-bold text-white tracking-wider uppercase">Quick Links</h4>
             </div>
             <ul className="flex flex-col gap-2.5 text-sm font-medium">
               <li>
@@ -153,8 +153,8 @@ export default function Footer() {
           {/* Column 3: Categories */}
           <div className="lg:col-span-3 flex flex-col gap-4 text-left">
             <div className="flex items-center gap-2">
-              <span className="w-3.5 h-[3px] bg-[var(--customer-accent)] rounded-sm"></span>
-              <h4 className="text-sm font-bold text-white tracking-wider uppercase">Categories</h4>
+              <span className="w-3.5 h-[3px] bg-[var(--brand-orange,#F97316)] rounded-sm"></span>
+              <h4 className="font-display text-sm font-bold text-white tracking-wider uppercase">Categories</h4>
             </div>
             <ul className="flex flex-col gap-2.5 text-sm font-medium">
               {categories.map((cat) => (
@@ -168,8 +168,8 @@ export default function Footer() {
           {/* Column 4: Contact Us */}
           <div className="lg:col-span-3 flex flex-col gap-4 text-left">
             <div className="flex items-center gap-2">
-              <span className="w-3.5 h-[3px] bg-[var(--customer-accent)] rounded-sm"></span>
-              <h4 className="text-sm font-bold text-white tracking-wider uppercase">Contact Us</h4>
+              <span className="w-3.5 h-[3px] bg-[var(--brand-orange,#F97316)] rounded-sm"></span>
+              <h4 className="font-display text-sm font-bold text-white tracking-wider uppercase">Contact Us</h4>
             </div>
             <div className="flex flex-col gap-3">
               

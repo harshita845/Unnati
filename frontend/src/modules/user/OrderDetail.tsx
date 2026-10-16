@@ -947,10 +947,10 @@ export default function OrderDetail() {
 
   if (loading && !order) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--brand-cream,#FDF9F2)] text-[var(--brand-ink,#1C2B20)] flex items-center justify-center">
         <div className="flex flex-col items-center gap-2">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--customer-primary-dark)]"></div>
-          <p className="text-sm text-neutral-500">Loading order details...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--brand-green,#236B34)]"></div>
+          <p className="text-sm text-[var(--brand-ink-muted,#5B6B60)]">Loading order details...</p>
         </div>
       </div>
     );
@@ -958,9 +958,9 @@ export default function OrderDetail() {
 
   if (!order) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4">
+      <div className="min-h-screen bg-[var(--brand-cream,#FDF9F2)] text-[var(--brand-ink,#1C2B20)] p-4">
         <div className="max-w-lg mx-auto text-center py-20">
-          <h1 className="text-lg sm:text-xl md:text-2xl font-bold mb-4">
+          <h1 className="text-lg sm:text-xl md:text-2xl font-display font-bold mb-4 text-[var(--brand-green-deep,#14401F)]">
             Order Not Found
           </h1>
           <Link to="/orders">
@@ -978,65 +978,65 @@ export default function OrderDetail() {
     Placed: {
       title: "Order placed",
       subtitle: "Order will reach you shortly",
-      color: "bg-green-700",
+      color: "bg-[var(--brand-green,#236B34)]",
     },
     Accepted: {
       title: "Preparing your order",
       subtitle: `Arriving in ${estimatedTime} mins`,
-      color: "bg-green-700",
+      color: "bg-[var(--brand-green,#236B34)]",
     },
     "On the way": {
       title: "Order picked up",
       subtitle: `Arriving in ${estimatedTime} mins`,
-      color: "bg-green-700",
+      color: "bg-[var(--brand-green,#236B34)]",
     },
     Delivered: {
       title: "Order delivered",
-      subtitle: "Enjoy your meal!",
-      color: "bg-[var(--customer-primary-dark)]",
+      subtitle: "Enjoy your items!",
+      color: "bg-[var(--brand-green-deep,#14401F)]",
     },
     // Backend status mappings
     Received: {
       title: "Order placed",
       subtitle: "Processing your order",
-      color: "bg-green-700",
+      color: "bg-[var(--brand-green,#236B34)]",
     },
     Pending: {
       title: "Order pending",
       subtitle: "Waiting for confirmation",
-      color: "bg-yellow-600",
+      color: "bg-[var(--brand-amber,#FFB020)]",
     },
     Processed: {
       title: "Order processed",
       subtitle: "Preparing for delivery",
-      color: "bg-green-700",
+      color: "bg-[var(--brand-green,#236B34)]",
     },
     Shipped: {
       title: "Order shipped",
       subtitle: "On the way to you",
-      color: "bg-[var(--customer-primary-dark)]",
+      color: "bg-[var(--brand-green-deep,#14401F)]",
     },
     "Out for Delivery": {
       title: "Out for delivery",
       subtitle: `Arriving in ${estimatedTime} mins`,
-      color: "bg-green-700",
+      color: "bg-[var(--brand-green,#236B34)]",
     },
     Cancelled: {
       title: "Order cancelled",
       subtitle: "This order has been cancelled",
-      color: "bg-[var(--customer-primary-dark)]",
+      color: "bg-[var(--brand-error,#D6402F)]",
     },
     Returned: {
       title: "Order returned",
       subtitle: "This order has been returned",
-      color: "bg-gray-600",
+      color: "bg-[var(--brand-ink-muted,#5B6B60)]",
     },
   };
 
   const currentStatus = statusConfig[orderStatus] || statusConfig["Received"];
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-[var(--brand-cream,#FDF9F2)] text-[var(--brand-ink,#1C2B20)]">
       {/* Order Confirmed Modal */}
       <AnimatePresence>
         {showConfirmation && (
@@ -1449,14 +1449,14 @@ export default function OrderDetail() {
           transition={{ delay: 0.85 }}>
           {order?.invoiceEnabled ? (
             <Link to={`/orders/${id}/invoice`} className="flex-1">
-              <Button className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white">
+              <Button className="w-full bg-[var(--brand-green,#236B34)] hover:bg-[var(--brand-green-dark,#1B5128)] text-white shadow-sm">
                 View Invoice
               </Button>
             </Link>
           ) : (
             <div className="flex-1">
               <Button
-                className="w-full bg-gray-400 cursor-not-allowed text-white"
+                className="w-full bg-[var(--brand-ink-muted,#5B6B60)]/40 cursor-not-allowed text-white"
                 disabled
                 title="Invoice will be available after delivery is completed">
                 Invoice Unavailable
@@ -1464,7 +1464,7 @@ export default function OrderDetail() {
             </div>
           )}
           <Link to="/orders" className="flex-1">
-            <Button variant="outline" className="w-full border-gray-300">
+            <Button variant="outline" className="w-full border-[var(--brand-border,#E9E2D3)]">
               All Orders
             </Button>
           </Link>

@@ -26,10 +26,13 @@ router.use(authenticate);
 
 const RAISERS = ["Customer", "Seller", "Delivery"];
 const MAX_OPEN_TICKETS = 10;
-const MAX_NEW_PER_HOUR = 5;
 const SUPPORT_FOLDER = "Unnati Stores/support";
 
-const isAdmin = (req: Request) => req.user?.userType === "Admin";
+const isAdmin = (req: Request) =>
+  req.user?.userType === "Admin" ||
+  String(req.user?.userType || "").toLowerCase() === "admin" ||
+  (req.user as any)?.role === "Super Admin" ||
+  (req.user as any)?.role === "Staff";
 const clean = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
 const cleanAttachments = (v: unknown): string[] =>
   (Array.isArray(v) ? v : [])

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { FadeImage, Skeleton } from "../../../components/motion";
 import { getCategories } from "../../../services/api/customerProductService";
 
 // A curated list of beautiful pastel background colors
@@ -69,15 +70,14 @@ export default function FeaturedCategoriesSection() {
   }
 
   return (
-    <div className="w-full bg-white py-2 pb-3.5 px-2 md:py-6 md:px-6 lg:px-8 border-b border-neutral-100 animate-fade-in">
+    <div className="w-full bg-transparent py-2 pb-3.5 px-2 md:py-6 md:px-6 lg:px-8 border-b border-[var(--brand-border,#E9E2D3)]/60 animate-fade-in font-sans">
       <div className="max-w-7xl mx-auto">
         
         {/* Section Header Row */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
           <div className="flex flex-wrap items-baseline gap-4 md:gap-6">
             <h2 
-              className="text-lg md:text-2xl lg:text-[28px] font-bold tracking-tight"
-              style={{ fontFamily: "'Quicksand', 'Nunito', 'Inter', sans-serif", color: '#253D4E' }}
+              className="text-lg md:text-2xl lg:text-[28px] font-display font-bold text-[var(--brand-green-deep,#14401F)] tracking-tight"
             >
               Featured Categories
             </h2>
@@ -87,7 +87,7 @@ export default function FeaturedCategoriesSection() {
           <div className="hidden sm:flex items-center gap-2 self-end sm:self-auto">
             <button
               onClick={() => handleScroll("left")}
-              className="w-8 h-8 rounded-full border border-neutral-200 bg-white hover:bg-neutral-50 flex items-center justify-center text-neutral-600 transition-all hover:shadow-sm active:scale-95"
+              className="w-8 h-8 rounded-full border border-[var(--brand-border,#E9E2D3)] bg-white hover:bg-[var(--brand-leaf-tint)] hover:text-[var(--brand-green)] flex items-center justify-center text-neutral-600 transition-all hover:shadow-xs active:scale-95"
               aria-label="Scroll left"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -97,7 +97,7 @@ export default function FeaturedCategoriesSection() {
             </button>
             <button
               onClick={() => handleScroll("right")}
-              className="w-8 h-8 rounded-full border border-neutral-200 bg-white hover:bg-neutral-50 flex items-center justify-center text-neutral-600 transition-all hover:shadow-sm active:scale-95"
+              className="w-8 h-8 rounded-full border border-[var(--brand-border,#E9E2D3)] bg-white hover:bg-[var(--brand-leaf-tint)] hover:text-[var(--brand-green)] flex items-center justify-center text-neutral-600 transition-all hover:shadow-xs active:scale-95"
               aria-label="Scroll right"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -114,6 +114,14 @@ export default function FeaturedCategoriesSection() {
           className="flex gap-2.5 md:gap-4 overflow-x-auto scrollbar-hide py-1 px-0.5"
           style={{ scrollSnapType: "x mandatory" }}
         >
+          {/* While loading: shimmering placeholders the same size as the cards */}
+          {loading && categories.length === 0 &&
+            Array.from({ length: 6 }).map((_, i) => (
+              <div key={`skeleton-${i}`} className="flex-shrink-0 flex flex-col items-center w-[92px] md:w-[136px]" aria-hidden="true">
+                <Skeleton className="w-[92px] h-[92px] md:w-full md:h-[120px] rounded-[24px] md:rounded-[16px]" />
+                <Skeleton className="mt-2 h-3 w-16 md:w-20 rounded-full" />
+              </div>
+            ))}
           {categories.map((category, index) => {
             const bgColor = PASTEL_BG_COLORS[index % PASTEL_BG_COLORS.length];
             const formattedName = category.name
@@ -124,7 +132,7 @@ export default function FeaturedCategoriesSection() {
                 key={category.id}
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.04 }}
+                transition={{ duration: 0.3, delay: Math.min(index, 8) * 0.04 }}
                 whileHover={{ y: -3, scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 className="flex-shrink-0 flex flex-col items-center cursor-pointer transition-all w-[92px] md:w-[136px]"
@@ -138,21 +146,21 @@ export default function FeaturedCategoriesSection() {
               >
                 {/* Card Container */}
                 <div 
-                  className="w-[92px] h-[92px] md:w-full md:h-[120px] flex items-center justify-center border border-neutral-100 rounded-[24px] bg-white p-1 shadow-sm md:shadow-none md:border-0 md:p-3 overflow-hidden"
+                  className="w-[92px] h-[92px] md:w-full md:h-[120px] flex items-center justify-center border border-[var(--brand-border,#E9E2D3)]/70 rounded-2xl bg-white p-1 shadow-[0_2px_8px_rgba(35,107,52,0.04)] md:shadow-none md:p-3 overflow-hidden"
                   style={{
                     backgroundColor: window.innerWidth < 768 ? '#ffffff' : bgColor,
-                    borderRadius: window.innerWidth < 768 ? '24px' : '16px'
                   }}
                 >
                   {category.image ? (
-                    <img
+                    <FadeImage
                       src={category.image}
                       alt={category.name}
-                      className="w-full h-full object-cover rounded-[20px] md:rounded-[14px] transition-transform duration-300 hover:scale-110"
+                      wrapperClassName="w-full h-full rounded-xl"
+                      className="w-full h-full object-cover rounded-xl hover:scale-110"
                       loading="lazy"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center rounded-[20px] md:rounded-[14px] bg-neutral-100 text-neutral-400">
+                    <div className="w-full h-full flex items-center justify-center rounded-xl bg-[var(--brand-cream-soft,#F6EFE2)] text-[var(--brand-ink-muted,#5B6B60)]">
                       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="3" y="3" width="7" height="7"></rect>
                         <rect x="14" y="3" width="7" height="7"></rect>
@@ -166,13 +174,12 @@ export default function FeaturedCategoriesSection() {
                 {/* Category Text Information */}
                 <div className="w-full mt-2 text-center">
                   <h3 
-                    className="text-[11px] md:text-[14px] font-bold text-[#1e293b] leading-tight w-full px-0.5 line-clamp-2"
-                    style={{ fontFamily: "'Quicksand', 'Nunito', 'Inter', sans-serif" }}
+                    className="text-[11px] md:text-[14px] font-bold text-[var(--brand-ink,#1C2B20)] leading-tight w-full px-0.5 line-clamp-2"
                   >
                     {formattedName}
                   </h3>
                   {category.itemCount > 0 && (
-                    <span className="hidden md:inline-block text-[11px] text-neutral-400 font-semibold leading-none mt-1">
+                    <span className="hidden md:inline-block text-[11px] text-[var(--brand-ink-muted,#5B6B60)] font-semibold leading-none mt-1">
                       {category.itemCount} items
                     </span>
                   )}

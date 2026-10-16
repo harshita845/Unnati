@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo, type ChangeEvent } from "react";
+import { createPortal } from "react-dom";
 import {
   Html5Qrcode,
   Html5QrcodeSupportedFormats,
@@ -99,6 +100,24 @@ export default function QRScannerModal({
   const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1 });
   const [isHighContrast, setIsHighContrast] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+
+  useEffect(() => {
+    const origOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = origOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
@@ -397,45 +416,80 @@ export default function QRScannerModal({
     e.target.value = "";
     if (!file) return;
 
+    setIsProcessingImage(true);
+    setCameraError(null);
+
     try {
       if (isIosProfile) {
         stopIosCamera();
         setCameraReady(false);
       } else {
         const scanner = scannerRef.current;
-        if (!scanner) return;
-        if (scanner.isScanning) await scanner.stop();
-      }
-
-      let text: string | null = null;
-      if (isIosProfile) {
-        text = await decodeBarcodeFromFileWithWasm(file);
-      } else {
-        const scanner = scannerRef.current;
-        if (scanner) text = await scanner.scanFile(file, false);
-      }
-
-      if (!text) throw new Error("No barcode found in image");
-      if (handledRef.current) return;
-
-      if (!isIosProfile) {
-        const scanner = scannerRef.current;
-        scannerRef.current = null;
-        try {
-          scanner?.clear();
-        } catch {
-          /* ignore */
+        if (scanner?.isScanning) {
+          try {
+            await scanner.stop();
+          } catch {
+            /* ignore stop error */
+          }
         }
       }
 
+      let text: string | null = null;
+
+      // 1. Try high-performance zxing-wasm first (works everywhere, decodes 1D barcodes and QR codes from image file)
+      try {
+        text = await decodeBarcodeFromFileWithWasm(file);
+      } catch (wasmErr) {
+        console.warn("zxing-wasm scan attempt:", wasmErr);
+      }
+
+      // 2. Fallback to native browser BarcodeDetector API (Chromium / Android Chrome)
+      if (!text && typeof window !== "undefined" && "BarcodeDetector" in window) {
+        try {
+          const detector = new (window as any).BarcodeDetector();
+          const bitmap = await createImageBitmap(file);
+          const detected = await detector.detect(bitmap);
+          if (detected && detected.length > 0 && detected[0]?.rawValue) {
+            text = String(detected[0].rawValue).trim();
+          }
+        } catch (detectorErr) {
+          console.warn("BarcodeDetector fallback:", detectorErr);
+        }
+      }
+
+      // 3. Fallback to html5-qrcode scanFile
+      if (!text) {
+        try {
+          let scanner = scannerRef.current;
+          if (!scanner) {
+            scanner = new Html5Qrcode(`temp-file-scan-${Date.now()}`, {
+              verbose: false,
+              useBarCodeDetectorIfSupported: true,
+              formatsToSupport: BILLING_BARCODE_FORMATS,
+            });
+          }
+          text = await scanner.scanFile(file, false);
+        } catch (html5Err) {
+          console.warn("html5-qrcode scanFile fallback:", html5Err);
+        }
+      }
+
+      if (!text) {
+        throw new Error("No barcode found in image. Please try a clearer photo or enter the barcode number below.");
+      }
+
+      if (handledRef.current) return;
       handledRef.current = true;
       playBeep();
       onScanSuccessRef.current(text);
+      onClose();
     } catch (err: any) {
       handledRef.current = false;
       const errorMsg = err?.message || "No barcode found in image";
-      setCameraError(`Image scan failed: ${errorMsg}. Please upload a clear QR code image.`);
+      setCameraError(errorMsg);
       onScanFailureRef.current?.(err);
+    } finally {
+      setIsProcessingImage(false);
     }
   };
 
@@ -471,16 +525,16 @@ export default function QRScannerModal({
   const showIosLoading = isIosProfile && iosStarting;
   const showViewfinder = cameraReady && !showIosLoading;
 
-  return (
+  return createPortal(
     <div
-      className={`fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-75 p-4 ${
+      className={`fixed inset-0 z-[1050] flex flex-col justify-end sm:justify-center items-center bg-black/80 p-0 sm:p-4 overflow-hidden ${
         isIosProfile ? "" : "backdrop-blur-sm"
       }`}
-      onClick={unlockAudio}
+      onClick={onClose}
       onTouchStart={unlockAudio}
     >
       <div
-        className="bg-white rounded-2xl w-full max-w-md overflow-hidden relative shadow-2xl flex flex-col max-h-[90vh]"
+        className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md overflow-hidden relative shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] border border-neutral-100"
         onClick={(e) => {
           e.stopPropagation();
           unlockAudio();
@@ -491,68 +545,66 @@ export default function QRScannerModal({
             #${readerId} video {
               width: 100% !important;
               height: 100% !important;
-              min-height: 300px !important;
+              min-height: 220px !important;
+              max-height: 260px !important;
               object-fit: cover !important;
             }
           `}</style>
         )}
 
-        <div className="flex justify-between items-center py-2.5 px-4 border-b border-gray-100 shrink-0">
+        {/* Sticky Header */}
+        <div className="flex justify-between items-center py-3.5 px-4 sm:px-5 border-b border-gray-100 bg-white shrink-0 z-30">
           <div>
-            <h3 className="text-base font-bold text-gray-800 leading-tight">{title || "Scan barcode"}</h3>
-            <p className="text-[9px] text-gray-500 uppercase tracking-wider font-semibold">
-              {scannerProfile.label}
+            <h3 className="text-base font-bold text-gray-800 leading-tight">
+              {title || "Scan Barcode / QR"}
+            </h3>
+            <p className="text-[10px] text-[var(--brand-green,#236B34)] font-semibold mt-0.5">
+              Align barcode in view or upload an image
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+            className="w-9 h-9 flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 text-neutral-600 hover:text-neutral-900 rounded-full transition-colors cursor-pointer"
             aria-label="Close scanner"
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
         </div>
 
+        {/* Scrollable Modal Content */}
         <div className="flex-1 overflow-y-auto bg-gray-50 p-4 space-y-3">
-          {cameraError && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800 leading-relaxed flex items-start gap-2">
-              <span className="shrink-0 text-base">⚠️</span>
-              <div>
-                <p className="font-bold text-red-900">Camera Access Denied</p>
-                <p className="mt-0.5 text-red-700">{cameraError}</p>
-              </div>
-            </div>
-          )}
-
           {isIosProfile && iosPreviewStalled && !iosStarting && (
             <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[11px] text-amber-800 leading-relaxed">
               Camera paused — tap the preview to resume.
             </div>
           )}
 
-          <div className="flex justify-end">
+          <div className="flex justify-between items-center">
+            <span className="text-[11px] font-medium text-gray-500">
+              {cameraReady ? "Camera active" : cameraError ? "Camera offline" : "Starting camera..."}
+            </span>
             <button
               type="button"
               onClick={() => setIsHighContrast(!isHighContrast)}
-              className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${
+              className={`py-1 px-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 isHighContrast
-                  ? "bg-indigo-600 text-white shadow-md"
-                  : "bg-white text-gray-600 border border-gray-200"
+                  ? "bg-neutral-800 text-white shadow-sm"
+                  : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
               }`}
             >
-              {isHighContrast ? "🌓 High Contrast" : "🌓 Normal"}
+              {isHighContrast ? "🌓 High Contrast" : "🌓 Contrast"}
             </button>
           </div>
 
           {zoomRange.max > zoomRange.min && (
-            <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-1.5">
+            <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm space-y-1">
               <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase">
                 <span>Zoom</span>
-                <span className="text-pink-600 bg-pink-50 px-1.5 py-0.5 rounded-full">
+                <span className="text-[var(--brand-green,#236B34)] bg-emerald-50 px-1.5 py-0.5 rounded-full font-bold">
                   {zoom.toFixed(1)}x
                 </span>
               </div>
@@ -563,12 +615,13 @@ export default function QRScannerModal({
                 step={zoomRange.step}
                 value={zoom}
                 onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
-                className="w-full h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-pink-600"
+                className="w-full h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-[var(--brand-green,#236B34)]"
               />
             </div>
           )}
 
-          <div className="relative">
+          {/* Camera Preview Area */}
+          <div className="relative rounded-2xl overflow-hidden border border-neutral-200 bg-neutral-900 shadow-inner">
             {isIosProfile ? (
               <video
                 ref={iosVideoRef}
@@ -576,98 +629,171 @@ export default function QRScannerModal({
                 muted
                 autoPlay
                 onClick={handlePreviewTap}
-                className={`w-full h-[300px] rounded-xl overflow-hidden border-2 border-gray-200 bg-black object-cover ${
+                className={`w-full h-[220px] sm:h-[260px] overflow-hidden bg-black object-cover ${
                   isHighContrast ? "contrast-150 brightness-110 saturate-0" : ""
                 }`}
               />
             ) : (
               <div
                 id={readerId}
-                className={`w-full h-[300px] rounded-xl overflow-hidden border-2 border-gray-200 bg-black ${
+                className={`w-full h-[220px] sm:h-[260px] overflow-hidden bg-black ${
                   isHighContrast ? "contrast-150 brightness-110 saturate-0" : ""
                 }`}
               />
             )}
 
             {showIosLoading && (
-              <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-black/50">
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-white border-t-transparent" />
               </div>
             )}
 
-            {showViewfinder && (
+            {/* Camera Permission / Error Fallback inside preview */}
+            {cameraError && (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-neutral-900/95 text-white p-4 text-center">
+                <div className="w-11 h-11 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center mb-2">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
+                    <line x1="2" y1="2" x2="22" y2="22"/>
+                  </svg>
+                </div>
+                <p className="font-bold text-sm text-neutral-100">
+                  {cameraError?.toLowerCase().includes("barcode") ? "Barcode Not Found" : "Camera Access Blocked"}
+                </p>
+                <p className="text-[11px] text-neutral-300 mt-1 max-w-[260px] leading-relaxed">
+                  {cameraError?.toLowerCase().includes("barcode")
+                    ? "Could not detect a barcode in that photo. Please try a clearer, closer photo or enter the barcode below."
+                    : "Camera permission was not granted. You can upload an image from your gallery or type the barcode below."}
+                </p>
+                <div className="flex items-center gap-2 mt-3">
+                  <button
+                    type="button"
+                    disabled={isProcessingImage}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-3.5 py-1.5 bg-[var(--brand-green,#236B34)] hover:bg-[var(--brand-green-dark,#1B5128)] text-white text-xs font-semibold rounded-lg shadow transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-60"
+                  >
+                    {isProcessingImage ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Scanning...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        <span>Upload Photo</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isProcessingImage}
+                    onClick={() => {
+                      setCameraError(null);
+                      if (beginLiveScanRef.current) {
+                        beginLiveScanRef.current().catch(() => {
+                          setCameraError("Camera permission denied. Please allow access in browser settings.");
+                        });
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold rounded-lg border border-neutral-700 transition-all cursor-pointer"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Viewfinder Frame (Brand Green) */}
+            {showViewfinder && !cameraError && (
               <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                <div className="w-[85%] h-[70%] border-2 border-pink-500 rounded-lg relative">
+                <div className="w-[85%] h-[72%] border-2 border-[var(--brand-green,#236B34)] rounded-lg relative shadow-[0_0_15px_rgba(35,107,52,0.3)]">
                   <div className="absolute -top-1 -left-1 w-4 h-4 border-t-4 border-l-4 border-white rounded-tl" />
                   <div className="absolute -top-1 -right-1 w-4 h-4 border-t-4 border-r-4 border-white rounded-tr" />
                   <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-4 border-l-4 border-white rounded-bl" />
                   <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-4 border-r-4 border-white rounded-br" />
-                  <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-pink-500/50 animate-pulse" />
+                  <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-[var(--brand-leaf,#5FA82E)]/70 animate-pulse" />
                 </div>
               </div>
             )}
           </div>
 
+          {/* Action Buttons: Upload image & Flashlight */}
           <div className="flex flex-wrap gap-2 justify-center shrink-0">
             <input
               ref={fileInputRef}
               type="file"
               accept="image/*"
-              capture="environment"
               className="hidden"
               onChange={handleGalleryPick}
             />
             <button
               type="button"
-              disabled={false}
+              disabled={isProcessingImage}
               onClick={() => fileInputRef.current?.click()}
-              className="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm"
+              className="flex-1 px-4 py-2.5 text-xs font-bold rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm flex items-center justify-center gap-1.5 cursor-pointer transition-colors disabled:opacity-60"
             >
-              {isIosProfile ? "Photo of Barcode" : "Upload Image"}
+              {isProcessingImage ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-[var(--brand-green,#236B34)] border-t-transparent rounded-full animate-spin" />
+                  <span>Scanning image...</span>
+                </>
+              ) : (
+                <>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  <span>Upload Barcode Image</span>
+                </>
+              )}
             </button>
             {torchSupported && (
               <button
                 type="button"
                 onClick={() => void toggleTorch()}
-                className={`px-4 py-2.5 text-sm font-bold rounded-xl border shadow-sm ${
+                className={`px-4 py-2.5 text-xs font-bold rounded-xl border shadow-sm transition-colors cursor-pointer ${
                   torchOn
-                    ? "bg-yellow-50 border-yellow-200 text-yellow-700"
-                    : "bg-white border-gray-200 text-gray-700"
+                    ? "bg-amber-50 border-amber-200 text-amber-700"
+                    : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
                 }`}
               >
-                {torchOn ? "🔦 Flash ON" : "🔦 Flash OFFER"}
+                {torchOn ? "🔦 Flash ON" : "🔦 Flash"}
               </button>
             )}
           </div>
 
-          {/* Manual Order ID Entry */}
-          <div className="pt-2 border-t border-gray-100 flex gap-2">
+          {/* Manual Barcode / Code Entry */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const el = document.getElementById("manual-qr-input") as HTMLInputElement;
+              if (el?.value.trim()) {
+                onScanSuccessRef.current(el.value.trim());
+              }
+            }}
+            className="pt-2 border-t border-gray-200 flex gap-2"
+          >
             <input
               type="text"
-              placeholder={manualPlaceholder || "Or enter Order ID / MongoDB ID manually..."}
-              className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 text-gray-800"
+              placeholder={manualPlaceholder || "Enter barcode or product number..."}
+              className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--brand-green,#236B34)] text-gray-800 font-sans"
               id="manual-qr-input"
             />
             <button
-              type="button"
-              onClick={() => {
-                const el = document.getElementById("manual-qr-input") as HTMLInputElement;
-                if (el?.value.trim()) {
-                  onScanSuccessRef.current(el.value.trim());
-                }
-              }}
-              className="px-4 py-2 bg-neutral-900 text-white text-xs font-bold rounded-xl hover:bg-black transition-colors"
+              type="submit"
+              className="px-4 py-2 bg-[var(--brand-green,#236B34)] hover:bg-[var(--brand-green-dark,#1B5128)] text-white text-xs font-bold rounded-xl transition-colors cursor-pointer active:scale-95 shadow-sm"
             >
-              Verify
+              {manualPlaceholder?.toLowerCase().includes("order") ? "Verify" : "Search"}
             </button>
-          </div>
+          </form>
         </div>
 
-        <div className="p-4 border-t border-gray-100 bg-white shrink-0">
-          <p className="text-center text-[11px] text-gray-400 italic">{scannerProfile.hint}</p>
+        {/* Footer */}
+        <div className="py-2.5 px-4 border-t border-gray-100 bg-white shrink-0">
+          <p className="text-center text-[10.5px] text-gray-400">
+            Center barcode in the green frame or upload an image from gallery
+          </p>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

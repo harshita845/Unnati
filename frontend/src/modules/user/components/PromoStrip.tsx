@@ -543,13 +543,13 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
       <div
         className="relative"
         style={{
-          backgroundColor: "#f9fafb",
+          backgroundColor: "transparent",
           paddingTop: "12px",
           paddingBottom: "0px",
           marginTop: 0,
           minHeight: "200px"
         }}>
-        <div className="h-[200px] w-full bg-transparent animate-pulse rounded-lg mx-0 mt-4" />
+        <div className="h-[200px] w-full bg-[var(--brand-cream-soft,#F6EFE2)]/60 animate-pulse rounded-2xl mx-0 mt-4 border border-[var(--brand-border-light,#F2ECE0)]" />
       </div>
     );
   }
@@ -557,7 +557,7 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
   // Show "No active promotions" only if there are no cards AND no products
   if (!hasData || (categoryCards.length === 0 && featuredProducts.length === 0)) {
     return (
-      <div className="text-center py-6 text-neutral-400 text-sm">
+      <div className="text-center py-6 text-[var(--brand-ink-muted,#5B6B60)] text-sm">
         No active promotions
       </div>
     );
@@ -604,7 +604,7 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
     <div
       className="relative animate-fade-in"
       style={{
-        backgroundColor: "#f9fafb",
+        backgroundColor: "transparent",
         paddingTop: "0px",
         paddingBottom: "0px",
         marginTop: "8px",
@@ -615,18 +615,18 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
           {/* Crazy Deals Section - Left */}
           <div className="flex-shrink-0 w-[100px] promo-card transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
             <div
-              className="h-full rounded-md p-1.5 flex flex-col items-center justify-between relative overflow-hidden border border-white/10 shadow-md"
+              className="h-full rounded-2xl p-1.5 flex flex-col items-center justify-between relative overflow-hidden border border-[var(--brand-border,#E9E2D3)] shadow-md"
               style={{
-                background: "linear-gradient(135deg, #111827 0%, #1f2937 50%, #374151 100%)",
+                background: "linear-gradient(135deg, #14401F 0%, #1B5128 50%, #236B34 100%)",
                 minHeight: "122px",
               }}>
               {/* CRAZY DEALS - Two lines, bigger, premium gold text */}
               <div className="text-center mb-1" style={{ marginTop: "4px" }}>
                 <div
-                  className="font-extrabold leading-tight tracking-wider uppercase bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-100 bg-clip-text text-transparent"
+                  className="font-extrabold leading-tight tracking-wider uppercase bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-100 bg-clip-text text-transparent font-display"
                   style={{
                     fontSize: "14px",
-                    fontFamily: "'Outfit', 'Inter', sans-serif",
+                    fontFamily: "var(--font-display, 'Fraunces', serif)",
                     textShadow: "0 2px 4px rgba(0,0,0,0.3)",
                   }}>
                   {crazyDealsTitle.split(" ").map((word, idx) => (
@@ -639,29 +639,29 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
               <div
                 ref={priceContainerRef}
                 className="flex flex-col items-center mb-1 relative">
-                {/* Original Price - Darker Gray, Smaller Banner */}
+                {/* Original Price - Darker Banner */}
                 <div
-                  className="bg-neutral-800/80 rounded-sm px-1.5 inline-block relative z-10 border border-neutral-700/50"
+                  className="bg-black/40 rounded-sm px-1.5 inline-block relative z-10 border border-white/10"
                   style={{
                     height: "fit-content",
                     lineHeight: "1",
                     paddingTop: "2px",
                     paddingBottom: "2px",
                   }}>
-                  <span className="text-neutral-400 text-[9px] font-medium line-through leading-none">
+                  <span className="text-white/60 text-[9px] font-medium line-through leading-none font-price">
                     ₹{safeOriginalPrice}
                   </span>
                 </div>
-                {/* Discounted Price - Premium Crimson/Red Gradient Banner */}
+                {/* Discounted Price - Signature Gradient Banner */}
                 <div
-                  className="bg-gradient-to-r from-red-500 to-rose-600 rounded-sm px-2 inline-block relative -mt-0.5 z-20 shadow-sm"
+                  className="bg-gradient-to-r from-[var(--brand-amber,#FFB020)] via-[var(--brand-orange,#F97316)] to-[var(--brand-orange-deep,#E8590C)] rounded-full px-2 inline-block relative -mt-0.5 z-20 shadow-sm"
                   style={{
                     height: "fit-content",
                     lineHeight: "1",
                     paddingTop: "2.5px",
                     paddingBottom: "2.5px",
                   }}>
-                  <span className="text-white text-[11px] font-extrabold leading-none tracking-wide">
+                  <span className="text-white text-[11px] font-extrabold leading-none tracking-wide font-price">
                     ₹{safeDiscountedPrice}
                   </span>
                 </div>
@@ -671,7 +671,7 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
               <div
                 ref={productNameRef}
                 onClick={handleProductClick}
-                className="text-gray-200 font-medium text-[10px] text-center mb-1 cursor-pointer hover:text-white hover:underline line-clamp-1 w-full px-0.5 transition-colors"
+                className="text-white/90 font-medium text-[10px] text-center mb-1 cursor-pointer hover:text-white hover:underline line-clamp-1 w-full px-0.5 transition-colors"
                 title={displayProduct.productName || displayProduct.name}>
                 {displayProduct.productName || displayProduct.name}
               </div>
@@ -683,7 +683,7 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
                 style={{ minHeight: "55px", maxHeight: "75px" }}>
                 <div
                   onClick={handleProductClick}
-                  className="w-16 h-18 rounded bg-white/5 flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-90 transition-opacity border border-white/5"
+                  className="w-16 h-18 rounded-xl bg-white/10 flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-90 transition-opacity border border-white/10"
                   style={{ background: "transparent" }}>
                   {displayProduct.imageUrl ? (
                     <img
@@ -747,16 +747,16 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
                 <div key={card.id} className="promo-card">
                   <Link
                     to={card.slug || card.categoryId ? `/category/${card.slug || card.categoryId}` : "#"}
-                    className="group rounded-md transition-all duration-300 hover:shadow-md hover:border-[var(--customer-primary-dark)] hover:-translate-y-0.5 active:scale-[0.98] h-full flex flex-col overflow-hidden relative border border-[var(--customer-primary-alpha-20)]"
+                    className="group rounded-2xl transition-all duration-300 hover:shadow-md hover:border-[var(--brand-green,#236B34)] hover:-translate-y-0.5 active:scale-[0.98] h-full flex flex-col overflow-hidden relative border border-[var(--brand-border,#E9E2D3)] bg-white"
                     style={{
                       minHeight: "122px",
-                      background: "linear-gradient(135deg, #ffffff 0%, var(--customer-primary-alpha-10) 100%)",
+                      background: "linear-gradient(135deg, #ffffff 0%, var(--brand-leaf-tint,#EAF5E0) 100%)",
                     }}>
                     {/* Gradient Discount Banner - Premium styled pill centered at top */}
                     <div
                       className="w-full flex justify-center"
                       style={{ paddingTop: "0", paddingBottom: "2px" }}>
-                      <div className="bg-gradient-to-r from-[var(--customer-primary-dark)] to-[var(--customer-primary)] text-white text-[11px] font-extrabold px-3 py-0.5 rounded-b-md tracking-wider text-center inline-block uppercase shadow-sm">
+                      <div className="bg-gradient-to-r from-[var(--brand-green-dark,#1B5128)] to-[var(--brand-green,#236B34)] text-white text-[11px] font-extrabold px-3 py-0.5 rounded-b-lg tracking-wider text-center inline-block uppercase shadow-sm font-sans">
                         {card.badge}
                       </div>
                     </div>
@@ -766,7 +766,7 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
                       style={{ paddingTop: "2px" }}>
                       {/* Category Title - with hover color transition */}
                       <div
-                        className="text-neutral-800 font-sans font-extrabold text-center uppercase tracking-wide group-hover:text-[var(--customer-primary-dark)] transition-colors"
+                        className="text-[var(--brand-ink,#1C2B20)] font-display font-bold text-center tracking-tight group-hover:text-[var(--brand-green,#236B34)] transition-colors"
                         style={{
                           fontSize: "13px",
                           lineHeight: "1.2",
@@ -784,7 +784,7 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
                             subcategoryImages.slice(0, 4).map((imageUrl, idx) => (
                                 <div
                                   key={idx}
-                                  className="flex-shrink-0 bg-white rounded-md flex items-center justify-center overflow-hidden border border-neutral-200/80 shadow-sm transition-all duration-300 group-hover:scale-[1.03]"
+                                  className="flex-shrink-0 bg-white rounded-xl flex items-center justify-center overflow-hidden border border-[var(--brand-border-light,#F2ECE0)] shadow-sm transition-all duration-300 group-hover:scale-[1.03]"
                                   style={{ width: "64px", height: "64px" }}>
                                   <img
                                     src={imageUrl}

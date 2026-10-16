@@ -402,9 +402,9 @@ export default function CategoryPage() {
   };
 
   return (
-    <div className="flex flex-col bg-white h-screen overflow-hidden">
+    <div className="flex flex-col bg-white h-screen overflow-hidden font-sans">
       {/* Header */}
-      <div className="sticky top-0 z-40 bg-white border-b border-neutral-200 flex-shrink-0">
+      <div className="sticky top-0 z-40 bg-white border-b border-[var(--brand-border,#E9E2D3)] flex-shrink-0 shadow-xs">
         <div className="px-4 md:px-6 lg:px-8 py-3 md:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -427,7 +427,7 @@ export default function CategoryPage() {
                   />
                 </svg>
               </button>
-              <h1 className="text-base md:text-xl font-bold text-neutral-900">
+              <h1 className="text-base md:text-xl font-display font-bold text-[var(--brand-green-deep,#14401F)]">
                 {category?.name}
               </h1>
             </div>
@@ -437,7 +437,7 @@ export default function CategoryPage() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar */}
-        <div className="w-20 bg-white border-r border-neutral-100 overflow-y-auto scrollbar-hide flex-shrink-0 py-2">
+        <div className="w-20 bg-white border-r border-[var(--brand-border,#E9E2D3)] overflow-y-auto scrollbar-hide flex-shrink-0 py-2">
           <div className="space-y-1">
             {subcategories.map((subcat) => {
               const isSelected =
@@ -460,21 +460,24 @@ export default function CategoryPage() {
                     navigate({ search: newParams.toString() }, { replace: true });
                   }}
                   className={`w-full flex flex-col items-center justify-center py-2 relative transition-all duration-200 group ${
-                    isSelected ? "bg-[var(--customer-primary-alpha-10)]" : "hover:bg-neutral-50"
+                    isSelected ? "bg-[var(--brand-leaf-tint,#EAF5E0)]/70" : "hover:bg-[var(--brand-cream-soft,#F6EFE2)]/40"
                   }`}
                   style={{
                     minHeight: "72px",
                   }}>
-                  {/* Active Indicator - curved blob on left */}
+                  {/* Active Indicator - curved blob on left + small orange dot */}
                   {isSelected && (
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-12 bg-[var(--customer-primary-dark)] rounded-r-full"></div>
+                    <>
+                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-10 bg-[var(--brand-green,#236B34)] rounded-r-full"></div>
+                      <div className="absolute right-1.5 top-1.5 w-1.5 h-1.5 rounded-full bg-[var(--brand-orange,#F97316)] shadow-xs"></div>
+                    </>
                   )}
 
                   {/* Image Container */}
                   <div
                     className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg mb-1 flex-shrink-0 overflow-hidden transition-all duration-200 shadow-sm ${
                       isSelected
-                        ? "ring-2 ring-[var(--customer-primary-dark)] ring-offset-2 bg-white"
+                        ? "ring-2 ring-[var(--brand-green,#236B34)] ring-offset-2 bg-white"
                         : "bg-neutral-50 border border-neutral-100 group-hover:shadow-md"
                     }`}>
                     {subcat.image ? (
@@ -501,8 +504,8 @@ export default function CategoryPage() {
                   <span
                     className={`text-[10px] text-center leading-tight px-1 transition-colors ${
                       isSelected
-                        ? "font-bold text-[var(--customer-primary-dark)]"
-                        : "text-neutral-500 group-hover:text-neutral-900"
+                        ? "font-bold text-[var(--brand-green-deep,#14401F)]"
+                        : "text-[var(--brand-ink-muted,#5B6B60)] group-hover:text-[var(--brand-ink,#1C2B20)]"
                     }`}
                     style={{
                       wordBreak: "break-word",
@@ -521,7 +524,7 @@ export default function CategoryPage() {
         </div>
 
         {/* Main Content Area */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-white">
+        <div className="flex-1 flex flex-col overflow-hidden bg-[var(--brand-cream,#FDF9F2)]/40">
           {/* Filter/Sort Bar - Updated layout with inline Filter Dropdown */}
           <div className="px-4 md:px-6 lg:px-8 py-1.5 md:py-2 bg-white border-b border-neutral-200 flex-shrink-0 relative z-30">
             <div className="flex items-center gap-1.5 md:gap-2 overflow-x-auto scrollbar-hide -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8 scroll-smooth">

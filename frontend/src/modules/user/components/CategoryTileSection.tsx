@@ -121,10 +121,9 @@ export default function CategoryTileSection({
   }
 
   return (
-    <div className="mb-6 md:mb-8 mt-0 overflow-visible relative">
+    <div className="mb-6 md:mb-8 mt-0 overflow-visible relative font-sans">
       <h2 
-        className="text-xl md:text-3xl font-bold mb-3 md:mb-6 px-2 md:px-4 lg:px-4 tracking-tight"
-        style={{ fontFamily: "'Quicksand', 'Nunito', 'Inter', sans-serif", color: '#253D4E' }}
+        className="text-xl md:text-2xl font-display font-bold text-[var(--brand-green-deep,#14401F)] mb-3 md:mb-5 px-2 md:px-4 lg:px-4 tracking-tight"
       >
         {title}
       </h2>
@@ -198,25 +197,25 @@ export default function CategoryTileSection({
                       handleTileClick(tile);
                     }
                   }}
-                   className="block bg-white rounded-xl shadow-sm border border-neutral-200 hover:shadow-md transition-shadow h-full p-2"
+                   className="block bg-white rounded-2xl shadow-[0_4px_16px_rgba(35,107,52,0.04)] border border-[var(--brand-border,#E9E2D3)] hover:shadow-md transition-shadow h-full p-2.5"
                 >
                   {/* Image - Single image */}
                   <div
-                    className={`w-full rounded-lg overflow-hidden bg-neutral-50 flex items-center justify-center ${
+                    className={`w-full rounded-xl overflow-hidden bg-[var(--brand-cream-soft,#F6EFE2)]/50 flex items-center justify-center ${
                       showProductCount ? "h-28 md:h-36 mb-2" : "aspect-square"
-                    } ${tile.bgColor || "bg-cyan-50"}`}
+                    }`}
                   >
                     {hasImages ? (
                       <img
                         src={images[0]}
                         alt={tile.name}
-                        className="w-full h-full object-contain rounded-lg"
+                        className="w-full h-full object-contain rounded-xl p-1"
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
                           target.style.display = 'none';
                           const parent = target.parentElement;
                           if (parent) {
-                            parent.innerHTML = `<img src="${fallbackImage}" class="w-full h-full object-cover rounded-lg" />`;
+                            parent.innerHTML = `<img src="${fallbackImage}" class="w-full h-full object-cover rounded-xl" />`;
                           }
                         }}
                       />
@@ -224,19 +223,19 @@ export default function CategoryTileSection({
                       <img
                         src={fallbackImage}
                         alt={tile.name}
-                        className="w-full h-full object-cover rounded-lg"
+                        className="w-full h-full object-cover rounded-xl"
                       />
                     )}
                   </div>
 
                   {/* Category Name */}
-                  <div className="text-xs md:text-sm font-bold text-neutral-800 leading-snug text-center w-full block mt-2 mb-1 px-1 line-clamp-2 font-sans">
+                  <div className="text-xs md:text-sm font-bold text-[var(--brand-ink,#1C2B20)] leading-snug text-center w-full block mt-2 mb-1 px-1 line-clamp-2">
                     {tile.name ? tile.name.charAt(0).toUpperCase() + tile.name.slice(1).toLowerCase() : ""}
                   </div>
 
                   {/* Product Count (Orange Subtext) */}
                   {showProductCount && tile.productCount && (
-                    <div className="text-xs md:text-sm font-bold text-orange-500 text-center w-full block pb-1.5 font-sans">
+                    <div className="text-xs md:text-sm font-display font-price font-bold text-[var(--brand-orange,#F97316)] text-center w-full block pb-1.5 font-sans">
                       {tile.productCount} items
                     </div>
                   )}
@@ -256,8 +255,8 @@ export default function CategoryTileSection({
               onClick={() => scrollToDot(idx)}
               className={`h-2 rounded-full transition-all duration-300 ${
                 activeDot === idx 
-                  ? 'w-5 bg-[var(--customer-primary)]' 
-                  : 'w-2 bg-neutral-300 hover:bg-neutral-400'
+                  ? 'w-6 bg-[var(--brand-green,#236B34)]' 
+                  : 'w-2 bg-[var(--brand-border,#E9E2D3)] hover:bg-[var(--brand-leaf-light,#8CC63F)]'
               }`}
               aria-label={`Go to slide ${idx + 1}`}
             />

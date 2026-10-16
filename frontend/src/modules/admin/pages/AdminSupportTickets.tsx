@@ -14,7 +14,8 @@ import {
   TICKET_PRIORITIES,
   TICKET_STATUSES,
 } from "../../../services/api/supportService";
-import TicketConversation, { PRIORITY_STYLES, StatusBadge } from "../../../components/support/TicketConversation";
+import TicketConversation, { PRIORITY_STYLES, STATUS_STYLES, StatusBadge } from "../../../components/support/TicketConversation";
+import { useToast } from "../../../context/ToastContext";
 
 const TABS = ["All", ...TICKET_STATUSES];
 const WHO: Record<string, string> = { Customer: "Customer", Seller: "Seller", Delivery: "Delivery partner" };
@@ -45,6 +46,9 @@ export default function AdminSupportTickets() {
   const [error, setError] = useState("");
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [ticketError, setTicketError] = useState("");
+
+  const { showToast } = useToast();
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const open = (id?: string) => {
     const p = new URLSearchParams(params);
@@ -97,9 +101,29 @@ export default function AdminSupportTickets() {
   const update = async (fn: () => Promise<Ticket>) => {
     try {
       setTicket(await fn());
-      loadList();
+      await loadList();
     } catch (e) {
       setTicketError(supportErrorMessage(e));
+    }
+  };
+
+  const handleQuickStatus = async (ticketId: string, newStatus: TicketStatus, ticketNum?: string) => {
+    setUpdatingId(ticketId);
+    try {
+      const updated = await setTicketStatus(ticketId, newStatus);
+      if (ticket && ticket._id === ticketId) {
+        setTicket(updated);
+      }
+      await loadList();
+      if (tab !== "All" && tab !== newStatus) {
+        showToast(`Ticket ${ticketNum || ""} marked as "${newStatus}" and moved to the "${newStatus}" tab.`, "success");
+      } else {
+        showToast(`Ticket ${ticketNum || ""} status updated to "${newStatus}".`, "success");
+      }
+    } catch (e) {
+      showToast(supportErrorMessage(e, "Failed to update ticket status"), "error");
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -182,42 +206,105 @@ export default function AdminSupportTickets() {
                   {!openId && <th className="px-4 py-3">Priority</th>}
                   <th className="px-4 py-3">Status</th>
                   {!openId && <th className="px-4 py-3">Last activity</th>}
+                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {!list && !error && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
+                    <td colSpan={openId ? 4 : 7} className="px-4 py-10 text-center text-gray-500">
                       Loading…
                     </td>
                   </tr>
                 )}
                 {list?.tickets.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
+                    <td colSpan={openId ? 4 : 7} className="px-4 py-10 text-center text-gray-500">
                       No tickets found
                     </td>
                   </tr>
                 )}
                 {list?.tickets.map((t) => (
-                  <tr key={t._id} onClick={() => open(t._id)} className={`cursor-pointer hover:bg-gray-50 ${openId === t._id ? "bg-gray-50" : ""}`}>
+                  <tr key={t._id} onClick={() => open(t._id)} className={`cursor-pointer hover:bg-gray-50/80 transition-colors ${openId === t._id ? "bg-emerald-50/30" : ""}`}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500">
                         {t.unreadByAdmin && <span className="inline-block h-2 w-2 rounded-full bg-[var(--primary-color)]" title="New message" />}
                         {t.ticketNumber}
                       </div>
-                      <div className={`max-w-[260px] truncate ${t.unreadByAdmin ? "font-semibold text-gray-900" : "text-gray-800"}`}>{t.subject}</div>
+                      <div className={`max-w-[240px] truncate ${t.unreadByAdmin ? "font-bold text-gray-900" : "text-gray-800"}`}>{t.subject}</div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-gray-800">{t.raisedBy.name}</div>
+                      <div className="text-gray-800 font-medium">{t.raisedBy.name}</div>
                       <span className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${WHO_STYLES[t.raisedBy.userType]}`}>{WHO[t.raisedBy.userType]}</span>
                     </td>
                     {!openId && <td className="px-4 py-3 text-gray-600">{t.category}</td>}
                     {!openId && <td className={`px-4 py-3 ${PRIORITY_STYLES[t.priority]}`}>{t.priority}</td>}
-                    <td className="px-4 py-3">
-                      <StatusBadge status={t.status} />
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <select
+                        value={t.status}
+                        disabled={updatingId === t._id}
+                        onChange={(e) => handleQuickStatus(t._id, e.target.value as TicketStatus, t.ticketNumber)}
+                        className={`rounded-full border px-2.5 py-1 text-xs font-semibold cursor-pointer outline-none transition-all shadow-xs ${
+                          STATUS_STYLES[t.status] || "bg-gray-100 text-gray-700 border-gray-200"
+                        } ${updatingId === t._id ? "opacity-50 cursor-wait" : ""}`}
+                        title="Click to change ticket status"
+                      >
+                        {TICKET_STATUSES.map((s) => (
+                          <option key={s} value={s} className="bg-white text-gray-800 font-normal">
+                            {s}
+                          </option>
+                        ))}
+                      </select>
                     </td>
                     {!openId && <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-500">{when(t.lastMessageAt)}</td>}
+                    <td className="px-4 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1.5">
+                        {t.status !== "Resolved" && t.status !== "Closed" && (
+                          <button
+                            type="button"
+                            disabled={updatingId === t._id}
+                            onClick={() => handleQuickStatus(t._id, "Resolved", t.ticketNumber)}
+                            className="px-2.5 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-lg text-xs font-semibold border border-emerald-200 transition-all cursor-pointer flex items-center gap-1 shadow-xs disabled:opacity-50"
+                            title="Mark as Resolved"
+                          >
+                            ✓ Resolve
+                          </button>
+                        )}
+                        {t.status !== "Closed" && (
+                          <button
+                            type="button"
+                            disabled={updatingId === t._id}
+                            onClick={() => handleQuickStatus(t._id, "Closed", t.ticketNumber)}
+                            className="px-2.5 py-1 bg-gray-50 text-gray-600 hover:bg-gray-700 hover:text-white rounded-lg text-xs font-semibold border border-gray-200 transition-all cursor-pointer flex items-center gap-1 shadow-xs disabled:opacity-50"
+                            title="Close Ticket"
+                          >
+                            ✕ Close
+                          </button>
+                        )}
+                        {(t.status === "Resolved" || t.status === "Closed") && (
+                          <button
+                            type="button"
+                            disabled={updatingId === t._id}
+                            onClick={() => handleQuickStatus(t._id, "Open", t.ticketNumber)}
+                            className="px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white rounded-lg text-xs font-semibold border border-blue-200 transition-all cursor-pointer flex items-center gap-1 shadow-xs disabled:opacity-50"
+                            title="Reopen Ticket"
+                          >
+                            ↺ Reopen
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => open(t._id)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                            openId === t._id
+                              ? "bg-[var(--primary-color)] text-white border-transparent"
+                              : "bg-[var(--brand-leaf-tint,#EAF5E0)] text-[var(--brand-green,#236B34)] hover:bg-[var(--brand-green,#236B34)] hover:text-white border-[var(--brand-leaf,#5FA82E)]/30"
+                          }`}
+                        >
+                          {openId === t._id ? "Viewing" : "View"}
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -271,31 +358,74 @@ export default function AdminSupportTickets() {
                     </div>
                     <div className="text-xs text-gray-500">Raised {when(ticket.createdAt)}</div>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3 text-sm">
-                    <label className="flex items-center gap-2 text-gray-600">
-                      Status
-                      <select
-                        value={ticket.status}
-                        onChange={(e) => update(() => setTicketStatus(ticket._id, e.target.value as TicketStatus))}
-                        className="rounded border px-2 py-1 text-sm"
-                      >
-                        {TICKET_STATUSES.map((s) => (
-                          <option key={s}>{s}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="flex items-center gap-2 text-gray-600">
-                      Priority
-                      <select
-                        value={ticket.priority}
-                        onChange={(e) => update(() => setTicketPriority(ticket._id, e.target.value as TicketPriority))}
-                        className="rounded border px-2 py-1 text-sm"
-                      >
-                        {TICKET_PRIORITIES.map((p) => (
-                          <option key={p}>{p}</option>
-                        ))}
-                      </select>
-                    </label>
+                  {/* Ticket Detail Actions Bar */}
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {ticket.status !== "Resolved" && ticket.status !== "Closed" && (
+                        <button
+                          type="button"
+                          disabled={updatingId === ticket._id}
+                          onClick={() => handleQuickStatus(ticket._id, "Resolved", ticket.ticketNumber)}
+                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          ✓ Mark as Resolved
+                        </button>
+                      )}
+                      {ticket.status !== "Closed" && (
+                        <button
+                          type="button"
+                          disabled={updatingId === ticket._id}
+                          onClick={() => handleQuickStatus(ticket._id, "Closed", ticket.ticketNumber)}
+                          className="px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold border border-gray-200 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          ✕ Close Ticket
+                        </button>
+                      )}
+                      {(ticket.status === "Resolved" || ticket.status === "Closed") && (
+                        <button
+                          type="button"
+                          disabled={updatingId === ticket._id}
+                          onClick={() => handleQuickStatus(ticket._id, "Open", ticket.ticketNumber)}
+                          className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700 rounded-lg text-xs font-bold border border-blue-200 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          ↺ Reopen Ticket
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-600">
+                        Status:
+                        <select
+                          value={ticket.status}
+                          disabled={updatingId === ticket._id}
+                          onChange={(e) => handleQuickStatus(ticket._id, e.target.value as TicketStatus, ticket.ticketNumber)}
+                          className={`rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-semibold cursor-pointer outline-none bg-white shadow-2xs ${
+                            STATUS_STYLES[ticket.status] || "text-gray-700"
+                          } ${updatingId === ticket._id ? "opacity-50" : ""}`}
+                        >
+                          {TICKET_STATUSES.map((s) => (
+                            <option key={s} value={s} className="bg-white text-gray-800 font-normal">
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-600">
+                        Priority:
+                        <select
+                          value={ticket.priority}
+                          onChange={(e) => update(() => setTicketPriority(ticket._id, e.target.value as TicketPriority))}
+                          className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-semibold bg-white cursor-pointer outline-none shadow-2xs"
+                        >
+                          {TICKET_PRIORITIES.map((p) => (
+                            <option key={p} value={p}>
+                              {p}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
                   </div>
                 </div>
                 <div className="rounded-xl bg-gray-50 p-3">

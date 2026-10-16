@@ -53,15 +53,15 @@ export default function FeaturedThisWeek() {
 
   return (
     <div className="mb-6 mt-6">
-      <h2 className="text-lg font-semibold text-neutral-900 mb-3 px-4 tracking-tight">
+      <h2 className="text-lg font-display font-bold text-[var(--brand-green-deep,#14401F)] mb-3 px-4 tracking-tight">
         Featured this week
       </h2>
       <div className="px-4">
         <div className="flex gap-2.5 overflow-x-auto scrollbar-hide -mx-4 px-4 scroll-smooth">
           <div className="flex-shrink-0 w-[110px]">
-            <div className="bg-gradient-to-br from-yellow-50 via-yellow-100 to-yellow-50 border-2 border-yellow-300 rounded-2xl overflow-hidden relative h-48 shadow-lg hover:shadow-xl transition-shadow">
+            <div className="bg-gradient-to-br from-[var(--brand-leaf-tint,#EAF5E0)] via-[var(--brand-cream-soft,#F6EFE2)] to-[var(--brand-cream,#FDF9F2)] border-2 border-[var(--brand-border,#E9E2D3)] rounded-2xl overflow-hidden relative h-48 shadow-lg hover:shadow-xl transition-shadow">
               <div className="absolute top-0 left-0 right-0 z-20">
-                <div className="bg-gradient-to-r from-red-600 via-orange-500 to-red-600 rounded-b-3xl px-3 py-2 text-center shadow-lg relative overflow-hidden">
+                <div className="bg-[var(--gradient-signature)] rounded-b-3xl px-3 py-2 text-center shadow-lg relative overflow-hidden">
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
                   <div className="text-white text-[9px] font-black uppercase leading-tight tracking-wider relative z-10">
                     <div>NEWLY</div>
@@ -111,27 +111,27 @@ export default function FeaturedThisWeek() {
                 <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,_white_1px,_transparent_1px)] bg-[length:20px_20px]"></div>
               </div>
               <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20">
-                <div className="bg-gradient-to-r from-[var(--customer-primary)] to-[var(--customer-primary-dark)] px-3 py-1 rounded-full shadow-lg border border-red-400/50">
+                <div className="bg-[var(--brand-green,#236B34)] px-3 py-1 rounded-full shadow-lg border border-[var(--brand-leaf-light,#8CC63F)]/40">
                   <span className="text-white text-[9px] font-black tracking-wide">Featured</span>
                 </div>
               </div>
               <div className="absolute top-8 right-3 w-12 h-12 bg-yellow-400/20 rounded-full blur-md"></div>
-              <div className="absolute bottom-8 left-3 w-10 h-10 bg-[var(--customer-primary)]/20 rounded-full blur-md"></div>
+              <div className="absolute bottom-8 left-3 w-10 h-10 bg-[var(--brand-leaf,#5FA82E)]/20 rounded-full blur-md"></div>
               <div className="flex items-center justify-center h-full px-2 relative z-10">
                 <div className="text-center">
                   <div
                     className="text-yellow-400 text-3xl font-black mb-0.5 transform group-hover:scale-105 transition-transform"
                     style={{
-                      textShadow: '2px 2px 0px #1e3a8a, 3px 3px 6px rgba(0,0,0,0.3)',
+                      textShadow: '2px 2px 0px #14401F, 3px 3px 6px rgba(0,0,0,0.3)',
                       letterSpacing: '2px'
                     }}
                   >
                     PRICE
                   </div>
                   <div
-                    className="text-red-400 text-3xl font-black transform group-hover:scale-105 transition-transform"
+                    className="text-orange-400 text-3xl font-black transform group-hover:scale-105 transition-transform"
                     style={{
-                      textShadow: '2px 2px 0px #1e3a8a, 3px 3px 6px rgba(0,0,0,0.3)',
+                      textShadow: '2px 2px 0px #14401F, 3px 3px 6px rgba(0,0,0,0.3)',
                       letterSpacing: '2px'
                     }}
                   >
@@ -145,13 +145,13 @@ export default function FeaturedThisWeek() {
           <div className="flex-shrink-0 w-[110px]">
             <Link
               to="/category/biscuits-bakery"
-              className="block bg-gradient-to-br from-red-900 via-red-800 to-red-900 border-2 border-white/30 rounded-2xl overflow-hidden relative h-48 shadow-lg hover:shadow-xl transition-shadow group"
+              className="block bg-gradient-to-br from-[var(--brand-green-deep,#14401F)] via-[var(--brand-green-dark,#1B5128)] to-[var(--brand-green-deep,#14401F)] border-2 border-[var(--brand-border,#E9E2D3)] rounded-2xl overflow-hidden relative h-48 shadow-lg hover:shadow-xl transition-shadow group"
             >
               <div className="absolute inset-0 opacity-5">
                 <div className="absolute inset-0 bg-[linear-gradient(45deg,_transparent_25%,_white_25%,_white_50%,_transparent_50%,_transparent_75%,_white_75%,_white)] bg-[length:20px_20px]"></div>
               </div>
               <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20">
-                <div className="bg-gradient-to-r from-[var(--customer-primary)] to-[var(--customer-primary-dark)] px-3 py-1 rounded-full shadow-lg border border-red-400/50">
+                <div className="bg-[var(--brand-green,#236B34)] px-3 py-1 rounded-full shadow-lg border border-[var(--brand-leaf-light,#8CC63F)]/40">
                   <span className="text-white text-[9px] font-black tracking-wide">Featured</span>
                 </div>
               </div>
@@ -173,13 +173,13 @@ export default function FeaturedThisWeek() {
           <div className="flex-shrink-0 w-[110px]">
             <Link
               to="/category/fruits-veg"
-              className="block bg-gradient-to-br from-green-600 via-green-500 to-green-600 border-2 border-green-400 rounded-2xl overflow-hidden relative h-48 shadow-lg hover:shadow-xl transition-shadow group"
+              className="block bg-gradient-to-br from-[var(--brand-leaf,#5FA82E)] via-[var(--brand-green,#236B34)] to-[var(--brand-green-deep,#14401F)] border-2 border-[var(--brand-leaf-light,#8CC63F)]/40 rounded-2xl overflow-hidden relative h-48 shadow-lg hover:shadow-xl transition-shadow group"
             >
               <div className="absolute inset-0 opacity-10">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,_white_2px,_transparent_2px)] bg-[length:30px_30px]"></div>
               </div>
               <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20">
-                <div className="bg-gradient-to-r from-green-700 to-green-600 px-3 py-1 rounded-full shadow-lg border border-green-400/50">
+                <div className="bg-[var(--brand-green-deep,#14401F)] px-3 py-1 rounded-full shadow-lg border border-white/20">
                   <span className="text-white text-[9px] font-black tracking-wide">Featured</span>
                 </div>
               </div>

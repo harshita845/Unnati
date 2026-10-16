@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Suspense, lazy, startTransition } from "react";
+import { MotionConfig } from "framer-motion";
 import { CartProvider } from "./context/CartContext";
 import { OrdersProvider } from "./context/OrdersContext";
 import { AuthProvider } from "./context/AuthContext";
@@ -317,6 +318,8 @@ function NotificationHandler() {
 function App() {
   return (
     <ErrorBoundary>
+      {/* Every framer-motion animation respects the device's "reduce motion" setting */}
+      <MotionConfig reducedMotion="user">
       <LoadingProvider>
         <AxiosLoadingInterceptor>
           <AppProvider>
@@ -734,6 +737,7 @@ function App() {
           </AppProvider>
         </AxiosLoadingInterceptor>
       </LoadingProvider>
+      </MotionConfig>
     </ErrorBoundary>
   );
 }

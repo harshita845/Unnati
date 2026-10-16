@@ -15,6 +15,12 @@ import { useAppContext } from '../../../context/AppContext';
 import { useAuth } from '../../../context/AuthContext';
 import { useCart } from '../../../context/CartContext';
 import LocationPermissionRequest from '../../../components/LocationPermissionRequest';
+import VoiceSearchModal from '../../../components/VoiceSearchModal';
+import QRScannerModal from '../../../components/QRScannerModal';
+import { openBarcodeScanner } from '../../../utils/scannerPlatform';
+import { duration, ease, fadeDown, spring, staggerContainer, tap, tapSoft } from '../../../lib/motion';
+
+const MotionLink = motion(Link);
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -104,7 +110,7 @@ const LanguageDropdown = ({ language, setLanguage, isSticky, themeKey }: Languag
   // Extract primary color for active state
   // Theme usually returns colors like '#HEX' or 'rgb(...)'.
   // We'll use a fallback or try to use the theme's primary color.
-  const activeColor = theme.primary && theme.primary[0] ? theme.primary[0] : '#0d9488'; // Defaulting to teal-like if fail
+  const activeColor = theme.primary && theme.primary[0] ? theme.primary[0] : 'var(--brand-green, #236B34)';
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -275,6 +281,8 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [showScannerModal, setShowScannerModal] = useState(false);
 
   const checkScrollLimits = () => {
     const container = tabsContainerRef.current;
@@ -539,43 +547,58 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
               }
             }}
           >
-            {tabs.map((tab) => {
+            {tabs.map((tab, tabIndex) => {
               const isActive = activeTab === tab.id;
               const themeObj = tab.theme ? getTheme(tab.theme) : null;
               const activeColor = tab.theme?.startsWith('#') 
                 ? tab.theme 
-                : (themeObj?.primary?.[0] || '#163F2E');
+                : (themeObj?.primary?.[0] || 'var(--brand-green, #236B34)');
 
               return (
-                <button
+                <motion.button
                   key={tab.id}
-                  ref={(el) => { if (el) tabRefs.current.set(tab.id, el); else tabRefs.current.delete(tab.id); }}
+                  ref={(el: HTMLButtonElement | null) => { if (el) tabRefs.current.set(tab.id, el); else tabRefs.current.delete(tab.id); }}
                   onClick={() => handleTabClick(tab.id)}
-                  style={isActive && tab.theme?.startsWith('#') ? { borderColor: activeColor } : undefined}
-                  className={`flex-shrink-0 flex flex-col items-center justify-between w-[56px] h-[60px] md:w-[74px] md:h-[78px] p-1.5 rounded-xl transition-all duration-200 group border cursor-pointer ${
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: duration.base, ease: ease.out, delay: Math.min(tabIndex, 8) * 0.035 }}
+                  whileTap={tap}
+                  className={`relative flex-shrink-0 flex flex-col items-center justify-between w-[56px] h-[60px] md:w-[74px] md:h-[78px] p-1.5 rounded-xl transition-colors duration-200 group border cursor-pointer ${
                     isActive
-                      ? 'border-[#163F2E] md:border-[#34d399] bg-[#e6f7f2] shadow-sm text-[#059669]'
+                      ? 'border-transparent text-[#059669]'
                       : 'border-neutral-200 bg-white hover:border-neutral-300 shadow-[0_1px_2px_rgba(0,0,0,0.03)] text-neutral-600 hover:text-neutral-900'
                   }`}
                   type="button"
                 >
-                  <div className="w-full flex-1 flex items-center justify-center overflow-hidden p-0">
-                    <div 
+                  {/* The active highlight slides from chip to chip */}
+                  {isActive && (
+                    <motion.span
+                      layoutId="home-chip-active"
+                      transition={spring.snappy}
+                      style={tab.theme?.startsWith('#') ? { borderColor: activeColor } : undefined}
+                      className="absolute -inset-px rounded-xl border-2 border-[var(--brand-green,#236B34)] bg-[var(--brand-leaf-tint,#EAF5E0)] shadow-xs"
+                      aria-hidden="true"
+                    />
+                  )}
+                  <div className="relative w-full flex-1 flex items-center justify-center overflow-hidden p-0">
+                    <motion.div
                       style={isActive && tab.theme?.startsWith('#') ? { color: activeColor } : undefined}
-                      className="w-[19px] h-[19px] md:w-[25px] md:h-[25px] flex items-center justify-center flex-shrink-0 [&>svg]:w-full [&>svg]:h-full [&>img]:w-full [&>img]:h-full [&>img]:object-contain transition-transform duration-200 group-hover:scale-105"
+                      animate={isActive ? { scale: [1, 1.2, 1] } : { scale: 1 }}
+                      transition={{ duration: duration.slow, ease: ease.out }}
+                      className="w-[19px] h-[19px] md:w-[25px] md:h-[25px] flex items-center justify-center flex-shrink-0 [&>svg]:w-full [&>svg]:h-full [&>img]:w-full [&>img]:h-full [&>img]:object-contain"
                     >
                       {tab.icon}
-                    </div>
+                    </motion.div>
                   </div>
                   <span
                     style={isActive && tab.theme?.startsWith('#') ? { color: activeColor } : undefined}
-                    className={`text-[9px] md:text-[11.5px] leading-tight text-center font-sans truncate w-full px-0.5 ${
-                      isActive ? 'font-bold text-[#059669]' : 'font-medium text-neutral-600 group-hover:text-neutral-900'
+                    className={`relative text-[9px] md:text-[11.5px] leading-tight text-center font-sans truncate w-full px-0.5 ${
+                      isActive ? 'font-bold text-[var(--brand-green,#236B34)]' : 'font-medium text-neutral-600 group-hover:text-neutral-900'
                     }`}
                   >
                     {tab.label.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}
                   </span>
-                </button>
+                </motion.button>
               )
             })}
           </div>
@@ -586,7 +609,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
           >
             <button
               onClick={() => scrollTabs('right')}
-              className="w-10 h-10 rounded-full bg-[#1e3a8a]/80 hover:bg-[#1e3a8a] text-white flex items-center justify-center transition-all duration-300 shadow-md active:scale-95"
+              className="w-10 h-10 rounded-full bg-[var(--brand-green,#236B34)] hover:bg-[var(--brand-green-dark,#1B5128)] text-white flex items-center justify-center transition-all duration-300 shadow-md active:scale-95"
               type="button"
               aria-label="Scroll right"
             >
@@ -612,30 +635,31 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
         {/* Row 1: Logo & Branding Text (Left) + Lang & Notif (Right) */}
         <div className="flex items-center justify-between">
           {/* Logo & Branding Text */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-11 h-11 rounded-full overflow-hidden border border-neutral-200 bg-white flex items-center justify-center p-0.5 shadow-sm">
+          <motion.div className="flex items-center gap-2.5" variants={staggerContainer(0.08)} initial="hidden" animate="show">
+            <motion.div variants={fadeDown} className="w-11 h-11 rounded-full overflow-hidden border border-[var(--brand-border,#E9E2D3)] bg-white flex items-center justify-center p-0.5 shadow-sm">
               <img
-                src={config?.appLogo || "/assets/unnati_logo.png"}
+                src={config?.appLogo || "/brand/unnati-logo.png"}
                 alt={config?.appName || "Unnati"}
                 className="w-full h-full object-contain"
               />
-            </div>
-            <div className="flex flex-col text-left min-w-0">
-              <span className="text-[12px] min-[360px]:text-[13px] sm:text-sm font-extrabold tracking-tight leading-tight text-[#163F2E] whitespace-nowrap">
+            </motion.div>
+            <motion.div variants={fadeDown} className="flex flex-col text-left min-w-0">
+              <span className="font-display text-[13px] min-[360px]:text-[14px] sm:text-base font-extrabold tracking-tight leading-tight text-[var(--brand-green,#236B34)] whitespace-nowrap">
                 Everything You Need,
               </span>
-              <span className="text-[12px] min-[360px]:text-[13px] sm:text-sm font-extrabold text-[#d97706] mt-0.5 ml-1 opacity-90 leading-tight whitespace-nowrap">
+              <span className="font-display text-[13px] min-[360px]:text-[14px] sm:text-base font-extrabold text-[var(--brand-orange,#F97316)] mt-0.5 ml-1 leading-tight whitespace-nowrap">
                 All in One Place.
               </span>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
 
           {/* Lang & Notif Icons */}
           <div className="flex items-center gap-2.5">
             {/* Language / Hamburger Button */}
-            <button
+            <motion.button
               onClick={() => setIsMenuOpen(true)}
-              className="w-8 h-8 rounded-full border border-neutral-200/80 flex items-center justify-center hover:bg-neutral-50 active:scale-95 transition-all text-neutral-600 shadow-sm"
+              whileTap={tap}
+              className="w-8 h-8 rounded-full border border-neutral-200/80 flex items-center justify-center hover:bg-neutral-50 transition-colors text-neutral-600 shadow-sm"
               aria-label="Open menu"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -643,50 +667,71 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                 <line x1="2" y1="12" x2="22" y2="12" />
                 <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
               </svg>
-            </button>
+            </motion.button>
 
             {/* Notification Bell */}
-            <Link
+            <MotionLink
               to="/account"
-              className="w-8 h-8 rounded-full border border-neutral-200/80 flex items-center justify-center hover:bg-neutral-50 active:scale-95 transition-all text-neutral-600 shadow-sm relative"
+              whileTap={tap}
+              className="w-8 h-8 rounded-full border border-neutral-200/80 flex items-center justify-center hover:bg-neutral-50 transition-colors text-neutral-600 shadow-sm relative"
               aria-label="Notifications"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                 <path d="M13.73 21a2 2 0 0 1-3.46 0" />
               </svg>
-            </Link>
+            </MotionLink>
           </div>
         </div>
 
         {/* Row 2: Deliver To dropdown */}
-        <div
+        <motion.div
           className="max-w-[80%] border border-neutral-100/90 rounded-2xl py-2 px-3 flex items-center justify-between bg-white cursor-pointer shadow-[0_1px_4px_rgba(0,0,0,0.015)] active:bg-neutral-50 transition-colors"
           onClick={() => setShowLocationModal(true)}
+          whileTap={tapSoft}
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 text-[#d97706]">
+            <motion.svg
+              width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 text-[var(--brand-orange,#F97316)]"
+              animate={{ y: [0, -2, 0] }}
+              transition={{ duration: 0.6, ease: 'easeInOut', repeat: Infinity, repeatDelay: 3.5 }}
+            >
               <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
               <circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+            </motion.svg>
             <div className="flex flex-col text-left min-w-0">
               <span className="text-[9px] uppercase tracking-wider font-extrabold text-[#707c97] leading-none">
                 DELIVER TO
               </span>
-              <span className="text-[12px] font-extrabold text-[#111827] truncate max-w-[180px] mt-0.5 leading-tight">
-                {isLocationLoading ? 'Updating Location...' : (locationDisplayText || 'Select Delivery Location')}
-              </span>
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span
+                  key={isLocationLoading ? 'loading' : (locationDisplayText || 'none')}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: duration.fast }}
+                  className="text-[12px] font-extrabold text-[#111827] truncate max-w-[180px] mt-0.5 leading-tight"
+                >
+                  {isLocationLoading ? 'Updating Location...' : (locationDisplayText || 'Select Delivery Location')}
+                </motion.span>
+              </AnimatePresence>
             </div>
           </div>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 text-neutral-400 ml-2">
+          <motion.svg
+            width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 text-neutral-400 ml-2"
+            animate={{ rotate: showLocationModal ? 180 : 0 }}
+            transition={spring.snappy}
+          >
             <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
+          </motion.svg>
+        </motion.div>
 
-        {/* Row 3: Capsule Search Bar (Less Compact / More Spaced out) */}
-        <div
+        {/* Row 3: Capsule Search Bar */}
+        <motion.div
           onClick={() => navigate('/search')}
-          className="w-full rounded-full py-2 px-3.5 flex items-center justify-between cursor-pointer border border-[#163F2E] bg-white shadow-[0_2px_8px_rgba(22,63,46,0.06)] active:scale-[0.99] transition-all overflow-hidden box-border"
+          whileTap={{ scale: 0.98 }}
+          whileHover={{ boxShadow: '0 4px 14px rgba(35,107,52,0.14)' }}
+          className="w-full rounded-full py-2 px-3.5 flex items-center justify-between cursor-pointer border-2 border-[var(--brand-green,#236B34)] bg-white shadow-[0_2px_8px_rgba(35,107,52,0.06)] overflow-hidden box-border"
         >
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
@@ -712,23 +757,45 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
             </div>
           </div>
           <div className="flex items-center gap-2.5 flex-shrink-0 ml-1.5">
-            {/* Mic Icon */}
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-400">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-              <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
-              <line x1="12" y1="19" x2="12" y2="23" />
-              <line x1="8" y1="23" x2="16" y2="23" />
-            </svg>
-            {/* Scanner Barcode Icon (Dark Green) */}
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#163F2E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-              <path d="M3 7V5a2 2 0 0 1 2-2h2" />
-              <path d="M17 3h2a2 2 0 0 1 2 2v2" />
-              <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
-              <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
-              <rect x="7" y="7" width="10" height="10" rx="1" />
-            </svg>
+            {/* Mic Icon Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowVoiceModal(true);
+              }}
+              className="p-1 -m-1 text-neutral-500 hover:text-[var(--brand-green,#236B34)] active:scale-90 transition-all flex items-center justify-center cursor-pointer rounded-full"
+              title="Voice Search"
+              aria-label="Voice Search"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                <line x1="12" y1="19" x2="12" y2="23" />
+                <line x1="8" y1="23" x2="16" y2="23" />
+              </svg>
+            </button>
+            {/* Scanner Barcode Icon Button (Brand Green) */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                openBarcodeScanner(() => setShowScannerModal(true));
+              }}
+              className="p-1 -m-1 text-[var(--brand-green,#236B34)] hover:text-[var(--brand-green-dark,#1B5128)] active:scale-90 transition-all flex items-center justify-center cursor-pointer rounded-full flex-shrink-0"
+              title="Scan Barcode / QR Code"
+              aria-label="Scan Barcode / QR Code"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+                <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+                <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+                <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+                <rect x="7" y="7" width="10" height="10" rx="1" />
+              </svg>
+            </button>
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Hamburger Menu Drawer */}
@@ -967,6 +1034,30 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
           isChangeMode={true}
           title="Choose Delivery Location"
           description="Update your location to view available stores and products near you."
+        />
+      )}
+
+      {/* Voice Search Modal */}
+      <VoiceSearchModal
+        isOpen={showVoiceModal}
+        onClose={() => setShowVoiceModal(false)}
+        onSearchResult={(query) => {
+          navigate(`/search?q=${encodeURIComponent(query)}`);
+        }}
+      />
+
+      {/* Barcode Scanner Modal */}
+      {showScannerModal && (
+        <QRScannerModal
+          title="Scan Product Barcode"
+          manualPlaceholder="Enter barcode number to search"
+          onScanSuccess={(decodedText) => {
+            setShowScannerModal(false);
+            if (decodedText) {
+              navigate(`/search?q=${encodeURIComponent(decodedText)}`);
+            }
+          }}
+          onClose={() => setShowScannerModal(false)}
         />
       )}
     </div>

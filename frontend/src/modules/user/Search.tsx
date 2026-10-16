@@ -23,6 +23,9 @@ import {
 } from "../../services/api/searchService";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { useLocation } from "../../hooks/useLocation";
+import VoiceSearchModal from "../../components/VoiceSearchModal";
+import QRScannerModal from "../../components/QRScannerModal";
+import { openBarcodeScanner } from "../../utils/scannerPlatform";
 
 type SortOption = "relevance" | "price_asc" | "price_desc" | "popular";
 
@@ -68,6 +71,8 @@ export default function Search() {
   const [minPrice, setMinPrice] = useState(searchParams.get("minPrice") || "");
   const [maxPrice, setMaxPrice] = useState(searchParams.get("maxPrice") || "");
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [showScannerModal, setShowScannerModal] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [selectedQuery, setSelectedQuery] = useState(initialQuery);
   const debouncedQuery = useDebouncedValue(inputValue, 300);
@@ -329,12 +334,12 @@ export default function Search() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 pb-24 md:pb-8">
-      <div className="sticky top-0 z-40 border-b border-neutral-200 bg-white/95 backdrop-blur md:hidden">
+    <div className="min-h-screen bg-[var(--brand-cream,#FDF9F2)] pb-24 md:pb-8">
+      <div className="sticky top-0 z-40 border-b border-[var(--brand-border,#E9E2D3)] bg-[var(--brand-cream,#FDF9F2)]/95 backdrop-blur md:hidden">
         <div className="mx-auto max-w-7xl px-4 py-3 md:px-6">
           <div ref={suggestionBoxRef} className="relative">
-            <div className="flex h-12 items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 shadow-sm">
-              <SearchIcon className="h-5 w-5 text-neutral-500" aria-hidden="true" />
+            <div className="flex h-12 items-center gap-2 rounded-xl border border-[var(--brand-border,#E9E2D3)] bg-white px-3 shadow-sm focus-within:border-[var(--brand-leaf,#5FA82E)] focus-within:ring-2 focus-within:ring-[var(--brand-leaf,#5FA82E)]/20 transition-all">
+              <SearchIcon className="h-5 w-5 text-[var(--brand-green,#236B34)]" aria-hidden="true" />
               <input
                 value={inputValue}
                 onChange={(event) => {
@@ -345,10 +350,10 @@ export default function Search() {
                 onFocus={() => setShowSuggestions(true)}
                 onKeyDown={handleKeyDown}
                 placeholder="Search for atta, dal, coke and more"
-                className="h-full min-w-0 flex-1 bg-transparent text-sm font-medium text-neutral-900 outline-none placeholder:text-neutral-400 md:text-base"
+                className="h-full min-w-0 flex-1 bg-transparent text-sm font-medium text-[var(--brand-ink,#1C2B20)] outline-none placeholder:text-neutral-400 md:text-base"
                 aria-label="Search products"
               />
-              {suggestionsLoading && <Loader2 className="h-4 w-4 animate-spin text-neutral-400" />}
+              {suggestionsLoading && <Loader2 className="h-4 w-4 animate-spin text-[var(--brand-green,#236B34)]" />}
               {inputValue && (
                 <button
                   type="button"
@@ -359,10 +364,41 @@ export default function Search() {
                   <X className="h-4 w-4" />
                 </button>
               )}
+              {/* Mic Icon Button */}
+              <button
+                type="button"
+                onClick={() => setShowVoiceModal(true)}
+                className="p-1.5 text-neutral-500 hover:text-[var(--brand-green,#236B34)] active:scale-90 transition-all flex items-center justify-center cursor-pointer rounded-full"
+                title="Voice Search"
+                aria-label="Voice Search"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
+                </svg>
+              </button>
+              {/* Scanner Barcode Icon Button (Brand Green) */}
+              <button
+                type="button"
+                onClick={() => openBarcodeScanner(() => setShowScannerModal(true))}
+                className="p-1.5 text-[var(--brand-green,#236B34)] hover:text-[var(--brand-green-dark,#1B5128)] active:scale-90 transition-all flex items-center justify-center cursor-pointer rounded-full flex-shrink-0"
+                title="Scan Barcode / QR Code"
+                aria-label="Scan Barcode / QR Code"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                  <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+                  <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+                  <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+                  <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+                  <rect x="7" y="7" width="10" height="10" rx="1" />
+                </svg>
+              </button>
             </div>
 
             {showSuggestions && visibleSuggestions.length > 0 && (
-              <div className="absolute left-0 right-0 top-14 z-50 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-xl">
+              <div className="absolute left-0 right-0 top-14 z-50 overflow-hidden rounded-2xl border border-[var(--brand-border,#E9E2D3)] bg-white shadow-xl">
                 {visibleSuggestions.map((item, index) => (
                   <button
                     key={`${item.type}-${item.id}-${item.name}`}
@@ -370,29 +406,29 @@ export default function Search() {
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => handleSuggestionClick(item)}
                     className={`flex w-full items-center gap-3 px-3 py-2 text-left transition-colors ${
-                      activeSuggestionIndex === index ? "bg-neutral-100" : "hover:bg-neutral-50"
+                      activeSuggestionIndex === index ? "bg-[var(--brand-cream-soft,#F6EFE2)]" : "hover:bg-[var(--brand-cream-soft,#F6EFE2)]/50"
                     }`}
                   >
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-neutral-100 text-neutral-500">
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[var(--brand-leaf-tint,#EAF5E0)] text-[var(--brand-green,#236B34)]">
                       {item.image ? (
-                        <img src={item.image} alt="" className="h-full w-full rounded-md object-contain" />
+                        <img src={item.image} alt="" className="h-full w-full rounded-xl object-contain" />
                       ) : item.type === "trending" ? (
-                        <TrendingUp className="h-4 w-4" />
+                        <TrendingUp className="h-4 w-4 text-[var(--brand-orange,#F97316)]" />
                       ) : (
                         <SearchIcon className="h-4 w-4" />
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-neutral-900">{item.name}</p>
-                      {suggestionSubtitle(item) && <p className="truncate text-xs text-neutral-500">{suggestionSubtitle(item)}</p>}
+                      <p className="truncate text-sm font-semibold text-[var(--brand-ink,#1C2B20)]">{item.name}</p>
+                      {suggestionSubtitle(item) && <p className="truncate text-xs text-[var(--brand-ink-muted,#5B6B60)]">{suggestionSubtitle(item)}</p>}
                     </div>
                     {item.type === "product" && Number(item.price) > 0 && (
                       <span className="flex-shrink-0 text-right">
-                        <span className="block text-sm font-bold text-[var(--customer-primary)]">
+                        <span className="font-price block text-sm font-bold text-[var(--brand-green-deep,#14401F)]">
                           Rs {Number(item.price).toLocaleString("en-IN")}
                         </span>
                         {Number(item.mrp) > Number(item.price) && (
-                          <span className="block text-[10px] text-neutral-400 line-through">Rs {Number(item.mrp).toLocaleString("en-IN")}</span>
+                          <span className="font-price block text-[10px] text-neutral-400 line-through">Rs {Number(item.mrp).toLocaleString("en-IN")}</span>
                         )}
                       </span>
                     )}
@@ -411,30 +447,30 @@ export default function Search() {
               key={chip}
               type="button"
               onClick={() => applySearch(chip)}
-              className="flex flex-shrink-0 items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 shadow-sm hover:border-[var(--customer-primary)] hover:text-[var(--customer-primary)]"
+              className="flex flex-shrink-0 items-center gap-1.5 rounded-full border border-[var(--brand-border,#E9E2D3)] bg-white px-3.5 py-2 text-xs font-semibold text-[var(--brand-ink,#1C2B20)] shadow-sm hover:border-[var(--brand-leaf,#5FA82E)] hover:text-[var(--brand-green,#236B34)] hover:bg-[var(--brand-leaf-tint,#EAF5E0)] transition-colors"
             >
-              <TrendingUp className="h-3.5 w-3.5" />
+              <TrendingUp className="h-3.5 w-3.5 text-[var(--brand-orange,#F97316)]" />
               {chip}
             </button>
           ))}
         </div>
 
-        <div className="mb-4 rounded-lg border border-neutral-200 bg-white p-3">
+        <div className="mb-4 rounded-2xl border border-[var(--brand-border,#E9E2D3)] bg-white p-3 shadow-[0_4px_16px_rgba(35,107,52,0.04)]">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-2 text-sm font-semibold text-neutral-800">
-              <Sparkles className="h-4 w-4 text-[var(--customer-primary)]" />
+            <div className="flex items-center gap-2 text-sm font-semibold text-[var(--brand-ink,#1C2B20)]">
+              <Sparkles className="h-4 w-4 text-[var(--brand-orange,#F97316)]" />
               {activeQuery.trim()
                 ? `${totalResults.toLocaleString("en-IN")} results for "${activeQuery.trim()}"`
                 : "Trending searches"}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-2 rounded-lg border border-neutral-200 px-2 py-1.5">
+              <div className="flex items-center gap-2 rounded-xl border border-[var(--brand-border,#E9E2D3)] px-2.5 py-1.5 bg-neutral-50/50">
                 <SlidersHorizontal className="h-4 w-4 text-neutral-500" />
                 <input
                   value={minPrice}
                   onChange={(event) => setMinPrice(event.target.value.replace(/[^\d]/g, ""))}
                   placeholder="Min"
-                  className="w-16 text-xs outline-none"
+                  className="w-16 text-xs outline-none bg-transparent"
                   inputMode="numeric"
                   aria-label="Minimum price"
                 />
@@ -443,17 +479,17 @@ export default function Search() {
                   value={maxPrice}
                   onChange={(event) => setMaxPrice(event.target.value.replace(/[^\d]/g, ""))}
                   placeholder="Max"
-                  className="w-16 text-xs outline-none"
+                  className="w-16 text-xs outline-none bg-transparent"
                   inputMode="numeric"
                   aria-label="Maximum price"
                 />
               </div>
-              <div className="flex items-center gap-2 rounded-lg border border-neutral-200 px-2 py-1.5">
+              <div className="flex items-center gap-2 rounded-xl border border-[var(--brand-border,#E9E2D3)] px-2.5 py-1.5 bg-neutral-50/50">
                 <ArrowDownUp className="h-4 w-4 text-neutral-500" />
                 <select
                   value={sort}
                   onChange={(event) => setSort(event.target.value as SortOption)}
-                  className="bg-white text-xs font-semibold text-neutral-700 outline-none"
+                  className="bg-transparent text-xs font-semibold text-[var(--brand-ink,#1C2B20)] outline-none"
                   aria-label="Sort results"
                 >
                   {Object.entries(sortLabels).map(([value, label]) => (
@@ -469,10 +505,10 @@ export default function Search() {
 
         {loading ? (
           <div className="flex justify-center py-16">
-            <Loader2 className="h-9 w-9 animate-spin text-[var(--customer-primary)]" />
+            <Loader2 className="h-9 w-9 animate-spin text-[var(--brand-green,#236B34)]" />
           </div>
         ) : error ? (
-          <div className="rounded-lg border border-red-100 bg-white px-4 py-12 text-center text-sm font-medium text-red-600">
+          <div className="rounded-2xl border border-red-100 bg-white px-4 py-12 text-center text-sm font-medium text-red-600 shadow-sm">
             {error}
           </div>
         ) : debouncedQuery.trim() && results.length > 0 ? (
@@ -481,7 +517,7 @@ export default function Search() {
               {results.map((product) => (
                 <div key={product.id || product._id} className="relative">
                   {product.searchScore && (
-                    <div className="absolute right-2 top-2 z-20 rounded-full bg-white/95 px-2 py-1 text-[10px] font-black text-[var(--customer-primary)] shadow-sm">
+                    <div className="absolute right-2 top-2 z-20 rounded-full bg-white/95 px-2 py-1 text-[10px] font-black text-[var(--brand-green,#236B34)] border border-[var(--brand-border,#E9E2D3)] shadow-sm">
                       {Math.round(product.searchScore.finalScore * 100)}%
                     </div>
                   )}
@@ -496,19 +532,19 @@ export default function Search() {
                   type="button"
                   onClick={() => setPage((value) => Math.max(1, value - 1))}
                   disabled={page <= 1}
-                  className="flex h-10 w-10 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 disabled:opacity-40"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--brand-border,#E9E2D3)] bg-white text-[var(--brand-ink,#1C2B20)] disabled:opacity-40 hover:bg-[var(--brand-leaf-tint,#EAF5E0)] transition-colors"
                   aria-label="Previous page"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
-                <span className="text-sm font-semibold text-neutral-700">
+                <span className="font-price text-sm font-semibold text-[var(--brand-ink,#1C2B20)]">
                   {page} / {totalPages}
                 </span>
                 <button
                   type="button"
                   onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
                   disabled={page >= totalPages}
-                  className="flex h-10 w-10 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 disabled:opacity-40"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--brand-border,#E9E2D3)] bg-white text-[var(--brand-ink,#1C2B20)] disabled:opacity-40 hover:bg-[var(--brand-leaf-tint,#EAF5E0)] transition-colors"
                   aria-label="Next page"
                 >
                   <ChevronRight className="h-4 w-4" />
@@ -517,9 +553,9 @@ export default function Search() {
             )}
           </>
         ) : debouncedQuery.trim() ? (
-          <div className="rounded-lg border border-neutral-200 bg-white px-4 py-14 text-center">
-            <p className="text-base font-semibold text-neutral-900">No products found</p>
-            <p className="mt-1 text-sm text-neutral-500">Try another search term.</p>
+          <div className="rounded-2xl border border-[var(--brand-border,#E9E2D3)] bg-white px-4 py-14 text-center shadow-sm">
+            <p className="font-display text-base font-bold text-[var(--brand-ink,#1C2B20)]">No products found</p>
+            <p className="mt-1 text-sm text-[var(--brand-ink-muted,#5B6B60)]">Try another search term.</p>
             {zeroResultSearches.length > 0 && (
               <div className="mt-5 flex flex-wrap justify-center gap-2">
                 {zeroResultSearches.slice(0, 5).map((item) => (
@@ -527,7 +563,7 @@ export default function Search() {
                     key={item}
                     type="button"
                     onClick={() => applySearch(item)}
-                    className="rounded-full bg-neutral-100 px-3 py-1.5 text-xs font-semibold text-neutral-700"
+                    className="rounded-full bg-[var(--brand-cream-soft,#F6EFE2)] px-3 py-1.5 text-xs font-semibold text-[var(--brand-ink,#1C2B20)] hover:bg-[var(--brand-leaf-tint,#EAF5E0)] transition-colors"
                   >
                     {item}
                   </button>
@@ -574,6 +610,29 @@ export default function Search() {
           </div>
         )}
       </div>
+      {/* Voice Search Modal */}
+      <VoiceSearchModal
+        isOpen={showVoiceModal}
+        onClose={() => setShowVoiceModal(false)}
+        onSearchResult={(query) => {
+          applySearch(query);
+        }}
+      />
+
+      {/* Barcode Scanner Modal */}
+      {showScannerModal && (
+        <QRScannerModal
+          title="Scan Product Barcode"
+          manualPlaceholder="Enter barcode number to search"
+          onScanSuccess={(decodedText) => {
+            setShowScannerModal(false);
+            if (decodedText) {
+              applySearch(decodedText);
+            }
+          }}
+          onClose={() => setShowScannerModal(false)}
+        />
+      )}
     </div>
   );
 }

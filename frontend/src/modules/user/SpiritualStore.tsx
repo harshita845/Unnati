@@ -43,7 +43,7 @@ export default function SpiritualStore() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-[var(--brand-cream,#FDF9F2)] text-[var(--brand-ink,#1C2B20)]">
       {/* Spiritual Store Banner */}
       <div className="relative w-full">
         <img

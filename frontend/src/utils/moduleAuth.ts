@@ -3,6 +3,8 @@
  * Allows multiple modules (user, seller, delivery, admin) to maintain separate auth sessions
  */
 
+import { devLogOnce } from "./devLog";
+
 export type ModuleType = 'user' | 'seller' | 'delivery' | 'admin';
 
 /**
@@ -58,7 +60,7 @@ export const setModuleAuthToken = (token: string, module: ModuleType): void => {
 export const getModuleAuthToken = (module: ModuleType): string | null => {
   const key = getTokenKey(module);
   const token = localStorage.getItem(key);
-  console.log(`🔑 Getting token for module "${module}" with key: ${key}`);
+  devLogOnce(`token:${module}`, `🔑 Getting token for module "${module}" with key: ${key}`);
   return token;
 };
 
@@ -105,6 +107,6 @@ export const clearModuleAuth = (module: ModuleType): void => {
 export const getCurrentModuleToken = (): string | null => {
   const module = detectModuleFromPath();
   const token = getModuleAuthToken(module);
-  console.log(`🎯 getCurrentModuleToken: module="${module}", hasToken=${!!token}`);
+  devLogOnce(`current:${module}:${!!token}`, `🎯 getCurrentModuleToken: module="${module}", hasToken=${!!token}`);
   return token;
 };

@@ -63,10 +63,10 @@ export default function BrandProducts() {
   if (loading) return <div className="min-h-screen flex items-center justify-center"><IconLoader forceShow /></div>;
 
   return (
-    <div className="min-h-screen bg-white pb-20">
+    <div className="min-h-screen bg-[var(--brand-cream,#FDF9F2)] pb-20 font-sans">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white border-b border-neutral-100 shadow-sm">
-        <div className="px-4 py-3 flex items-center gap-3">
+      <div className="sticky top-0 z-10 bg-white border-b border-[var(--brand-border,#E9E2D3)] shadow-xs">
+        <div className="px-4 py-3 flex items-center gap-3 max-w-7xl mx-auto">
             <button
                 onClick={() => navigate(-1)}
                 className="w-8 h-8 flex items-center justify-center hover:bg-neutral-50 rounded-full transition-colors"
@@ -77,9 +77,9 @@ export default function BrandProducts() {
             </button>
             <div className="flex items-center gap-2">
                 {brand?.image && (
-                    <img src={brand.image} alt="" className="w-8 h-8 object-contain rounded-md border border-neutral-100" />
+                    <img src={brand.image} alt="" className="w-8 h-8 object-contain rounded-md border border-[var(--brand-border,#E9E2D3)] bg-white p-0.5" />
                 )}
-                <h1 className="text-lg font-bold text-neutral-800">{brand?.name || 'Brand Products'}</h1>
+                <h1 className="text-lg font-display font-bold text-[var(--brand-green-deep,#14401F)]">{brand?.name || 'Brand Products'}</h1>
             </div>
         </div>
       </div>

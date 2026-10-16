@@ -4,6 +4,8 @@ import { useCart } from '../context/CartContext';
 import { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { Product } from '../types/domain';
+import { AnimatedCounter } from './motion';
+import { duration } from '../lib/motion';
 
 interface AddToCartAnimationProps {
   /**
@@ -247,10 +249,10 @@ export default function AddToCartAnimation({
       // Enhanced pulse animation with red glow effect
       const tl = gsap.timeline();
 
-      // Step 1: Scale up with red glow
+      // Step 1: Scale up with green glow
       tl.to(linkRef.current, {
         scale: 1.08,
-        boxShadow: '0 10px 25px rgba(239, 68, 68, 0.4)',
+        boxShadow: '0 10px 25px rgba(35, 107, 52, 0.4)',
         duration: 0.15,
         ease: 'power2.out',
         transformOrigin: 'center center',
@@ -259,7 +261,7 @@ export default function AddToCartAnimation({
         // Step 2: Bounce back
         .to(linkRef.current, {
           scale: 1.0,
-          boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
+          boxShadow: '0 4px 12px rgba(35, 107, 52, 0.3)',
           duration: 0.2,
           ease: 'power2.inOut',
         })
@@ -402,7 +404,7 @@ export default function AddToCartAnimation({
             <Link
               ref={linkRef}
               to={cart.itemCount > 0 ? linkTo : '/cart'}
-              className={`relative overflow-hidden bg-gradient-to-r from-[var(--customer-primary-dark)] via-[var(--customer-primary)] to-[var(--customer-primary-dark)] text-white rounded-full shadow-xl shadow-[var(--customer-primary-dark)]/30 px-3 py-2 flex items-center gap-2 hover:from-[var(--customer-primary-darker)] hover:via-[var(--customer-primary-dark)] hover:to-[var(--customer-primary-darker)] transition-all duration-300 pointer-events-auto border border-[var(--customer-primary-alpha-30)] backdrop-blur-sm ${pillClassName}`}
+              className={`relative overflow-hidden bg-gradient-to-r from-[var(--brand-green-deep,#14401F)] via-[var(--brand-green,#236B34)] to-[var(--brand-green-deep,#14401F)] text-white rounded-full shadow-xl shadow-[rgba(20,64,31,0.35)] px-3.5 py-2 flex items-center gap-2 hover:shadow-2xl transition-all duration-300 pointer-events-auto border border-white/20 backdrop-blur-sm ${pillClassName}`}
             >
               {/* Shimmer Effect */}
               <div className="shimmer-overlay" />
@@ -486,15 +488,30 @@ export default function AddToCartAnimation({
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.1, duration: 0.3 }}
               >
-                <span className="text-xs font-bold leading-tight drop-shadow-sm">
-                  {cart.itemCount > 0 ? 'View cart' : 'Cart'}
-                </span>
-                <span className="text-[10px] opacity-95 leading-tight font-medium">
-                  {cart.itemCount > 0
-                    ? `${cart.itemCount} ${cart.itemCount === 1 ? 'item' : 'items'}`
-                    : 'Empty'
-                  }
-                </span>
+                {/* "Cart · Empty" and "View cart · N items" cross-fade; the count rolls to its new value */}
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.span
+                    key={cart.itemCount > 0 ? 'has-items' : 'empty'}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: duration.fast }}
+                    className="flex flex-col"
+                  >
+                    <span className="text-xs font-bold leading-tight drop-shadow-sm">
+                      {cart.itemCount > 0 ? 'View cart' : 'Cart'}
+                    </span>
+                    <span className="text-[10px] opacity-95 leading-tight font-medium">
+                      {cart.itemCount > 0 ? (
+                        <>
+                          <AnimatedCounter value={cart.itemCount} /> {cart.itemCount === 1 ? 'item' : 'items'}
+                        </>
+                      ) : (
+                        'Empty'
+                      )}
+                    </span>
+                  </motion.span>
+                </AnimatePresence>
               </motion.div>
 
               {/* Right: Arrow icon */}
@@ -505,7 +522,10 @@ export default function AddToCartAnimation({
                 transition={{ delay: 0.15, duration: 0.3 }}
                 whileHover={{ scale: 1.1, rotate: -5 }}
               >
-                <svg
+                {/* Small nudge to the right every few seconds, inviting a tap */}
+                <motion.svg
+                  animate={{ x: [0, 3, 0] }}
+                  transition={{ duration: 0.6, ease: 'easeInOut', repeat: Infinity, repeatDelay: 4 }}
                   width="14"
                   height="14"
                   viewBox="0 0 16 16"
@@ -520,7 +540,7 @@ export default function AddToCartAnimation({
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
-                </svg>
+                </motion.svg>
               </motion.div>
             </Link>
           </motion.div>

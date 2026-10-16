@@ -85,13 +85,13 @@ export default function FAQ() {
   };
 
   return (
-    <div className="pb-24 md:pb-8 bg-white min-h-screen">
+    <div className="pb-24 md:pb-8 bg-[var(--brand-cream,#FDF9F2)] text-[var(--brand-ink,#1C2B20)] min-h-screen">
       {/* Header */}
-      <div className="bg-gradient-to-b from-green-200 via-green-100 to-white pb-6 md:pb-8 pt-12 md:pt-16">
+      <div className="bg-gradient-to-b from-[var(--brand-leaf-tint,#EAF5E0)] via-[var(--brand-cream-soft,#F6EFE2)] to-[var(--brand-cream,#FDF9F2)] pb-6 md:pb-8 pt-12 md:pt-16">
         <div className="px-4 md:px-6 lg:px-8">
           <button
             onClick={() => navigate(-1)}
-            className="mb-4 text-neutral-900"
+            className="mb-4 text-[var(--brand-ink,#1C2B20)] hover:text-[var(--brand-green,#236B34)] transition-colors"
             aria-label="Back"
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -105,13 +105,13 @@ export default function FAQ() {
             </svg>
           </button>
           <div className="flex flex-col items-center mb-4 md:mb-6">
-            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-white flex items-center justify-center mb-3 md:mb-4 border-2 border-white shadow-sm">
+            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-white flex items-center justify-center mb-3 md:mb-4 border border-[var(--brand-border,#E9E2D3)] shadow-[0_4px_16px_rgba(35,107,52,0.06)]">
               <svg
                 width="40"
                 height="40"
                 viewBox="0 0 24 24"
                 fill="none"
-                className="text-[var(--customer-primary-dark)] md:w-12 md:h-12"
+                className="text-[var(--brand-green,#236B34)] md:w-12 md:h-12"
               >
                 <path
                   d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
@@ -122,10 +122,10 @@ export default function FAQ() {
                 />
               </svg>
             </div>
-            <h1 className="text-xl md:text-2xl font-bold text-neutral-900 mb-2">
+            <h1 className="text-xl md:text-2xl font-display font-bold text-[var(--brand-green-deep,#14401F)] mb-2">
               Frequently Asked Questions
             </h1>
-            <p className="text-sm md:text-base text-neutral-600 text-center px-4">
+            <p className="text-sm md:text-base text-[var(--brand-ink-muted,#5B6B60)] text-center px-4">
               Find answers to common questions about our services
             </p>
           </div>
@@ -141,13 +141,13 @@ export default function FAQ() {
               return (
                 <div
                   key={item.id}
-                  className="bg-white rounded-lg border border-neutral-200 overflow-hidden transition-all"
+                  className="bg-white rounded-2xl border border-[var(--brand-border,#E9E2D3)] shadow-[0_4px_16px_rgba(35,107,52,0.04)] overflow-hidden transition-all"
                 >
                   <button
                     onClick={() => toggleItem(item.id)}
-                    className="w-full flex items-center justify-between px-4 py-4 hover:bg-neutral-50 transition-colors text-left"
+                    className="w-full flex items-center justify-between px-5 py-4 hover:bg-[var(--brand-cream-soft,#F6EFE2)]/40 transition-colors text-left"
                   >
-                    <span className="text-sm md:text-base font-semibold text-neutral-900 pr-4">
+                    <span className="text-sm md:text-base font-semibold text-[var(--brand-ink,#1C2B20)] pr-4">
                       {item.question}
                     </span>
                     <svg
@@ -155,7 +155,7 @@ export default function FAQ() {
                       height="20"
                       viewBox="0 0 24 24"
                       fill="none"
-                      className={`flex-shrink-0 text-neutral-500 transition-transform ${
+                      className={`flex-shrink-0 text-[var(--brand-green,#236B34)] transition-transform duration-200 ${
                         isOpen ? 'rotate-180' : ''
                       }`}
                     >
@@ -169,8 +169,8 @@ export default function FAQ() {
                     </svg>
                   </button>
                   {isOpen && (
-                    <div className="px-4 pb-4 pt-0">
-                      <p className="text-sm md:text-base text-neutral-600 leading-relaxed">
+                    <div className="px-5 pb-5 pt-0">
+                      <p className="text-sm md:text-base text-[var(--brand-ink-muted,#5B6B60)] leading-relaxed border-t border-[var(--brand-border-light,#F2ECE0)] pt-3">
                         {item.answer}
                       </p>
                     </div>
@@ -181,14 +181,14 @@ export default function FAQ() {
           </div>
 
           {/* Contact Support Section */}
-          <div className="mt-8 bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 border border-green-200">
+          <div className="mt-8 bg-gradient-to-br from-[var(--brand-leaf-tint,#EAF5E0)] to-[var(--brand-cream-soft,#F6EFE2)] rounded-2xl p-6 border border-[var(--brand-border,#E9E2D3)] shadow-[0_4px_16px_rgba(35,107,52,0.06)]">
             <div className="text-center">
               <svg
                 width="48"
                 height="48"
                 viewBox="0 0 24 24"
                 fill="none"
-                className="mx-auto mb-4 text-[var(--customer-primary-dark)]"
+                className="mx-auto mb-4 text-[var(--brand-green,#236B34)]"
               >
                 <path
                   d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
@@ -204,16 +204,16 @@ export default function FAQ() {
                   strokeLinecap="round"
                 />
               </svg>
-              <h3 className="text-lg font-bold text-neutral-900 mb-2">
+              <h3 className="text-lg font-display font-bold text-[var(--brand-green-deep,#14401F)] mb-2">
                 Still have questions?
               </h3>
-              <p className="text-sm text-neutral-600 mb-4">
+              <p className="text-sm text-[var(--brand-ink-muted,#5B6B60)] mb-4">
                 Our customer support team is here to help you 24/7
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <a
                   href="mailto:help@Ecommerce.com"
-                  className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[var(--customer-primary-dark)] text-white rounded-lg font-semibold hover:bg-[var(--customer-primary-darker)] transition-colors text-sm"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[var(--brand-green,#236B34)] text-white rounded-xl font-semibold hover:bg-[var(--brand-green-dark,#1B5128)] shadow-sm transition-colors text-sm"
                 >
                   <svg
                     width="18"
@@ -240,7 +240,7 @@ export default function FAQ() {
                 </a>
                 <a
                   href="tel:+91-XXXXX-XXXXX"
-                  className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-[var(--customer-primary-dark)] border-2 border-[var(--customer-primary-dark)] rounded-lg font-semibold hover:bg-[var(--customer-primary-alpha-10)] transition-colors text-sm"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-[var(--brand-green,#236B34)] border-2 border-[var(--brand-green,#236B34)] rounded-xl font-semibold hover:bg-[var(--brand-leaf-tint,#EAF5E0)] transition-colors text-sm shadow-sm"
                 >
                   <svg
                     width="18"

@@ -609,7 +609,7 @@ export default function GoogleMapsTracking({
                         icon={showRoute && routeDestination?.lat === seller.lat ? {
                             path: window.google?.maps?.SymbolPath?.CIRCLE || 0,
                             scale: 10,
-                            fillColor: '#0B5D3B',
+                            fillColor: '#236B34',
                             fillOpacity: 1,
                             strokeWeight: 3,
                             strokeColor: '#ffffff',
@@ -637,7 +637,7 @@ export default function GoogleMapsTracking({
                     <PolylineF
                         path={path}
                         options={{
-                            strokeColor: routeError ? '#0B5D3B' : '#16a34a',
+                            strokeColor: routeError ? '#236B34' : '#5FA82E',
                             strokeOpacity: 0.7,
                             strokeWeight: 4,
                             geodesic: true,
