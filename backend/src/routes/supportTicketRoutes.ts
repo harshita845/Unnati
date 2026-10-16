@@ -26,6 +26,7 @@ router.use(authenticate);
 
 const RAISERS = ["Customer", "Seller", "Delivery"];
 const MAX_OPEN_TICKETS = 10;
+const MAX_NEW_PER_HOUR = 5;
 const SUPPORT_FOLDER = "Unnati Stores/support";
 
 const isAdmin = (req: Request) =>
