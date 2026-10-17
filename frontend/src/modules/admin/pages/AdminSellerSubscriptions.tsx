@@ -120,7 +120,7 @@ export default function AdminSellerSubscriptions() {
   const [sellerSearch, setSellerSearch] = useState("");
   const [expiringOnly, setExpiringOnly] = useState(false);
   const [activateForm, setActivateForm] = useState<{ sellerId: string; planId: string; reference: string; customDates: boolean; startDate: string; endDate: string } | null>(null);
-  const [trialForm, setTrialForm] = useState<{ sellerId: string; categories: string[]; startDate: string; endDate: string } | null>(null);
+  const [trialForm, setTrialForm] = useState<{ sellerId: string; headerCategories: string[]; startDate: string; endDate: string } | null>(null);
   const [datesFor, setDatesFor] = useState<{ id: string; label: string; startDate: string; endDate: string } | null>(null);
   const [extendFor, setExtendFor] = useState<{ id: string; days: number } | null>(null);
 
@@ -136,7 +136,6 @@ export default function AdminSellerSubscriptions() {
   const [reminderText, setReminderText] = useState("");
 
   const rootCategories = useMemo(() => categories.filter((c: any) => !c.parentId), [categories]);
-  const requiredCategories = useMemo(() => rootCategories.filter((c: any) => c.subscriptionEnabled), [rootCategories]);
 
   // Main categories grouped by header (Grocery, Electronics, ...), so a plan can be applied to
   // a whole header group in one click instead of checking 20-30 individual categories.
@@ -153,9 +152,8 @@ export default function AdminSellerSubscriptions() {
     }
     return [...groups.values()].sort((a, b) => a.headerName.localeCompare(b.headerName));
   }, [rootCategories]);
-  // Header categories a plan can cover as a whole; main categories without a header are picked one by one
+  // Subscriptions are chosen by header category only (Winter, Wedding…), each covering all its categories and subcategories
   const headerGroups = useMemo(() => categoriesByHeader.filter((g) => g.headerId !== "none"), [categoriesByHeader]);
-  const ungroupedCategories = useMemo(() => categoriesByHeader.find((g) => g.headerId === "none")?.cats || [], [categoriesByHeader]);
 
   const loadPlans = async () => {
     try {
@@ -341,14 +339,14 @@ export default function AdminSellerSubscriptions() {
   };
 
   const openTrial = () =>
-    setTrialForm({ sellerId: "", categories: [], startDate: toDateInput(new Date()), endDate: toDateInput(new Date(Date.now() + (settings?.trialDays || 30) * DAY)) });
+    setTrialForm({ sellerId: "", headerCategories: [], startDate: toDateInput(new Date()), endDate: toDateInput(new Date(Date.now() + (settings?.trialDays || 30) * DAY)) });
 
   const submitTrial = async () => {
-    if (!trialForm?.sellerId || !trialForm.categories.length) return showToast("Choose a seller and at least one category", "error");
+    if (!trialForm?.sellerId || !trialForm.headerCategories.length) return showToast("Choose a seller and at least one category", "error");
     try {
       await grantSellerTrial({
         sellerId: trialForm.sellerId,
-        categories: trialForm.categories,
+        headerCategories: trialForm.headerCategories,
         startDate: dateInputToISO(trialForm.startDate, "start"),
         endDate: dateInputToISO(trialForm.endDate, "end"),
       });
@@ -443,12 +441,6 @@ export default function AdminSellerSubscriptions() {
     </button>
   );
 
-  const categoryRuleText = (c: any) => {
-    const grace = typeof c.subscriptionGraceDays === "number" ? c.subscriptionGraceDays : settings?.graceDays;
-    const bill = c.subscriptionBillType || (settings?.invoiceEnabled === false ? "receipt" : "gst");
-    return `${bill === "gst" ? "GST invoice" : "Receipt"} · ${grace === 0 ? "hide at expiry" : `${grace}d grace`}`;
-  };
-
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow-sm border border-neutral-200 p-5">
@@ -494,25 +486,27 @@ export default function AdminSellerSubscriptions() {
                     </span>
                   </div>
                   {plan.description && <p className="text-sm text-neutral-600 mt-2">{plan.description}</p>}
-                  <p className="text-xs text-neutral-500 mt-3">
-                    Covers {plan.categories.length} categor{plan.categories.length === 1 ? "y" : "ies"} right now
-                  </p>
+                  {/* Header categories only (Winter, Wedding…): a plan covers each one with all its categories and subcategories */}
+                  <p className="text-xs text-neutral-500 mt-3">Covers</p>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {(plan.headerCategories || []).map((h) => (
-                      <span key={h._id} className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]">
-                        All of {h.name}
-                      </span>
-                    ))}
-                    {(plan.headerCategories?.length
-                      ? plan.categories.filter((c: any) => (plan.explicitCategories || []).includes(String(c._id || c)) &&
-                          !(plan.headerCategories || []).some((h) => String(h._id) === String(c.headerCategoryId?._id || c.headerCategoryId)))
-                      : plan.categories
-                    ).map((c: any) => (
-                      <span key={String(c._id || c)} className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-800" title={c.subscriptionEnabled ? categoryRuleText(c) : "Subscription not required"}>
-                        {c.name || "Category"}
-                        {c.subscriptionEnabled === false ? " (not required)" : c.subscriptionEnabled ? ` · ${categoryRuleText(c)}` : ""}
-                      </span>
-                    ))}
+                    {(() => {
+                      const names = new Map<string, string>();
+                      (plan.headerCategories || []).forEach((h: any) => names.set(String(h._id), h.name));
+                      // Older plans picked single categories; access is per header group, so show that group
+                      plan.categories.forEach((c: any) => {
+                        const h = c?.headerCategoryId;
+                        if (h?._id && h?.name) names.set(String(h._id), h.name);
+                      });
+                      return names.size ? (
+                        [...names.entries()].map(([id, name]) => (
+                          <span key={id} className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]">
+                            All of {name}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-xs text-neutral-400">No category</span>
+                      );
+                    })()}
                   </div>
                   <ul className="mt-3 space-y-1 text-sm text-neutral-700">
                     {plan.limits?.maxProducts ? <li>• Up to {plan.limits.maxProducts} products</li> : <li>• Unlimited products</li>}
@@ -905,47 +899,26 @@ export default function AdminSellerSubscriptions() {
                   })}
                   {headerGroups.length === 0 && <p className="text-sm text-neutral-500 p-2">No categories yet. Add header categories and categories first.</p>}
                 </div>
-                {ungroupedCategories.length > 0 && (
-                  <div className="mt-2 border border-dashed border-neutral-200 rounded-lg p-2">
-                    <p className="text-xs text-neutral-500 mb-1">Categories without a header category (pick one by one):</p>
-                    <div className="flex flex-wrap gap-3">
-                      {ungroupedCategories.map((c: any) => (
-                        <label key={c._id} className="flex items-center gap-1.5 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={editing.data.categories.includes(c._id)}
-                            onChange={(e) =>
-                              setPlanField({
-                                categories: e.target.checked
-                                  ? [...editing.data.categories, c._id]
-                                  : editing.data.categories.filter((id) => id !== c._id),
-                              })
-                            }
-                          />
-                          {c.name}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
                 {(() => {
-                  // Individual picks kept from an older version of this plan (their group isn't ticked as a whole)
-                  const ungroupedIds = new Set(ungroupedCategories.map((c: any) => String(c._id)));
-                  const legacy = editing.data.categories.filter((id) => !ungroupedIds.has(id));
+                  // Older plans picked single categories. Access works per header group, so name the group
+                  const legacy = editing.data.categories;
                   if (!legacy.length) return null;
-                  const names = legacy.map((id) => (rootCategories as any[]).find((c) => String(c._id) === id)?.name || "Removed category");
+                  const groupNames = [
+                    ...new Set(
+                      legacy.map((id) => {
+                        const c: any = (rootCategories as any[]).find((x) => String(x._id) === id);
+                        return c?.headerCategoryId?.name || "Removed category";
+                      })
+                    ),
+                  ];
                   return (
                     <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800 flex items-start justify-between gap-3">
                       <span>
-                        This plan also covers {legacy.length} individually picked categor{legacy.length === 1 ? "y" : "ies"} from before: {names.join(", ")}.
-                        Tick their whole group above to cover everything in it.
+                        This plan was set up before categories were chosen as whole groups. It also covers: {groupNames.join(", ")}.
+                        Tick those groups above to keep them, then remove the old selection.
                       </span>
-                      <button
-                        type="button"
-                        className="shrink-0 font-semibold underline"
-                        onClick={() => setPlanField({ categories: editing.data.categories.filter((id) => ungroupedIds.has(id)) })}
-                      >
-                        Remove these
+                      <button type="button" className="shrink-0 font-semibold underline" onClick={() => setPlanField({ categories: [] })}>
+                        Remove old selection
                       </button>
                     </div>
                   );
@@ -1188,18 +1161,36 @@ export default function AdminSellerSubscriptions() {
           </div>
           <div>
             <label className={labelClass}>Categories</label>
-            {requiredCategories.length === 0 ? (
-              <p className="text-xs text-neutral-500">No category requires a subscription yet.</p>
+            {headerGroups.length === 0 ? (
+              <p className="text-xs text-neutral-500">No categories yet.</p>
             ) : (
-              <div className="max-h-40 overflow-y-auto border border-neutral-200 rounded-lg p-2 space-y-1">
-                {requiredCategories.map((c: any) => (
-                  <label key={c._id} className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked={trialForm.categories.includes(c._id)}
-                      onChange={(e) => setTrialForm({ ...trialForm, categories: e.target.checked ? [...trialForm.categories, c._id] : trialForm.categories.filter((id) => id !== c._id) })} />
-                    {c.name}
-                  </label>
-                ))}
-              </div>
+              <>
+                {/* Whole header categories only: each covers all its categories and subcategories */}
+                <div className="max-h-48 overflow-y-auto border border-neutral-200 rounded-lg p-2 space-y-1">
+                  {headerGroups.map((group) => {
+                    const needsPlan = group.cats.some((c: any) => c.subscriptionEnabled);
+                    return (
+                      <label key={group.headerId} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={trialForm.headerCategories.includes(group.headerId)}
+                          onChange={(e) =>
+                            setTrialForm({
+                              ...trialForm,
+                              headerCategories: e.target.checked
+                                ? [...trialForm.headerCategories, group.headerId]
+                                : trialForm.headerCategories.filter((id) => id !== group.headerId),
+                            })
+                          }
+                        />
+                        <span className="font-medium">{group.headerName}</span>
+                        {needsPlan && <span className="text-[11px] text-amber-700">needs a plan</span>}
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-neutral-500 mt-1">The trial covers everything in each ticked category, including its subcategories.</p>
+              </>
             )}
           </div>
           <div className="grid grid-cols-2 gap-3">

@@ -374,14 +374,10 @@ export default function SellerSubscriptions() {
         ) : (
           <div className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">
             {data.plans.map((plan) => {
-              // Whole groups read better than a long list ("All of Beauty" instead of 30 category names)
-              const groups = (plan.headerCategories || []).map((h: any) => `All of ${h.name}`);
-              const groupIds = new Set((plan.headerCategories || []).map((h: any) => String(h._id)));
-              const singles = plan.categories
-                .filter((c: any) => !groupIds.has(String(c.headerCategoryId?._id || c.headerCategoryId || "")))
-                .map((c: any) => c.name)
-                .filter(Boolean);
-              const covered = groups.length ? groups : singles.length ? singles : plan.categories.map((c: any) => c.name).filter(Boolean);
+              // Plans cover whole header categories ("All of Beauty"): never list single categories or subcategories
+              const groupNames = new Set<string>((plan.headerCategories || []).map((h: any) => h.name).filter(Boolean));
+              plan.categories.forEach((c: any) => c?.headerCategoryId?.name && groupNames.add(c.headerCategoryId.name));
+              const covered = [...groupNames].map((name) => `All of ${name}`);
               const current = data.categories.find(
                 (c) =>
                   ((plan.headerCategories || []).some((ph: any) => String(ph._id || ph) === c.categoryId) ||

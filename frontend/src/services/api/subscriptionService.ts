@@ -232,7 +232,8 @@ export const getSellerPlansBySeller = async (): Promise<{ success: boolean; data
   (await api.get("/admin/subscriptions/by-seller")).data;
 export const activatePlanForSeller = async (data: { sellerId: string; planId: string; reference?: string; startDate?: string; endDate?: string }) =>
   (await api.post("/admin/subscriptions/activate", data)).data;
-export const grantSellerTrial = async (data: { sellerId: string; categories: string[]; startDate?: string; endDate?: string }) =>
+/** headerCategories: whole groups (Winter, Wedding…); each covers all its categories and subcategories */
+export const grantSellerTrial = async (data: { sellerId: string; headerCategories: string[]; startDate?: string; endDate?: string }) =>
   (await api.post("/admin/subscriptions/trial", data)).data;
 export const updateSubscriptionDates = async (id: string, data: { startDate?: string; endDate?: string }) =>
   (await api.put(`/admin/subscriptions/${id}/dates`, data)).data;

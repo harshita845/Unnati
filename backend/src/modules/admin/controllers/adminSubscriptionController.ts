@@ -342,9 +342,9 @@ export const activateForSeller = asyncHandler(async (req: Request, res: Response
 
 /** Free trial for a seller with Super Admin's chosen categories and dates. */
 export const grantTrial = asyncHandler(async (req: Request, res: Response) => {
-  const { sellerId, categories, startDate, endDate } = req.body;
+  const { sellerId, categories, headerCategories, startDate, endDate } = req.body;
   try {
-    const trial = await adminGrantTrial(req.user?.userId, sellerId, categories, startDate, endDate);
+    const trial = await adminGrantTrial(req.user?.userId, sellerId, categories, startDate, endDate, headerCategories);
     return res.status(201).json({ success: true, message: "Free trial granted", data: trial });
   } catch (error) {
     return handle(res, error);

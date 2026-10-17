@@ -547,7 +547,9 @@ const createTrial = async (
   categoryIds: unknown[],
   startDate: Date,
   endDate: Date,
-  activatedBy: { type: "Admin" | "System"; id?: unknown }
+  activatedBy: { type: "Admin" | "System"; id?: unknown },
+  /** Whole header categories: the trial covers everything under them, including categories added later */
+  headerCategoryIds: unknown[] = []
 ) => {
   const days = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / DAY_MS));
   return SellerSubscription.create({
@@ -563,6 +565,7 @@ const createTrial = async (
       accessibleModules: ALL_SELLER_MODULE_KEYS,
     },
     categories: categoryIds.map(toId),
+    headerCategories: headerCategoryIds.map(toId),
     isTrial: true,
     status: "Active",
     startDate,
@@ -631,6 +634,114 @@ export const onCategorySubscriptionChanged = async (
       );
     }
     await syncSellerCategoryVisibility(sellerId, [catId]);
+  }
+  return { trialsGranted, sellersAffected: sellerIds.length };
+};
+
+export interface HeaderSubscriptionRule {
+  subscriptionEnabled: boolean;
+  /** Days products stay visible after a plan expires; null = store default */
+  subscriptionGraceDays: number | null;
+  /** Bill for subscription payments; null = store default */
+  subscriptionBillType: "gst" | "receipt" | null;
+}
+
+/**
+ * A header category's subscription rule (e.g. "Winter"). It is stored on every main category under
+ * the header (they always share it), so all access checks keep reading the main category.
+ */
+export const getHeaderSubscriptionRule = async (headerId: unknown): Promise<HeaderSubscriptionRule & { categoryCount: number }> => {
+  const mains: any[] = mongoose.isValidObjectId(idStr(headerId))
+    ? await Category.find({ headerCategoryId: toId(headerId), parentId: null })
+        .select("subscriptionEnabled subscriptionGraceDays subscriptionBillType")
+        .lean()
+    : [];
+  return {
+    subscriptionEnabled: mains.some((c) => c.subscriptionEnabled),
+    subscriptionGraceDays: mains.find((c) => typeof c.subscriptionGraceDays === "number")?.subscriptionGraceDays ?? null,
+    subscriptionBillType: mains.find((c) => c.subscriptionBillType)?.subscriptionBillType ?? null,
+    categoryCount: mains.length,
+  };
+};
+
+/**
+ * Super Admin set the subscription rule on a whole header category: it applies to every category
+ * and subcategory under it. Switched on, each seller selling there without a plan gets ONE free
+ * trial for the whole group (or must buy a plan) and one notification. Switched off, or the grace
+ * period changed: product visibility is re-checked with the real rules (a plan covering the
+ * group still counts).
+ */
+export const setHeaderSubscriptionRule = async (
+  headerId: unknown,
+  rule: HeaderSubscriptionRule,
+  options?: { trial?: { startDate: Date; endDate: Date } | null; adminId?: unknown }
+) => {
+  if (!mongoose.isValidObjectId(idStr(headerId))) throw new SubscriptionError(404, "Category not found");
+  const header: any = await HeaderCategory.findById(idStr(headerId)).select("name").lean();
+  if (!header) throw new SubscriptionError(404, "Category not found");
+
+  const before = await getHeaderSubscriptionRule(header._id);
+  const mainIds = (await mainCategoriesUnderHeaders([header._id])).map((id) => toId(id));
+  if (!mainIds.length) throw new SubscriptionError(400, `"${header.name}" has no categories yet. Add a category to it first.`);
+
+  // Subcategories never carry a rule of their own: they follow their main category
+  await Category.updateMany(
+    { _id: { $in: mainIds } },
+    {
+      $set: {
+        subscriptionEnabled: rule.subscriptionEnabled,
+        subscriptionGraceDays: rule.subscriptionGraceDays,
+        subscriptionBillType: rule.subscriptionBillType,
+        allowedPlans: [],
+      },
+    }
+  );
+
+  const enabledChanged = before.subscriptionEnabled !== rule.subscriptionEnabled;
+  const graceChanged = before.subscriptionGraceDays !== rule.subscriptionGraceDays;
+  if (!enabledChanged && !graceChanged) return { trialsGranted: 0, sellersAffected: 0 };
+
+  const matchIds = await expandCategoryWithDescendants(mainIds);
+  const sellerIds: any[] = await Product.distinct("seller", { category: { $in: matchIds } });
+
+  if (!(enabledChanged && rule.subscriptionEnabled)) {
+    // Off, or only the grace period changed: show / hide products by the current rules
+    for (const sellerId of sellerIds) await syncSellerCategoryVisibility(sellerId, mainIds);
+    return { trialsGranted: 0, sellersAffected: enabledChanged ? 0 : sellerIds.length };
+  }
+
+  const settings = await getSubscriptionSettings();
+  let trial: { startDate: Date; endDate: Date } | null = null;
+  if (options?.trial) trial = options.trial;
+  else if (options?.trial === undefined && settings.trialDays > 0) {
+    const now = new Date();
+    trial = { startDate: now, endDate: computeEndDate(now, settings.trialDays, "day") };
+  }
+
+  let trialsGranted = 0;
+  for (const sellerId of sellerIds) {
+    // Access is per header group, so checking one of its categories checks the whole group
+    const access = await getCategoryAccess(sellerId, mainIds[0]);
+    if (!access.allowed && trial) {
+      await createTrial(sellerId, mainIds, trial.startDate, trial.endDate, { type: options?.adminId ? "Admin" : "System", id: options?.adminId }, [header._id]);
+      trialsGranted++;
+      await notifySeller(
+        sellerId,
+        "Free trial started",
+        `"${header.name}" now needs a subscription. You have a free trial from ${fmtDate(trial.startDate)} to ${fmtDate(trial.endDate)}. Buy a plan before it ends to keep selling there.`,
+        "Info",
+        "High"
+      );
+    } else if (!access.allowed) {
+      await notifySeller(
+        sellerId,
+        "Subscription required",
+        `"${header.name}" now needs a subscription plan. Your products there are hidden from customers until you buy one.`,
+        "Warning",
+        "Urgent"
+      );
+    }
+    await syncSellerCategoryVisibility(sellerId, mainIds);
   }
   return { trialsGranted, sellersAffected: sellerIds.length };
 };
@@ -722,19 +833,37 @@ export const subscriptionDisplayStatus = (
 };
 
 /** Super Admin gives a seller a free trial for chosen categories and dates. */
-export const adminGrantTrial = async (adminId: unknown, sellerId: unknown, categoryIds: unknown[], start: unknown, end: unknown) => {
+/**
+ * Free trial chosen by header category (Winter, Wedding…): it covers every category and subcategory
+ * under each header. `categoryIds` (main categories) is still accepted from older clients.
+ */
+export const adminGrantTrial = async (
+  adminId: unknown,
+  sellerId: unknown,
+  categoryIds: unknown[],
+  start: unknown,
+  end: unknown,
+  headerCategoryIds: unknown[] = []
+) => {
   if (!mongoose.isValidObjectId(idStr(sellerId)) || !(await Seller.exists({ _id: idStr(sellerId) }))) {
     throw new SubscriptionError(404, "Seller not found");
   }
-  const ids = (Array.isArray(categoryIds) ? categoryIds : []).filter((c) => mongoose.isValidObjectId(idStr(c)));
-  if (!ids.length) throw new SubscriptionError(400, "Select at least one category");
-  // A trial covers main categories only — never a subcategory, which always follows its main category
-  const mainCount = await Category.countDocuments({ _id: { $in: ids }, parentId: null });
-  if (mainCount !== new Set(ids.map(idStr)).size) {
-    throw new SubscriptionError(400, "A trial can only be granted for main categories, not subcategories");
+  const validIds = (list: unknown) => [...new Set((Array.isArray(list) ? list : []).map(idStr).filter((c) => mongoose.isValidObjectId(c)))];
+  const headerIds = validIds(headerCategoryIds);
+  const mainIds = validIds(categoryIds);
+  if (!headerIds.length && !mainIds.length) throw new SubscriptionError(400, "Select at least one category");
+  if (headerIds.length && (await HeaderCategory.countDocuments({ _id: { $in: headerIds } })) !== headerIds.length) {
+    throw new SubscriptionError(400, "One of the selected categories no longer exists");
   }
+  // Main categories only — never a subcategory on its own (a subcategory always follows its main category)
+  if (mainIds.length && (await Category.countDocuments({ _id: { $in: mainIds }, parentId: null })) !== mainIds.length) {
+    throw new SubscriptionError(400, "A trial can only be granted for whole categories, not subcategories");
+  }
+  // Store the header's current main categories too, so every check that looks at categories sees them
+  const underHeaders = headerIds.length ? await mainCategoriesUnderHeaders(headerIds) : [];
+  const allMainIds = [...new Set([...mainIds, ...underHeaders.map(idStr)])];
   const { startDate, endDate } = parseDateRange(start, end);
-  const trial = await createTrial(sellerId, ids, startDate, endDate, { type: "Admin", id: adminId });
+  const trial = await createTrial(sellerId, allMainIds, startDate, endDate, { type: "Admin", id: adminId }, headerIds);
   await syncSellerVisibility(sellerId);
   await notifySeller(sellerId, "Free trial granted", `You have a free trial from ${fmtDate(startDate)} to ${fmtDate(endDate)}.`, "Success");
   return trial;

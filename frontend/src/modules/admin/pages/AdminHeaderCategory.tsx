@@ -10,10 +10,13 @@ import { uploadImage } from '../../../services/api/admin/adminProductService';
 import { themes } from '../../../utils/themes';
 import { ICON_LIBRARY, getIconByName, IconDef } from '../../../utils/iconLibrary';
 import { useToast } from '../../../context/ToastContext';
+import HeaderSubscriptionModal from '../components/HeaderSubscriptionModal';
 
 export default function AdminHeaderCategory() {
   const { showToast } = useToast();
   const [headerCategories, setHeaderCategories] = useState<HeaderCategory[]>([]);
+  // Header whose subscription rule is being edited (the rule covers all its categories and subcategories)
+  const [subscriptionHeader, setSubscriptionHeader] = useState<HeaderCategory | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Form states
@@ -848,6 +851,11 @@ export default function AdminHeaderCategory() {
                         >
                           {category.status}
                         </span>
+                        {category.subscription?.subscriptionEnabled && (
+                          <span className="ml-1.5 px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                            Needs a plan
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm flex gap-2">
                         <button
@@ -859,6 +867,15 @@ export default function AdminHeaderCategory() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
+                        {category.subscription && (
+                          <button
+                            onClick={() => setSubscriptionHeader(category)}
+                            className="text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded text-xs font-semibold transition-colors"
+                            title="Seller subscription rule for this category and everything in it"
+                          >
+                            Subscription
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDelete(category._id)}
                           className="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 p-1.5 rounded transition-colors"
@@ -912,6 +929,13 @@ export default function AdminHeaderCategory() {
           </div>
         </div>
       </div>
+      {subscriptionHeader && (
+        <HeaderSubscriptionModal
+          header={subscriptionHeader}
+          onClose={() => setSubscriptionHeader(null)}
+          onSaved={fetchCategories}
+        />
+      )}
     </div>
   );
 }

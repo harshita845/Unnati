@@ -5,6 +5,7 @@ import Category from "../../../models/Category";
 import {
   expandCategoryWithDescendants,
   onCategorySubscriptionChanged,
+  getHeaderSubscriptionRule,
   parseDateRange,
   syncSellerCategoryVisibility,
 } from "../../../services/sellerSubscriptionService";
@@ -197,6 +198,13 @@ export const createCategory = asyncHandler(
       finalOrder = lastCategory ? (lastCategory.order || 0) + 1 : 0;
     }
 
+    // A new main category takes its header category's subscription rule (the rule is set per header)
+    let rule: { subscriptionEnabled: boolean; subscriptionGraceDays: number | null; subscriptionBillType: "gst" | "receipt" | null } = subscription;
+    if (!parentId && finalHeaderCategoryId) {
+      const headerRule = await getHeaderSubscriptionRule(finalHeaderCategoryId);
+      if (headerRule.categoryCount > 0) rule = headerRule;
+    }
+
     const category = await Category.create({
       name,
       image,
@@ -207,9 +215,9 @@ export const createCategory = asyncHandler(
       parentId: parentId || null,
       headerCategoryId: finalHeaderCategoryId || null,
       status,
-      subscriptionEnabled: subscription.subscriptionEnabled,
-      subscriptionGraceDays: subscription.subscriptionGraceDays,
-      subscriptionBillType: subscription.subscriptionBillType,
+      subscriptionEnabled: rule.subscriptionEnabled,
+      subscriptionGraceDays: rule.subscriptionGraceDays,
+      subscriptionBillType: rule.subscriptionBillType,
       allowedPlans: subscription.allowedPlans,
     });
 

@@ -2,6 +2,12 @@ import { Request, Response } from "express";
 import HeaderCategory from "../../../models/HeaderCategory";
 import Category from "../../../models/Category";
 import SubscriptionPlan from "../../../models/SubscriptionPlan";
+import {
+  SubscriptionError,
+  getHeaderSubscriptionRule,
+  parseDateRange,
+  setHeaderSubscriptionRule,
+} from "../../../services/sellerSubscriptionService";
 
 // @desc    Get all header categories (Admin)
 // @route   GET /api/v1/header-categories/admin
@@ -14,8 +20,12 @@ export const getAdminHeaderCategories = async (
     const categories = await HeaderCategory.find().sort({
       order: 1,
       createdAt: -1,
-    });
-    return res.json(categories);
+    }).lean();
+    // Each header's subscription rule (Super Admin sets it on the header; it covers everything under it)
+    const withRules = await Promise.all(
+      categories.map(async (h: any) => ({ ...h, subscription: await getHeaderSubscriptionRule(h._id) }))
+    );
+    return res.json(withRules);
   } catch (error) {
     return res.status(500).json({ message: "Server Error", error });
   }
@@ -203,5 +213,61 @@ export const deleteHeaderCategory = async (req: Request, res: Response) => {
     }
   } catch (error) {
     return res.status(500).json({ message: "Server Error", error });
+  }
+};
+
+// @desc    Set the subscription rule for a whole header category (all its categories and subcategories)
+// @route   PUT /api/v1/header-categories/:id/subscription
+// @access  Private/Admin
+// Body: { subscriptionEnabled, subscriptionGraceDays (0-90 or null), subscriptionBillType ("gst" | "receipt" | null),
+//         existingSellers?: { mode: "trial", trialStartDate, trialEndDate } | { mode: "buy" } }
+export const updateHeaderSubscription = async (req: Request, res: Response) => {
+  try {
+    const body = req.body || {};
+    if (typeof body.subscriptionEnabled !== "boolean") {
+      return res.status(400).json({ success: false, message: "subscriptionEnabled must be true or false" });
+    }
+    let grace: number | null = null;
+    if (body.subscriptionGraceDays !== undefined && body.subscriptionGraceDays !== null && body.subscriptionGraceDays !== "") {
+      const n = Number(body.subscriptionGraceDays);
+      if (!Number.isInteger(n) || n < 0 || n > 90) {
+        return res.status(400).json({ success: false, message: "Grace period must be a whole number of days from 0 to 90" });
+      }
+      grace = n;
+    }
+    let billType: "gst" | "receipt" | null = null;
+    if (body.subscriptionBillType) {
+      if (!["gst", "receipt"].includes(body.subscriptionBillType)) {
+        return res.status(400).json({ success: false, message: "Bill type must be gst or receipt" });
+      }
+      billType = body.subscriptionBillType;
+    }
+
+    // What sellers already selling here get when the rule is switched on (not given = default trial days)
+    let trialOption: { trial?: { startDate: Date; endDate: Date } | null } = {};
+    const option = body.existingSellers;
+    if (option?.mode === "buy") trialOption = { trial: null };
+    else if (option?.mode === "trial") trialOption = { trial: parseDateRange(option.trialStartDate, option.trialEndDate) };
+    else if (option) return res.status(400).json({ success: false, message: "Choose a free trial or 'must buy a plan' for existing sellers" });
+
+    const result = await setHeaderSubscriptionRule(
+      req.params.id,
+      { subscriptionEnabled: body.subscriptionEnabled, subscriptionGraceDays: grace, subscriptionBillType: billType },
+      { ...trialOption, adminId: req.user?.userId }
+    );
+    let note = "";
+    if (result.trialsGranted) note = ` ${result.trialsGranted} existing seller(s) got a free trial.`;
+    else if (body.subscriptionEnabled && result.sellersAffected) {
+      note = ` ${result.sellersAffected} existing seller(s) without a plan have their products here hidden until they buy one.`;
+    }
+    return res.json({
+      success: true,
+      message: `Subscription rule saved.${note}`,
+      data: await getHeaderSubscriptionRule(req.params.id),
+    });
+  } catch (error: any) {
+    if (error instanceof SubscriptionError) return res.status(error.statusCode).json({ success: false, message: error.message });
+    console.error("Update header subscription error:", error);
+    return res.status(500).json({ success: false, message: "Server Error", error: error.message });
   }
 };
