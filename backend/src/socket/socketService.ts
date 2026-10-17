@@ -128,6 +128,19 @@ export const initializeSocket = (httpServer: HttpServer) => {
         }
     });
 
+    /**
+     * Notification rooms carry order and customer details, so a socket may only join the room of the
+     * account in its own login token (the id the client sends is ignored). Returns that id, or null
+     * (and tells the client) when the socket isn't logged in as that kind of user.
+     */
+    const ownRoomId = (socket: any, userType: string, event: string): string | null => {
+        const user = socket.user;
+        if (user?.userType === userType && user?.userId) return String(user.userId);
+        console.warn(`🚫 ${event} refused: socket ${socket.id} is not logged in as ${userType}`);
+        socket.emit('room-join-error', { event, message: `Log in as ${userType} to receive these notifications` });
+        return null;
+    };
+
     io.on('connection', (socket) => {
         console.log('✅ Socket connected:', socket.id, 'User:', (socket as any).user?.userId || 'Unauthenticated');
 
@@ -188,14 +201,17 @@ export const initializeSocket = (httpServer: HttpServer) => {
         });
 
         // Delivery partner joins their active deliveries room
-        socket.on('join-delivery-room', (deliveryPartnerId: string) => {
+        socket.on('join-delivery-room', () => {
+            const deliveryPartnerId = ownRoomId(socket, 'Delivery', 'join-delivery-room');
+            if (!deliveryPartnerId) return;
             console.log(`🛵 Delivery partner joined: ${deliveryPartnerId}`);
             socket.join(`delivery-${deliveryPartnerId}`);
         });
 
         // Seller joins their notification room
-        socket.on('join-seller-room', (sellerId: string) => {
-            const normalizedSellerId = String(sellerId).trim();
+        socket.on('join-seller-room', () => {
+            const normalizedSellerId = ownRoomId(socket, 'Seller', 'join-seller-room');
+            if (!normalizedSellerId) return;
             console.log(`🏪 Seller ${normalizedSellerId} joined notifications room`);
             socket.join(`seller-${normalizedSellerId}`);
 
@@ -207,8 +223,9 @@ export const initializeSocket = (httpServer: HttpServer) => {
         });
 
         // Admin joins their notification room
-        socket.on('join-admin-room', (adminId: string) => {
-            const normalizedAdminId = String(adminId).trim();
+        socket.on('join-admin-room', () => {
+            const normalizedAdminId = ownRoomId(socket, 'Admin', 'join-admin-room');
+            if (!normalizedAdminId) return;
             console.log(`🛡️ Admin ${normalizedAdminId} joined notifications room`);
             socket.join(`admin-${normalizedAdminId}`);
             socket.join('admin-notifications');
@@ -221,9 +238,9 @@ export const initializeSocket = (httpServer: HttpServer) => {
         });
 
         // Delivery boy joins notification room
-        socket.on('join-delivery-notifications', (deliveryBoyId: string) => {
-            // Normalize deliveryBoyId to string to ensure consistent room naming
-            const normalizedDeliveryBoyId = String(deliveryBoyId).trim();
+        socket.on('join-delivery-notifications', () => {
+            const normalizedDeliveryBoyId = ownRoomId(socket, 'Delivery', 'join-delivery-notifications');
+            if (!normalizedDeliveryBoyId) return;
             console.log(`🔔 Delivery boy ${normalizedDeliveryBoyId} joined notifications room`);
 
             socket.join('delivery-notifications');

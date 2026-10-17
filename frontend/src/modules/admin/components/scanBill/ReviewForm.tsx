@@ -38,6 +38,7 @@ import { amountToIndianWords } from '../../../../utils/amountInWords';
 import { inr, inToIso, isoToIN, lineAmount, liveChecks, r2, summarize } from '../../scanBill/billMath';
 import { exportBillPdf } from '../../scanBill/exportPdf';
 import { confirmIssues } from '../../scanBill/confirmChecks';
+import MatchStatusPanel from './MatchStatusPanel';
 import PartyField from './PartyField';
 import ProductPicker, { optionKey } from './ProductPicker';
 import { apiMessage, btn, ConfidenceDot, inputCls, StatusPill } from './scanBillUi';
@@ -770,6 +771,20 @@ export default function ReviewForm({ scan, localPreviews = [], categories, onUpd
         <label className="mb-1 block text-xs font-semibold text-gray-600">Notes</label>
         <textarea className={`${inputCls} min-h-[56px]`} value={bill.notes || ''} disabled={locked} onChange={(e) => update({ notes: e.target.value })} />
       </div>
+
+      {/* How each field the AI read compares with your records; edit or choose an action per row */}
+      <MatchStatusPanel
+        bill={bill}
+        matches={matches}
+        warnings={warnings}
+        labels={labels}
+        locked={locked}
+        dateText={dateText}
+        onUpdate={update}
+        onUpdateItem={(i, patch) => updateItem(i, patch)}
+        onDateText={setDateText}
+        focusField={focusField}
+      />
 
       {/* Warnings */}
       {(warnings.length > 0 || confirmErrors.length > 0) && (

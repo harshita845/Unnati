@@ -65,6 +65,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [token]);
 
+  // Another tab logged in / out of the same panel (all tabs share one saved login): reload this tab so
+  // its screen, API calls and live notifications all belong to the same account again. Without this,
+  // a tab kept showing seller A while its requests used seller B's login ("Access denied" on A's orders).
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      const module = detectModuleFromPath();
+      if (e.key !== `${module}_authToken`) return;
+      if ((e.newValue || null) === (token || null)) return;
+      window.location.reload();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [token]);
+
   const login = (newToken: string, userData: User) => {
     const module = detectModuleFromPath();
     setToken(newToken);

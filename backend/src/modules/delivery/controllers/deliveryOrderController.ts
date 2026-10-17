@@ -196,14 +196,14 @@ export const getPendingOrders = asyncHandler(async (req: Request, res: Response)
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
 
-    // Unassigned offers: only ones this partner was offered (dispatch is by distance to the store)
-    // and has not declined. Orders dispatched while no partner was online are open to all.
+    // Unassigned offers this partner hasn't declined: ones they were offered when every store
+    // accepted, plus ones they can serve now (they came online later, or are near the stores now).
+    // The offer list is fixed at that moment, so without this a rider who wasn't online then never saw it.
     const riderId = new mongoose.Types.ObjectId(String(deliveryId));
     const pendingQuery: any = {
         $and: [
             riderVisibleOrdersFilter(deliveryId, {
                 'dispatch.rejectedDeliveryBoys': { $ne: riderId },
-                $or: [{ 'dispatch.notifiedDeliveryBoys.0': { $exists: false } }, { 'dispatch.notifiedDeliveryBoys': riderId }],
             }),
             {
                 $or: [
@@ -217,12 +217,16 @@ export const getPendingOrders = asyncHandler(async (req: Request, res: Response)
     const candidates = await Order.find(pendingQuery)
         .populate("items")
         .sort({ createdAt: -1 });
-    // Offers made to nobody specifically (no rider was near at dispatch): only riders near the
-    // order's stores see them, never riders in another city
+    // Unassigned orders: shown if this rider was offered it or can serve its stores now — never to
+    // riders in another city
     const orders = [];
     for (const o of candidates) {
-        const openOffer = !o.deliveryBoy && !((o as any).dispatch?.notifiedDeliveryBoys?.length);
-        if (!openOffer || (await riderCanServeOrder(deliveryId, o._id))) orders.push(o);
+        if (o.deliveryBoy) {
+            orders.push(o);
+            continue;
+        }
+        const wasOffered = ((o as any).dispatch?.notifiedDeliveryBoys || []).some((id: any) => String(id) === String(deliveryId));
+        if (wasOffered || (await riderCanServeOrder(deliveryId, o._id))) orders.push(o);
     }
 
     const formattedOrders = orders.map(order => ({

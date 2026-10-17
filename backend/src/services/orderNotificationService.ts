@@ -346,10 +346,11 @@ export async function handleOrderAcceptance(
         }
         const riderId = new mongoose.Types.ObjectId(normalizedDeliveryBoyId);
 
-        // An order offered to nobody specifically (no rider was near when it was dispatched) can
-        // only be taken by a rider near its stores — never by a rider in another city
+        // Riders offered the order when every store accepted can take it, and so can any rider who
+        // can serve its stores now (came online later, or moved into range) — never one in another city
         const offer: any = await Order.findById(orderId).select('deliveryBoy dispatch').lean();
-        if (offer && !offer.deliveryBoy && !offer.dispatch?.notifiedDeliveryBoys?.length && !(await riderCanServeOrder(riderId, orderId))) {
+        const wasOffered = (offer?.dispatch?.notifiedDeliveryBoys || []).some((id: any) => String(id) === normalizedDeliveryBoyId);
+        if (offer && !offer.deliveryBoy && !wasOffered && !(await riderCanServeOrder(riderId, orderId))) {
             return { success: false, message: 'This order is too far from you' };
         }
 
@@ -360,11 +361,6 @@ export async function handleOrderAcceptance(
                 // Riders can take an order once every store has accepted it
                 status: { $in: PICKUP_READY_STATUSES },
                 'dispatch.rejectedDeliveryBoys': { $ne: riderId },
-                // Only partners who were offered the order (if the offer list was recorded)
-                $or: [
-                    { 'dispatch.notifiedDeliveryBoys.0': { $exists: false } },
-                    { 'dispatch.notifiedDeliveryBoys': riderId },
-                ],
             },
             { $set: { deliveryBoy: riderId, deliveryBoyStatus: 'Assigned', assignedAt: new Date() } },
             { new: true }

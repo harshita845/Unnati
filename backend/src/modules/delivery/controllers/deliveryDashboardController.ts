@@ -3,7 +3,7 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Delivery from "../../../models/Delivery";
 import Order from "../../../models/Order";
-import { RIDER_ACTIVE_STATUSES, riderVisibleOrdersFilter } from "../../../services/orderFlowService";
+import { RIDER_ACTIVE_STATUSES, riderCanServeOrder, riderVisibleOrdersFilter } from "../../../services/orderFlowService";
 import mongoose from "mongoose";
 
 /**
@@ -150,9 +150,10 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
     const totalEarning = result.totalDeliveredCount * COMMISSION_PER_ORDER;
 
     // Fetch list of Pending Orders for the "Today's Pending Order" section (only from today)
+    // Same rule as the Pending list: unassigned orders this rider hasn't declined and can serve
     const pendingQuery: any = {
         $and: [
-            riderVisibleOrdersFilter(deliveryId),
+            riderVisibleOrdersFilter(deliveryId, { 'dispatch.rejectedDeliveryBoys': { $ne: new mongoose.Types.ObjectId(String(deliveryId)) } }),
             {
                 $or: [
                     { createdAt: { $gte: todayStart, $lte: todayEnd } },
@@ -161,10 +162,16 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
             }
         ]
     };
-    const pendingOrdersList = await Order.find(pendingQuery)
-        .select("orderNumber customerName deliveryAddress status total estimatedDeliveryDate createdAt")
+    const pendingCandidates = await Order.find(pendingQuery)
+        .select("orderNumber customerName deliveryAddress status total estimatedDeliveryDate createdAt deliveryBoy dispatch")
         .sort({ createdAt: -1 })
-        .limit(5);
+        .limit(30);
+    const pendingOrdersList: any[] = [];
+    for (const o of pendingCandidates) {
+        if (pendingOrdersList.length >= 5) break;
+        const wasOffered = ((o as any).dispatch?.notifiedDeliveryBoys || []).some((id: any) => String(id) === String(deliveryId));
+        if (o.deliveryBoy || wasOffered || (await riderCanServeOrder(deliveryId, o._id))) pendingOrdersList.push(o);
+    }
 
     // Format pending list for Frontend
     const formattedPendingList = pendingOrdersList.map(order => ({

@@ -424,19 +424,27 @@ export default function SellerOrderDetail() {
     return `${unit} x ${qty}`;
   };
 
+  // This store's own stage. In an order from several stores the order itself stays "New order"
+  // until every store accepts, but this store has moved on (accepted / packed / handed over).
+  const ownProgress = orderDetail.sellerProgress;
+  const ownStep = ownProgress?.pickedUpAt ? 3 : ownProgress?.readyAt ? 2 : ownProgress?.acceptedAt ? 1 : 0;
+  const stepIndex = FLOW_INDEX[orderStatus] === undefined ? undefined : Math.max(FLOW_INDEX[orderStatus], ownStep);
+  const stageLabel =
+    orderStatus === 'Received' && ownStep > 0 ? FLOW_STEPS[ownStep] : STATUS_LABEL[orderStatus] || orderStatus;
+
   return (
     <div className="min-h-screen bg-neutral-50 pb-8">
       {/* Order progress + what the store should do next */}
       <div className="bg-white mb-6 rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
         <div className="bg-[var(--primary-dark)] text-white px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
           <h2 className="text-base sm:text-lg font-semibold">Order #{orderDetail.orderNumber}</h2>
-          <span className="text-xs sm:text-sm bg-white/15 px-3 py-1 rounded-full">{STATUS_LABEL[orderStatus] || orderStatus}</span>
+          <span className="text-xs sm:text-sm bg-white/15 px-3 py-1 rounded-full">{stageLabel}</span>
         </div>
         <div className="px-4 sm:px-6 py-5 space-y-5">
-          {FLOW_INDEX[orderStatus] !== undefined && (
+          {stepIndex !== undefined && (
             <ol className="grid grid-cols-6 gap-1 text-center">
               {FLOW_STEPS.map((step, index) => {
-                const done = index <= FLOW_INDEX[orderStatus];
+                const done = index <= stepIndex;
                 return (
                   <li key={step} className="flex flex-col items-center gap-1">
                     <span
@@ -489,14 +497,30 @@ export default function SellerOrderDetail() {
               );
             }
             if (orderStatus === 'Received' && accepted) {
+              // Each store packs its own part; it doesn't have to wait for the other stores to accept
               return (
                 <div className="space-y-3">
                   <p className="text-sm text-neutral-700">
-                    You accepted. Waiting for the other store(s) in this order ({progress?.storesAccepted}/{progress?.totalStores} accepted).
+                    {ready
+                      ? 'Packed and ready. Give the delivery partner your pickup code below when they arrive.'
+                      : 'Accepted. Pack your items, then mark them ready for pickup.'}
                   </p>
-                  <button disabled={actionBusy} onClick={() => handleStatusUpdate('Cancelled')} className={dangerBtn}>
-                    Cancel order
-                  </button>
+                  {multiStore && (
+                    <p className="text-sm text-neutral-600">
+                      This order also has items from other stores: {progress?.storesAccepted}/{progress?.totalStores} stores have accepted.
+                      A delivery partner is assigned once every store has accepted.
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-3">
+                    {!ready && (
+                      <button disabled={actionBusy} onClick={() => handleStatusUpdate('Ready for pickup')} className={primaryBtn}>
+                        Mark ready for pickup
+                      </button>
+                    )}
+                    <button disabled={actionBusy} onClick={() => handleStatusUpdate('Cancelled')} className={dangerBtn}>
+                      Cancel order
+                    </button>
+                  </div>
                 </div>
               );
             }

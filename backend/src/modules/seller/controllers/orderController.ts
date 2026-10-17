@@ -396,7 +396,7 @@ export const updateOrderStatus = asyncHandler(
       success: true,
       message:
         action === 'accept' && updatedOrder.status === 'Received'
-          ? "Accepted. Waiting for the other store(s) in this order to accept."
+          ? "Accepted. Pack your items and mark them ready; the other store(s) in this order still need to accept."
           : "Order status updated successfully",
       data: {
         id: updatedOrder._id,
