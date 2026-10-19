@@ -80,8 +80,7 @@ const HomeSectionSchema = new Schema<IHomeSection>(
 
 // Indexes for better query performance
 HomeSectionSchema.index({ order: 1, isActive: 1 });
-HomeSectionSchema.index({ slug: 1 });
-HomeSectionSchema.index({ category: 1 });
+HomeSectionSchema.index({ categories: 1 });
 
 const HomeSection = mongoose.model<IHomeSection>("HomeSection", HomeSectionSchema);
 

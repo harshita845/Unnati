@@ -61,7 +61,11 @@ export default function HeaderSubscriptionModal({ header, onClose, onSaved }: Pr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="header-subscription-title">
+      <div
+        // Width and white background inline: the admin theme stretches white rounded boxes to 100% width
+        style={{ width: "100%", maxWidth: 512, backgroundColor: "#ffffff" }}
+        className="rounded-xl shadow-xl"
+        onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="header-subscription-title">
         <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4">
           <h2 id="header-subscription-title" className="text-base font-semibold text-neutral-900">
             Subscription · {header.name}

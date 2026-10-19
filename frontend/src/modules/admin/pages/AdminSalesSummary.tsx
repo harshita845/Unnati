@@ -6,6 +6,7 @@ import {
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../context/ToastContext";
 import SalesSummaryChart from "../components/SalesSummaryChart";
+import TopInsightsButtons from "../components/TopInsightsButtons";
 
 const FiCalendar = ({ className }: { className?: string }) => (
   <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -282,8 +283,10 @@ const AdminSalesSummary = () => {
 
       {/* Chart Section */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <h3 className="font-bold text-gray-800 text-lg">Revenue Performance</h3>
+          {/* Top 15 sold products / searched items of the last month */}
+          <TopInsightsButtons />
           <div className="text-xs text-gray-400 bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
             Real-time daily aggregation
           </div>

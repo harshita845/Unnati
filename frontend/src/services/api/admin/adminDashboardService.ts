@@ -190,3 +190,29 @@ export const getSalesSummary = async (
   );
   return response.data;
 };
+
+export interface TopProductInsight {
+  productId?: string | null;
+  name: string;
+  image?: string;
+  quantity: number;
+  revenue: number;
+  orders: number;
+}
+
+export interface TopSearchInsight {
+  query: string;
+  count: number;
+  /** Times the search found no products */
+  noResults: number;
+  lastSearchedAt: string;
+}
+
+/** Top 15 sold products and top 15 customer searches between two dates (YYYY-MM-DD) */
+export const getTopInsights = async (
+  startDate: string,
+  endDate: string
+): Promise<ApiResponse<{ topProducts: TopProductInsight[]; topSearches: TopSearchInsight[] }>> => {
+  const response = await api.get("/admin/dashboard/top-insights", { params: { startDate, endDate } });
+  return response.data;
+};

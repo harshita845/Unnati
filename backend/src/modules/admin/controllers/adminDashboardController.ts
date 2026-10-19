@@ -9,6 +9,7 @@ import {
   getRecentOrders,
   getSalesByLocation,
   getSalesSummary,
+  getTopInsights,
 } from "../../../services/dashboardService";
 
 /**
@@ -158,3 +159,18 @@ export const getSalesSummaryController = asyncHandler(
     });
   }
 );
+
+/** Top 15 sold products and top 15 customer searches for a period (Sales & Summary page) */
+export const getTopInsightsController = asyncHandler(async (req: Request, res: Response) => {
+  const { startDate, endDate } = req.query;
+  if (!startDate || !endDate) {
+    return res.status(400).json({ success: false, message: "startDate and endDate are required" });
+  }
+  const start = new Date(startDate as string);
+  const end = new Date(endDate as string);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return res.status(400).json({ success: false, message: "Invalid dates" });
+  }
+  end.setHours(23, 59, 59, 999);
+  return res.status(200).json({ success: true, data: await getTopInsights(start, end) });
+});

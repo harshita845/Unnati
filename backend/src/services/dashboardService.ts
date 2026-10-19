@@ -3,6 +3,8 @@ import Category from "../models/Category";
 import SubCategory from "../models/SubCategory";
 import Product from "../models/Product";
 import Order from "../models/Order";
+import OrderItem from "../models/OrderItem";
+import SearchAnalytics from "../models/SearchAnalytics";
 // import OrderItem from "../models/OrderItem";
 // import Seller from "../models/Seller";
 
@@ -750,4 +752,56 @@ export const getSalesSummary = async (startDate: Date, endDate: Date): Promise<a
     console.error("Error fetching sales summary:", error);
     throw error;
   }
+};
+
+
+/**
+ * Sales & Summary insights for a period: the 15 best-selling products (by quantity, from the same
+ * orders the sales totals count: cancelled / rejected / returned excluded) and the 15 most searched
+ * terms in the customer app.
+ */
+export const getTopInsights = async (startDate: Date, endDate: Date, limit = 15) => {
+  // The period's orders, filtered exactly like the sales totals
+  const orderIds = await Order.distinct("_id", {
+    orderDate: { $gte: startDate, $lte: endDate },
+    status: { $nin: ["Cancelled", "Rejected", "Returned"] },
+  });
+  const [topProducts, topSearches] = await Promise.all([
+    OrderItem.aggregate([
+      { $match: { order: { $in: orderIds }, status: { $nin: ["Cancelled", "Returned"] } } },
+      {
+        $group: {
+          // Same product sold under different names still counts once; lines without a product group by name
+          _id: { $ifNull: ["$product", "$productName"] },
+          productId: { $first: "$product" },
+          name: { $last: "$productName" },
+          image: { $last: "$productImage" },
+          quantity: { $sum: { $ifNull: ["$quantity", 0] } },
+          revenue: { $sum: { $ifNull: ["$total", 0] } },
+          orders: { $addToSet: "$order" },
+        },
+      },
+      { $project: { _id: 0, productId: 1, name: 1, image: 1, quantity: 1, revenue: 1, orders: { $size: "$orders" } } },
+      { $sort: { quantity: -1, revenue: -1 } },
+      { $limit: limit },
+    ]),
+    SearchAnalytics.aggregate([
+      { $match: { source: "search", createdAt: { $gte: startDate, $lte: endDate }, normalizedQuery: { $nin: [null, ""] } } },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: "$normalizedQuery",
+          // The most recent spelling the customer typed
+          query: { $first: "$query" },
+          count: { $sum: 1 },
+          noResults: { $sum: { $cond: [{ $eq: ["$resultCount", 0] }, 1, 0] } },
+          lastSearchedAt: { $first: "$createdAt" },
+        },
+      },
+      { $project: { _id: 0, query: 1, count: 1, noResults: 1, lastSearchedAt: 1 } },
+      { $sort: { count: -1, lastSearchedAt: -1 } },
+      { $limit: limit },
+    ]),
+  ]);
+  return { topProducts, topSearches };
 };

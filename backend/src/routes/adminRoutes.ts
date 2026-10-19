@@ -147,6 +147,8 @@ router.get(
   "/dashboard/sales-summary",
   dashboardController.getSalesSummaryController
 );
+// Top 15 sold products and top 15 customer searches for the same period
+router.get("/dashboard/top-insights", dashboardController.getTopInsightsController);
 
 // ==================== Category Routes ====================
 router.post("/categories", productController.createCategory);

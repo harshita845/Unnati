@@ -15,7 +15,6 @@ const SellerPOSStateSchema = new Schema<ISellerPOSState>(
       ref: "Seller",
       required: true,
       unique: true,
-      index: true,
     },
     bills: {
       type: [mongoose.Schema.Types.Mixed],

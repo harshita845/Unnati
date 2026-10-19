@@ -25,8 +25,6 @@ const BrandSchema = new Schema<IBrand>(
   }
 );
 
-// Index for faster queries
-BrandSchema.index({ name: 1 });
 
 const Brand = mongoose.model<IBrand>("Brand", BrandSchema);
 
