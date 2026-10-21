@@ -9,6 +9,7 @@ import ProductCard from "./components/ProductCard";
 import BannerSlider from "./components/banners/BannerSlider";
 import HomePopup from "./components/banners/HomePopup";
 import FlashDealSection from "./components/banners/FlashDealSection";
+import PromoStrip from "./components/PromoStrip";
 import HomeThreePromoBanners from "./components/banners/HomeThreePromoBanners";
 import DealOfTheDay from "./components/banners/DealOfTheDay";
 import FirstOrderOfferBanner from "./components/banners/FirstOrderOfferBanner";
@@ -544,6 +545,9 @@ export default function Home() {
 
       {/* FLASH DEAL Section */}
       <FlashDealSection />
+
+      {/* PROMO STRIP Section (HOUSEFULL SALE / CRAZY DEALS) */}
+      <PromoStrip activeTab={activeTab} />
 
       {/* Main content */}
       <div

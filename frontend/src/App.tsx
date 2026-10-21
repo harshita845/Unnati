@@ -95,6 +95,8 @@ const SellerAddProduct = lazy(() => import("./modules/seller/pages/SellerAddProd
 const SellerTaxes = lazy(() => import("./modules/seller/pages/SellerTaxes"));
 const SellerProductList = lazy(() => import("./modules/seller/pages/SellerProductList"));
 const SellerStockManagement = lazy(() => import("./modules/seller/pages/SellerStockManagement"));
+const SellerStockTransfers = lazy(() => import("./modules/seller/pages/SellerStockTransfers"));
+const SellerGstReturns = lazy(() => import("./modules/seller/pages/SellerGstReturns"));
 const SellerWallet = lazy(() => import("./modules/seller/pages/SellerWallet"));
 const SellerSubscriptions = lazy(() => import("./modules/seller/pages/SellerSubscriptions"));
 const SellerSupport = lazy(() => import("./modules/seller/pages/SellerSupport"));
@@ -237,6 +239,9 @@ const AdminOutOfStockSummary = lazy(() => import("./modules/admin/pages/AdminOut
 const AdminLossSummary = lazy(() => import("./modules/admin/pages/AdminLossSummary"));
 const AdminGSTSalesReport = lazy(() => import("./modules/admin/pages/AdminGSTSalesReport"));
 const AdminGSTReport = lazy(() => import("./modules/admin/pages/AdminGSTReport"));
+const AdminGstReturns = lazy(() => import("./modules/admin/pages/AdminGstReturns"));
+const AdminDataBackup = lazy(() => import("./modules/admin/pages/AdminDataBackup"));
+const AdminStockTransfer = lazy(() => import("./modules/admin/pages/AdminStockTransfer"));
 const AdminPaymentReport = lazy(() => import("./modules/admin/pages/AdminPaymentReport"));
 const AdminOnlineOrderReport = lazy(() => import("./modules/admin/pages/AdminOnlineOrderReport"));
 const AdminPOSInvoiceReport = lazy(() => import("./modules/admin/pages/AdminPOSInvoiceReport"));
@@ -501,6 +506,7 @@ function App() {
                               <Route path="product/variation-setup" element={<SellerVariationTypeSetup />} />
                               <Route path="product/storage-location" element={<SellerStorageLocationSetup />} />
                               <Route path="product/stock" element={<SellerStockManagement />} />
+                              <Route path="product/stock-transfers" element={<SellerStockTransfers />} />
                               <Route path="wallet" element={<SellerWallet />} />
                               <Route path="subscriptions" element={<SellerSubscriptions />} />
                               <Route path="support" element={<SellerSupport />} />
@@ -535,6 +541,7 @@ function App() {
                               <Route path="inventory-reports/loss-summary" element={<SellerLossSummary />} />
                               <Route path="reports/gst-sales" element={<SellerGSTSalesReport />} />
                               <Route path="reports/gst-register" element={<SellerGSTReport />} />
+                              <Route path="reports/gst-returns" element={<SellerGstReturns />} />
                               <Route path="reports/payment" element={<SellerPaymentReport />} />
                               <Route path="reports/sales/summary" element={<SellerReportSalesSummary />} />
                               <Route path="reports/sales/return-exchange" element={<SellerReturnExchangeSummary />} />
@@ -582,6 +589,7 @@ function App() {
                              <Route path="product/variation-setup" element={<AdminVariationTypeSetup />} />
                              <Route path="product/storage-location" element={<AdminStorageLocationSetup />} />
                              <Route path="product/list" element={<AdminStockManagement />} />
+                             <Route path="product/stock-transfer" element={<AdminStockTransfer />} />
                             <Route path="product/add" element={<AdminAddProduct />} />
                             <Route path="product/edit/:id" element={<AdminAddProduct />} />
                             <Route path="manage-seller/add" element={<AdminAddSeller />} />
@@ -649,6 +657,8 @@ function App() {
                             <Route path="reports/inventory/loss-summary" element={<AdminLossSummary />} />
                             <Route path="reports/gst-sales" element={<AdminGSTSalesReport />} />
                             <Route path="reports/gst-register" element={<AdminGSTReport />} />
+                            <Route path="reports/gst-returns" element={<AdminGstReturns />} />
+                            <Route path="data-backup" element={<AdminDataBackup />} />
                             <Route path="reports/payment" element={<AdminPaymentReport />} />
                             <Route path="reports/order" element={<AdminOnlineOrderReport />} />
                             <Route path="reports/invoice" element={<AdminPOSInvoiceReport />} />

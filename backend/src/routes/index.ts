@@ -187,6 +187,10 @@ import sellerSubscriptionRoutes from "./sellerSubscriptionRoutes";
 router.use("/admin/subscriptions", authenticate, requireUserType("Admin"), adminSubscriptionRoutes);
 router.use("/seller/subscriptions", authenticate, requireUserType("Seller"), sellerSubscriptionRoutes);
 
+// Stock transfers sent to a store: it accepts (stock arrives) or rejects (stock goes back)
+import sellerStockTransferRoutes from "./sellerStockTransferRoutes";
+router.use("/seller/stock-transfers", requireSellerModule({ modules: ["product"] }), sellerStockTransferRoutes);
+
 // POS Customer Display: admin management + the customer-facing screen (terminal display key)
 import { adminCustomerDisplayRoutes, publicCustomerDisplayRoutes } from "./customerDisplayRoutes";
 router.use("/admin/customer-display", adminCustomerDisplayRoutes);

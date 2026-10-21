@@ -18,6 +18,7 @@ export const createPromoStrip = asyncHandler(async (req: Request, res: Response)
     endDate,
     categoryCards,
     featuredProducts,
+    crazyDealsTitle,
     isActive = true,
     order = 0,
   } = req.body;
@@ -44,6 +45,9 @@ export const createPromoStrip = asyncHandler(async (req: Request, res: Response)
   // Validate dates
   const start = new Date(startDate);
   const end = new Date(endDate);
+  if (typeof endDate === "string" && !endDate.includes("T")) {
+    end.setHours(23, 59, 59, 999);
+  }
   if (end <= start) {
     return res.status(400).json({
       success: false,
@@ -51,22 +55,28 @@ export const createPromoStrip = asyncHandler(async (req: Request, res: Response)
     });
   }
 
-  // Validate category cards
+  // Validate and clean category cards
+  const cleanedCategoryCards: any[] = [];
   if (categoryCards && Array.isArray(categoryCards)) {
-    for (const card of categoryCards) {
+    for (let i = 0; i < categoryCards.length; i++) {
+      const card = categoryCards[i];
       if (!card.categoryId) {
-        return res.status(400).json({
-          success: false,
-          message: "Category ID is required for each category card",
-        });
+        continue;
       }
       const category = await Category.findById(card.categoryId);
       if (!category) {
         return res.status(404).json({
           success: false,
-          message: `Category with ID "${card.categoryId}" not found`,
+          message: `Category for Card ${i + 1} not found`,
         });
       }
+      cleanedCategoryCards.push({
+        categoryId: card.categoryId,
+        title: (card.title && card.title.trim()) || category.name || "Category",
+        badge: (card.badge && card.badge.trim()) || (card.discountPercentage ? `Up to ${card.discountPercentage}% OFF` : "SPECIAL OFFER"),
+        discountPercentage: typeof card.discountPercentage === "number" ? card.discountPercentage : 0,
+        order: typeof card.order === "number" ? card.order : i,
+      });
     }
   }
 
@@ -89,8 +99,9 @@ export const createPromoStrip = asyncHandler(async (req: Request, res: Response)
     saleText,
     startDate: start,
     endDate: end,
-    categoryCards: categoryCards || [],
+    categoryCards: cleanedCategoryCards,
     featuredProducts: featuredProducts || [],
+    crazyDealsTitle: crazyDealsTitle || "CRAZY DEALS",
     isActive,
     order,
   });
@@ -99,8 +110,9 @@ export const createPromoStrip = asyncHandler(async (req: Request, res: Response)
     .populate("categoryCards.categoryId", "name slug image")
     .populate("featuredProducts", "productName mainImage price mrp");
 
-  // Invalidate cache for this header category slug
+  // Invalidate cache for this header category slug and "all"
   cache.delete(`promoStrip-${headerCategorySlug.toLowerCase()}`);
+  cache.delete("promoStrip-all");
 
   return res.status(201).json({
     success: true,
@@ -182,6 +194,7 @@ export const updatePromoStrip = asyncHandler(async (req: Request, res: Response)
     endDate,
     categoryCards,
     featuredProducts,
+    crazyDealsTitle,
     isActive,
     order,
   } = req.body;
@@ -212,6 +225,9 @@ export const updatePromoStrip = asyncHandler(async (req: Request, res: Response)
   if (startDate || endDate) {
     const start = startDate ? new Date(startDate) : promoStrip.startDate;
     const end = endDate ? new Date(endDate) : promoStrip.endDate;
+    if (endDate && typeof endDate === "string" && !endDate.includes("T")) {
+      end.setHours(23, 59, 59, 999);
+    }
     if (end <= start) {
       return res.status(400).json({
         success: false,
@@ -222,20 +238,30 @@ export const updatePromoStrip = asyncHandler(async (req: Request, res: Response)
     if (endDate) promoStrip.endDate = end;
   }
 
-  // Validate category cards if provided
+  // Validate and clean category cards if provided
   if (categoryCards && Array.isArray(categoryCards)) {
-    for (const card of categoryCards) {
-      if (card.categoryId) {
-        const category = await Category.findById(card.categoryId);
-        if (!category) {
-          return res.status(404).json({
-            success: false,
-            message: `Category with ID "${card.categoryId}" not found`,
-          });
-        }
+    const cleanedCategoryCards: any[] = [];
+    for (let i = 0; i < categoryCards.length; i++) {
+      const card = categoryCards[i];
+      if (!card.categoryId) {
+        continue;
       }
+      const category = await Category.findById(card.categoryId);
+      if (!category) {
+        return res.status(404).json({
+          success: false,
+          message: `Category for Card ${i + 1} not found`,
+        });
+      }
+      cleanedCategoryCards.push({
+        categoryId: card.categoryId,
+        title: (card.title && card.title.trim()) || category.name || "Category",
+        badge: (card.badge && card.badge.trim()) || (card.discountPercentage ? `Up to ${card.discountPercentage}% OFF` : "SPECIAL OFFER"),
+        discountPercentage: typeof card.discountPercentage === "number" ? card.discountPercentage : 0,
+        order: typeof card.order === "number" ? card.order : i,
+      });
     }
-    promoStrip.categoryCards = categoryCards;
+    promoStrip.categoryCards = cleanedCategoryCards;
   }
 
   // Validate featured products if provided
@@ -254,6 +280,7 @@ export const updatePromoStrip = asyncHandler(async (req: Request, res: Response)
 
   if (heading !== undefined) promoStrip.heading = heading;
   if (saleText !== undefined) promoStrip.saleText = saleText;
+  if (crazyDealsTitle !== undefined) promoStrip.crazyDealsTitle = crazyDealsTitle;
   if (isActive !== undefined) promoStrip.isActive = isActive;
   if (order !== undefined) promoStrip.order = order;
 
@@ -263,8 +290,9 @@ export const updatePromoStrip = asyncHandler(async (req: Request, res: Response)
     .populate("categoryCards.categoryId", "name slug image")
     .populate("featuredProducts", "productName mainImage price mrp");
 
-  // Invalidate cache for this header category slug
+  // Invalidate cache for this header category slug and "all"
   cache.delete(`promoStrip-${promoStrip.headerCategorySlug.toLowerCase()}`);
+  cache.delete("promoStrip-all");
 
   return res.status(200).json({
     success: true,
@@ -287,8 +315,9 @@ export const deletePromoStrip = asyncHandler(async (req: Request, res: Response)
     });
   }
 
-  // Invalidate cache for this header category slug
+  // Invalidate cache for this header category slug and "all"
   cache.delete(`promoStrip-${promoStrip.headerCategorySlug.toLowerCase()}`);
+  cache.delete("promoStrip-all");
 
   return res.status(200).json({
     success: true,

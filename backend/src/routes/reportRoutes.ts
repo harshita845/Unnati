@@ -16,6 +16,7 @@ import {
   deleteGSTReportEntry,
 } from "../modules/seller/controllers/sellerGSTReportController";
 import { authenticate, requireUserType, checkEnabled } from "../middleware/auth";
+import { getSellerGstReturns } from "../modules/admin/controllers/adminGstReturnController";
 
 const router = Router();
 
@@ -26,6 +27,8 @@ router.use(checkEnabled);
 // Get seller's sales report
 router.get("/sales", getSalesReport);
 router.get("/gst-sales", getGSTSalesReport);
+// GSTR-1 & GSTR-3B for this seller's own store (never another store's)
+router.get("/gst-returns", getSellerGstReturns);
 router.delete("/gst-sales", deleteGSTSalesReportEntries);
 router.get("/payment", getPaymentReport);
 router.get("/sales-summary", getSalesSummaryReport);

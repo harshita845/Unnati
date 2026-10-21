@@ -25,6 +25,7 @@ import { initializeSocket } from "./socket/socketService";
 import ThemeSettings from "./models/ThemeSettings";
 import { expireUnpaidOnlineOrders } from "./services/orderLifecycleService";
 import { runSubscriptionJob, setSubscriptionSocket } from "./services/sellerSubscriptionService";
+import { runBackup } from "./services/backupService";
 
 // Load environment variables (.env file reload)
 dotenv.config();
@@ -190,6 +191,19 @@ app.get("/api/v1/cron/subscriptions", async (req, res) => {
   } catch (error: any) {
     console.error("Scheduled subscription job failed:", error);
     return res.status(500).json({ success: false, message: "Subscription job failed" });
+  }
+});
+// Daily database backup (Vercel Cron, see vercel.json). Same CRON_SECRET as above.
+app.get("/api/v1/cron/backup", async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return res.status(503).json({ success: false, message: "CRON_SECRET is not set" });
+  if (req.headers.authorization !== `Bearer ${secret}`) return res.status(401).json({ success: false, message: "Unauthorized" });
+  try {
+    const backup = await runBackup("scheduled");
+    return res.json({ success: true, files: backup.files.length, documents: backup.totalDocuments });
+  } catch (error: any) {
+    console.error("Scheduled backup failed:", error);
+    return res.status(error?.statusCode || 500).json({ success: false, message: error?.message || "Backup failed" });
   }
 });
 app.use("/api/v1", routes);

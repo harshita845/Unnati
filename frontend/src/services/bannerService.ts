@@ -5,6 +5,7 @@ export interface DealsConfig {
   flashDealTargetDate: string;
   flashDealImage?: string;
   isActive?: boolean;
+  isExpired?: boolean;
   flashDealProductIds?: string[];
   featuredDealProductId?: string;
   featuredDealProductIds?: string[];
@@ -105,10 +106,10 @@ export const bannerService = {
       if (res.data.success && res.data.data) {
           return res.data.data;
       }
-      return { flashDealTargetDate: new Date(Date.now() + 86400000).toISOString() };
+      return { flashDealTargetDate: '', isActive: false, isExpired: true };
     } catch (e) {
         console.error("Failed to fetch flash deals config", e);
-        return { flashDealTargetDate: new Date(Date.now() + 86400000).toISOString() };
+        return { flashDealTargetDate: '', isActive: false, isExpired: true };
     }
   },
 

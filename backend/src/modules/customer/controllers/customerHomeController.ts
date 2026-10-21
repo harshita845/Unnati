@@ -664,9 +664,20 @@ export const getHomeContent = async (req: Request, res: Response) => {
     // Try to get from cache first
     let promoStrip = cache.get(promoStripCacheKey) as any;
 
+    const now = new Date();
+
+    // Check cached promoStrip validity (must not be expired, inactive, or empty)
+    if (promoStrip) {
+      const end = promoStrip.endDate ? new Date(promoStrip.endDate) : null;
+      const start = promoStrip.startDate ? new Date(promoStrip.startDate) : null;
+      if (!promoStrip.isActive || (end && now > end) || (start && now < start)) {
+        promoStrip = null;
+        cache.delete(promoStripCacheKey);
+      }
+    }
+
     if (!promoStrip) {
-      const now = new Date();
-      const promoStripDoc = await PromoStrip.findOne({
+      let promoStripDoc = await PromoStrip.findOne({
         headerCategorySlug: currentHeaderCategorySlug.toLowerCase(),
         isActive: true,
         startDate: { $lte: now },
@@ -677,9 +688,38 @@ export const getHomeContent = async (req: Request, res: Response) => {
         .sort({ order: 1 })
         .lean();
 
+      // If viewing "all" tab and no specific "all" promo strip exists, fallback to active promo strip
+      if (!promoStripDoc && currentHeaderCategorySlug.toLowerCase() === "all") {
+        promoStripDoc = await PromoStrip.findOne({
+          isActive: true,
+          startDate: { $lte: now },
+          endDate: { $gte: now },
+        })
+          .populate("categoryCards.categoryId", "name slug image")
+          .populate("featuredProducts", "productName mainImage mainImageUrl galleryImageUrls galleryImages price discPrice variations unitPricing mrp compareAtPrice discount rating reviewsCount seller")
+          .sort({ order: 1, createdAt: -1 })
+          .lean();
+      }
+
+      // Strictly validate promoStripDoc: if it has no products or no category cards, it's broken - don't serve
+      if (promoStripDoc) {
+        const validCards = Array.isArray(promoStripDoc.categoryCards)
+          ? promoStripDoc.categoryCards.filter((c: any) => c && c.categoryId)
+          : [];
+        const validProducts = Array.isArray(promoStripDoc.featuredProducts)
+          ? promoStripDoc.featuredProducts.filter((p: any) => p && typeof p === 'object' && p._id)
+          : [];
+
+        if (validCards.length === 0 || validProducts.length === 0) {
+          promoStripDoc = null;
+        } else {
+          promoStripDoc.categoryCards = validCards;
+          promoStripDoc.featuredProducts = validProducts;
+        }
+      }
+
       promoStrip = promoStripDoc;
 
-      // (Location filtering of featured products happens below, per request: this cache is shared)
       // Cache for 3 minutes (PromoStrip data doesn't change frequently)
       if (promoStrip) {
         cache.set(promoStripCacheKey, promoStrip, 3 * 60 * 1000);
@@ -689,15 +729,29 @@ export const getHomeContent = async (req: Request, res: Response) => {
       }
     }
 
-    // Featured products in the promo strip: only from stores that deliver to this user
+    // Featured products in the promo strip: mark availability based on location
     if (promoStrip && Array.isArray((promoStrip as any).featuredProducts)) {
       const nearby = new Set(nearbySellerIds.map((id) => id.toString()));
-      promoStrip = {
-        ...(promoStrip as any),
-        featuredProducts: (promoStrip as any).featuredProducts
-          .filter((p: any) => p && p.seller && nearby.has(p.seller.toString()))
-          .map((p: any) => ({ ...p, isAvailable: true })),
-      };
+      const rawProducts = (promoStrip as any).featuredProducts;
+
+      const mappedProducts = rawProducts
+        .filter((p: any) => p && typeof p === 'object' && p._id)
+        .map((p: any) => {
+          const sellerIdStr = p?.seller ? p.seller.toString() : "";
+          const isAvailable = !locationProvided || nearbySellerIds.length === 0
+            ? true
+            : (sellerIdStr ? nearby.has(sellerIdStr) : false);
+          return { ...p, isAvailable };
+        });
+
+      if (mappedProducts.length === 0) {
+        promoStrip = null;
+      } else {
+        promoStrip = {
+          ...(promoStrip as any),
+          featuredProducts: mappedProducts,
+        };
+      }
     }
 
     res.status(200).json({

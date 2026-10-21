@@ -4,7 +4,8 @@ import { useAuth } from '../../../context/AuthContext';
 import { getSocketBaseURL, isRealtimeAvailable } from '../../../services/api/config';
 
 export interface SellerNotification {
-    type: 'NEW_ORDER' | 'STATUS_UPDATE';
+    /** STOCK_TRANSFER*: stock sent to this store (only type, transferNumber and items are set) */
+    type: 'NEW_ORDER' | 'STATUS_UPDATE' | 'STOCK_TRANSFER' | 'STOCK_TRANSFER_CANCELLED';
     orderId: string;
     orderNumber: string;
     status: string;

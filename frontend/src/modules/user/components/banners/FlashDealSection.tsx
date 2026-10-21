@@ -29,9 +29,17 @@ export default function FlashDealSection() {
   const navigate = useNavigate();
   // We still track activeCategory so deals refetch when the customer changes tab.
   const { activeCategory } = useThemeContext();
-  const [config, setConfig] = useState<{flashDealTargetDate: string; flashDealImage?: string; isActive?: boolean; flashDealProductIds?: string[]}>({ flashDealTargetDate: '', isActive: true });
+  const [config, setConfig] = useState<{
+    flashDealTargetDate: string;
+    flashDealImage?: string;
+    isActive?: boolean;
+    isExpired?: boolean;
+    flashDealProductIds?: string[];
+  }>({ flashDealTargetDate: '', isActive: true });
   const [products, setProducts] = useState<any[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [targetDate, setTargetDate] = useState<Date | null>(null);
+  const [isExpired, setIsExpired] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { location } = useLocation();
 
@@ -72,28 +80,25 @@ export default function FlashDealSection() {
     fetchConfig();
   }, [activeCategory]);
 
-  const [targetDate, setTargetDate] = useState(() => {
-      const date = new Date();
-      date.setHours(date.getHours() + 24);
-      return date;
-  });
-
   useEffect(() => {
      if (config.flashDealTargetDate) {
          const serverDate = new Date(config.flashDealTargetDate);
-         // If server date is in the past, add 24 hours to the current time to make it "run"
-         if (serverDate.getTime() <= Date.now()) {
-            const newTarget = new Date();
-            newTarget.setHours(newTarget.getHours() + 24);
-            setTargetDate(newTarget);
+         if (isNaN(serverDate.getTime()) || serverDate.getTime() <= Date.now()) {
+            setTargetDate(serverDate);
+            setIsExpired(true);
          } else {
             setTargetDate(serverDate);
+            setIsExpired(false);
          }
+     } else {
+         setTargetDate(null);
+         setIsExpired(true);
      }
   }, [config.flashDealTargetDate]);
 
   const calculateTimeLeft = (): TimeLeft => {
-    const difference = +targetDate - +new Date();
+    if (!targetDate) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+    const difference = targetDate.getTime() - Date.now();
     let timeLeft: TimeLeft = { days: 0, hours: 0, minutes: 0, seconds: 0 };
 
     if (difference > 0) {
@@ -110,15 +115,35 @@ export default function FlashDealSection() {
   const [timeLeft, setTimeLeft] = useState<TimeLeft>(calculateTimeLeft());
 
   useEffect(() => {
+    if (!targetDate || isExpired) return;
+
     const timer = setInterval(() => {
-      setTimeLeft(calculateTimeLeft());
+      const remaining = calculateTimeLeft();
+      setTimeLeft(remaining);
+      if (
+        remaining.days === 0 &&
+        remaining.hours === 0 &&
+        remaining.minutes === 0 &&
+        remaining.seconds === 0
+      ) {
+        setIsExpired(true);
+      }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [targetDate]);
+  }, [targetDate, isExpired]);
 
-  // Hide section only if explicitly disabled (isActive === false) or when both products and flashDealImage are missing.
-  const hideProductSection = isLoaded && (config.isActive === false || (products.length === 0 && !config.flashDealImage));
+  // Hide section if:
+  // 1. Not loaded yet
+  // 2. Explicitly disabled in admin (isActive === false)
+  // 3. Deal is expired (isExpired === true or config.isExpired === true)
+  // 4. No flash deal products configured or available (products.length === 0)
+  const hideProductSection =
+    !isLoaded ||
+    config.isActive === false ||
+    config.isExpired === true ||
+    isExpired ||
+    products.length === 0;
 
   const TimerBox = ({ value, label }: { value: number; label: string }) => (
     <div className="flex flex-col items-center min-w-[32px] md:min-w-[36px]">
@@ -129,14 +154,17 @@ export default function FlashDealSection() {
     </div>
   );
 
+  if (hideProductSection) {
+    return <BannerSlider position="Flash Deals" className="px-2 md:px-4 lg:px-4 mb-2 mt-4" />;
+  }
+
   return (
     <div className="px-2 md:px-4 lg:px-4 mb-2 mt-4">
       <div className="mb-3">
         <BannerSlider position="Flash Deals" />
       </div>
 
-      {hideProductSection ? null : (
-        <div className="rounded-2xl shadow-sm border border-neutral-100 overflow-hidden flex flex-col md:flex-row md:items-stretch">
+      <div className="rounded-2xl shadow-sm border border-neutral-100 overflow-hidden flex flex-col md:flex-row md:items-stretch">
 
         {/* LEFT SIDE (Desktop Sidebar / Mobile Header) */}
         <div
@@ -294,7 +322,6 @@ export default function FlashDealSection() {
             </button>
         </div>
       </div>
-      )}
     </div>
   );
 }

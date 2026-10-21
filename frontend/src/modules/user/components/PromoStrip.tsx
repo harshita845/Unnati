@@ -22,6 +22,18 @@ interface PromoCard {
 
 // Icon mappings for each category
 const getCategoryIcons = (categoryId: string) => {
+  const id = (categoryId || "").toLowerCase();
+  if (id.includes("wedding") || id.includes("bridal")) return ["👰", "💍", "👑", "✨"];
+  if (id.includes("cricket") || id.includes("bat") || id.includes("ball")) return ["🏏", "⚾", "🏆", "🧢"];
+  if (id.includes("thermal") || id.includes("wool") || id.includes("winter")) return ["🧥", "🧣", "🧤", "🧶"];
+  if (id.includes("clean") || id.includes("detergent") || id.includes("wash")) return ["🧼", "🧽", "🧴", "🫧"];
+  if (id.includes("cloth") || id.includes("men") || id.includes("women") || id.includes("fashion")) return ["👕", "👗", "👖", "👔"];
+  if (id.includes("jewel") || id.includes("gold") || id.includes("silver")) return ["💍", "💎", "📿", "👑"];
+  if (id.includes("audio") || id.includes("earbud") || id.includes("electronic")) return ["🎧", "📱", "💻", "⌚"];
+  if (id.includes("skin") || id.includes("care") || id.includes("beauty")) return ["🧴", "✨", "💄", "💆"];
+  if (id.includes("rice") || id.includes("grain") || id.includes("atta")) return ["🌾", "🍚", "🫘", "🫒"];
+  if (id.includes("snack") || id.includes("sweet")) return ["🍿", "🍪", "🍫", "🍬"];
+
   const iconMap: Record<string, string[]> = {
     "personal-care": ["🧴", "💧", "🧼", "💄"],
     "breakfast-instant": ["🍜", "☕", "🥛", "🍞"],
@@ -33,53 +45,64 @@ const getCategoryIcons = (categoryId: string) => {
     "fruits-veg": ["🥬", "🥕", "🍅", "🥒"],
     "dairy-breakfast": ["🥛", "🧀", "🍞", "🥚"],
     snacks: ["🍿", "🍪", "🥨", "🍫"],
-    sports: ["⚽", "🏀", "🏋️", "🎾"],
+    sports: ["⚽", "🏏", "🏋️", "🎾"],
   };
-  return iconMap[categoryId] || ["📦", "📦", "📦", "📦"];
+  return iconMap[id] || ["🛍️", "🏷️", "✨", "🎁"];
 };
 
 const getDummyCategoryImages = (title: string, categoryId?: string): string[] => {
   const t = (title || "").toLowerCase();
   const cid = (categoryId || "").toLowerCase();
 
+  if (t.includes("wedding") || t.includes("bridal") || cid.includes("wedding") || cid.includes("bridal")) {
+    return [
+      "https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=200&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=200&auto=format&fit=crop&q=80",
+    ];
+  }
+  if (t.includes("cricket") || t.includes("sport") || t.includes("bat") || cid.includes("cricket") || cid.includes("sport")) {
+    return [
+      "https://images.unsplash.com/photo-1531415074868-036b107e775a?w=200&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=200&auto=format&fit=crop&q=80",
+    ];
+  }
+  if (t.includes("wool") || t.includes("thermal") || t.includes("winter") || cid.includes("wool") || cid.includes("thermal")) {
+    return [
+      "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=200&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1578587018452-892bacefd3f2?w=200&auto=format&fit=crop&q=80",
+    ];
+  }
+  if (t.includes("clean") || t.includes("detergent") || cid.includes("clean") || cid.includes("detergent")) {
+    return [
+      "https://images.unsplash.com/photo-1585421514284-efb74c2b69ba?w=200&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=200&auto=format&fit=crop&q=80",
+    ];
+  }
   if (t.includes("home") || t.includes("decor") || cid.includes("home")) {
     return [
       "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=200&auto=format&fit=crop&q=80",
       "https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?w=200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1540932239986-30128078f3c5?w=200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1507652313519-d4e9174996dd?w=200&auto=format&fit=crop&q=80",
     ];
   }
   if (t.includes("net") || t.includes("mosquito") || t.includes("machhar")) {
     return [
       "https://images.unsplash.com/photo-1616046229478-9901c5536a45?w=200&auto=format&fit=crop&q=80",
       "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1584100936595-c0654b55a2e2?w=200&auto=format&fit=crop&q=80",
     ];
   }
   if (t.includes("water") || t.includes("bottle") || t.includes("can")) {
     return [
       "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=200&auto=format&fit=crop&q=80",
       "https://images.unsplash.com/photo-1556817411-31ae72fa3ea0?w=200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1523362628745-0c100150b504?w=200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1544816155-12df9643f363?w=200&auto=format&fit=crop&q=80",
     ];
   }
   if (t.includes("towel") || t.includes("bath") || t.includes("cloth")) {
     return [
       "https://images.unsplash.com/photo-1616627547584-bf28cee262db?w=200&auto=format&fit=crop&q=80",
       "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1629949009765-40fc74c954c9?w=200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1563291074-2bf8677ac0e5?w=200&auto=format&fit=crop&q=80",
     ];
   }
-  return [
-    "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=200&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=200&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=200&auto=format&fit=crop&q=80",
-  ];
+  return [];
 };
 
 
@@ -218,127 +241,117 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
         let newSaleTextValue = theme.saleText;
         let newDateRange = "";
 
-        if (response.success && response.data) {
-          // 1. Check for PromoStrip data from backend (highest priority)
-          if (response.data.promoStrip && response.data.promoStrip.isActive) {
-            const promoStrip = response.data.promoStrip;
-            newHeadingText = promoStrip.heading || newHeadingText;
-            newSaleTextValue = promoStrip.saleText || newSaleTextValue;
-            // Set CRAZY DEALS title from PromoStrip
-            if (promoStrip.crazyDealsTitle) {
-              setCrazyDealsTitle(promoStrip.crazyDealsTitle);
-            } else {
-              setCrazyDealsTitle("CRAZY DEALS");
-            }
+        if (response.success && response.data?.promoStrip && response.data.promoStrip.isActive) {
+          const promoStrip = response.data.promoStrip;
 
-            // Format date range
-            if (promoStrip.startDate && promoStrip.endDate) {
-              const start = new Date(promoStrip.startDate);
-              const end = new Date(promoStrip.endDate);
-              newDateRange = `${start.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()} - ${end.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()}`;
-            }
+          // Double check dates on client side - if expired or not yet started, strictly hide!
+          const now = new Date();
+          const start = promoStrip.startDate ? new Date(promoStrip.startDate) : null;
+          const end = promoStrip.endDate ? new Date(promoStrip.endDate) : null;
+          if (end && now > end) {
+            // Expired - strictly hide the promo strip
+            setHasData(false);
+            setCategoryCards([]);
+            setFeaturedProducts([]);
+            setLoading(false);
+            return;
+          }
+          if (start && now < start) {
+            // Not yet started - strictly hide
+            setHasData(false);
+            setCategoryCards([]);
+            setFeaturedProducts([]);
+            setLoading(false);
+            return;
+          }
 
-            // Map category cards from PromoStrip
-            if (promoStrip.categoryCards && promoStrip.categoryCards.length > 0) {
-              fetchedCards = promoStrip.categoryCards
-                .sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
-                .map((card: any) => {
-                  const category = typeof card.categoryId === 'object' ? card.categoryId : null;
-                  return {
-                    id: card._id || card.categoryId?._id || card.categoryId,
-                    badge: card.badge || `Up to ${card.discountPercentage || 0}% OFFER`,
-                    title: card.title || category?.name || "",
-                    categoryId: category?._id || card.categoryId,
-                    slug: category?.slug || card.categoryId,
-                    imageUrl: category?.image,
-                    bgColor: "bg-yellow-50",
-                  };
-                });
-            }
+          newHeadingText = promoStrip.heading || "";
+          newSaleTextValue = promoStrip.saleText || "";
+          if (promoStrip.crazyDealsTitle) {
+            setCrazyDealsTitle(promoStrip.crazyDealsTitle);
+          } else {
+            setCrazyDealsTitle("CRAZY DEALS");
+          }
 
-            // Fallback to general categories if PromoStrip exists but has no category cards
-            if (fetchedCards.length === 0 && response.data.categories && response.data.categories.length > 0) {
-              fetchedCards = response.data.categories
-                .slice(0, 4)
-                .map((c: any) => ({
-                  id: c._id || c.id,
-                  badge: "Top Selling",
-                  title: c.name,
-                  categoryId: c.slug || c._id,
-                  slug: c.slug,
-                  bgColor: c.color || "bg-yellow-50",
-                }));
-            }
+          // Format date range
+          if (start && end) {
+            newDateRange = `${start.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()} - ${end.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()}`;
+          }
 
-            // Map featured products from PromoStrip
-            if (promoStrip.featuredProducts && promoStrip.featuredProducts.length > 0) {
-              fetchedProducts = promoStrip.featuredProducts.map((p: any) => {
-                const product = typeof p === 'object' ? p : null;
-                const price = Number(product?.price) || 0;
-                const mrp = Number(product?.mrp) || Number(product?.compareAtPrice) || 0;
-                const originalPrice = mrp > 0 ? mrp : (price > 0 ? Math.round(price * 1.2) : 999);
-                const discountedPrice = price > 0 ? price : 499;
-
-                // Try multiple image field names and fallbacks
-                const imageUrl =
-                  product?.mainImage ||
-                  product?.mainImageUrl ||
-                  product?.image ||
-                  product?.imageUrl ||
-                  (product?.galleryImageUrls && product.galleryImageUrls.length > 0 ? product.galleryImageUrls[0] : null) ||
-                  (product?.galleryImages && product.galleryImages.length > 0 ? product.galleryImages[0] : null) ||
-                  null;
-
-                // Always prioritize productName to avoid showing category names
-                const productName = (typeof product?.productName === 'string' ? product.productName : null) ||
-                                   (typeof product?.name === 'string' ? product.name : null) || "Product";
-
+          // Map category cards ONLY if explicitly configured in this PromoStrip
+          if (promoStrip.categoryCards && promoStrip.categoryCards.length > 0) {
+            fetchedCards = promoStrip.categoryCards
+              .filter((card: any) => card.categoryId)
+              .sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
+              .map((card: any) => {
+                const category = typeof card.categoryId === 'object' ? card.categoryId : null;
                 return {
-                  id: product?._id || p,
-                  _id: product?._id || p,
-                  name: productName,
-                  productName: productName, // Always use productName, never category name
-                  price: price,
-                  mrp: mrp,
-                  originalPrice: isNaN(originalPrice) ? 999 : originalPrice,
-                  discountedPrice: isNaN(discountedPrice) ? 499 : discountedPrice,
-                  imageUrl: imageUrl,
+                  id: card._id || card.categoryId?._id || card.categoryId,
+                  badge: card.badge || (card.discountPercentage ? `Up to ${card.discountPercentage}% OFFER` : "OFFER"),
+                  title: card.title || category?.name || "",
+                  categoryId: category?._id || card.categoryId,
+                  slug: category?.slug || card.categoryId,
+                  imageUrl: category?.image,
+                  bgColor: "bg-yellow-50",
                 };
               });
-            }
           }
-          // 2. Fallback to promoCards if no PromoStrip
-          else if (response.data.promoCards && response.data.promoCards.length > 0) {
-            fetchedCards = response.data.promoCards;
-          }
-          // 3. Fallback to categories if no promo cards
-          else if (
-            response.data.categories &&
-            response.data.categories.length > 0
-          ) {
-            fetchedCards = response.data.categories
-              .slice(0, 4)
-              .map((c: any) => ({
-                id: c._id || c.id,
-                badge: "Top Selling",
-                title: c.name,
-                categoryId: c.slug || c._id,
-                slug: c.slug,
-                bgColor: c.color || "bg-yellow-50",
-              }));
+
+          // Map featured products from PromoStrip
+          if (promoStrip.featuredProducts && promoStrip.featuredProducts.length > 0) {
+            fetchedProducts = promoStrip.featuredProducts.map((p: any) => {
+              const product = typeof p === 'object' ? p : null;
+              const price = Number(product?.price) || 0;
+              const mrp = Number(product?.mrp) || Number(product?.compareAtPrice) || 0;
+              const originalPrice = mrp > 0 ? mrp : (price > 0 ? Math.round(price * 1.2) : 999);
+              const discountedPrice = price > 0 ? price : 499;
+
+              // Try multiple image field names and fallbacks
+              const imageUrl =
+                product?.mainImage ||
+                product?.mainImageUrl ||
+                product?.image ||
+                product?.imageUrl ||
+                (product?.galleryImageUrls && product.galleryImageUrls.length > 0 ? product.galleryImageUrls[0] : null) ||
+                (product?.galleryImages && product.galleryImages.length > 0 ? product.galleryImages[0] : null) ||
+                null;
+
+              // Always prioritize productName to avoid showing category names
+              const productName = (typeof product?.productName === 'string' ? product.productName : null) ||
+                                 (typeof product?.name === 'string' ? product.name : null) || "Product";
+
+              return {
+                id: product?._id || p,
+                _id: product?._id || p,
+                name: productName,
+                productName: productName,
+                price: price,
+                mrp: mrp,
+                originalPrice: isNaN(originalPrice) ? 999 : originalPrice,
+                discountedPrice: isNaN(discountedPrice) ? 499 : discountedPrice,
+                imageUrl: imageUrl,
+              };
+            });
           }
         }
 
-        setCategoryCards(fetchedCards);
-        setFeaturedProducts(fetchedProducts);
+        // Must have at least 1 featured product AND category cards to be considered an active, working promo strip
+        const isStripActive = Boolean(
+          response.data?.promoStrip &&
+          response.data.promoStrip.isActive &&
+          fetchedProducts.length >= 1 &&
+          fetchedCards.length >= 1
+        );
+
+        setCategoryCards(isStripActive ? fetchedCards : []);
+        setFeaturedProducts(isStripActive ? fetchedProducts : []);
         setHeadingText(newHeadingText);
         setSaleTextValue(newSaleTextValue);
         setDateRange(newDateRange);
-        // Reset CRAZY DEALS title if no PromoStrip data
-        if (!response.data?.promoStrip || !response.data.promoStrip.isActive) {
+        if (!isStripActive) {
           setCrazyDealsTitle("CRAZY DEALS");
         }
-        setHasData(fetchedCards.length > 0 || fetchedProducts.length > 0);
+        setHasData(isStripActive);
       } catch (error) {
         console.error("Error fetching home content for PromoStrip:", error);
         setCategoryCards([]);
@@ -438,42 +451,20 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
   useLayoutEffect(() => {
     if (!hasData) return;
     const housefullContainer = housefullRef.current;
-    const saleText = saleRef.current;
-    const dateText = dateRef.current;
     if (!housefullContainer) return;
 
     // Defer animation start to prioritize content rendering
     const timeoutId = setTimeout(() => {
-    const letters = housefullContainer.querySelectorAll(".housefull-letter");
-
-      // Simplified animation - single entrance animation instead of loop
-      gsap.set([housefullContainer, saleText, dateText], {
-        scale: 0.8,
-        opacity: 0,
-      });
-
-      gsap.to([housefullContainer, saleText, dateText], {
-        scale: 1,
-          opacity: 1,
-          duration: 0.5,
-          ease: "back.out(1.7)",
-      });
-
-      // Simplified letter animation - only run once
-      gsap.to(letters, {
-        y: -10,
-        duration: 0.15,
-        stagger: 0.04,
-          ease: "power2.out",
-        yoyo: true,
-        repeat: 1,
-      });
-    }, 150); // Start animation 150ms after render
+      gsap.fromTo(
+        housefullContainer,
+        { opacity: 0, y: -6 },
+        { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" }
+      );
+    }, 150);
 
     return () => {
       clearTimeout(timeoutId);
-      const letters = housefullContainer.querySelectorAll(".housefull-letter");
-      gsap.killTweensOf([housefullContainer, saleText, dateText, letters]);
+      gsap.killTweensOf(housefullContainer);
     };
   }, [hasData]);
 
@@ -537,40 +528,12 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
 
   const currentProduct = featuredProducts.length > 0 ? featuredProducts[currentProductIndex] : null;
 
-  // Show minimal loading state - render faster
-  if (loading) {
-    return (
-      <div
-        className="relative"
-        style={{
-          backgroundColor: "transparent",
-          paddingTop: "12px",
-          paddingBottom: "0px",
-          marginTop: 0,
-          minHeight: "200px"
-        }}>
-        <div className="h-[200px] w-full bg-[var(--brand-cream-soft,#F6EFE2)]/60 animate-pulse rounded-2xl mx-0 mt-4 border border-[var(--brand-border-light,#F2ECE0)]" />
-      </div>
-    );
+  // Strictly hide from user app if loading, or if broken/expired (missing products or category cards)
+  if (loading || !hasData || !currentProduct || featuredProducts.length === 0 || categoryCards.length === 0) {
+    return null;
   }
 
-  // Show "No active promotions" only if there are no cards AND no products
-  if (!hasData || (categoryCards.length === 0 && featuredProducts.length === 0)) {
-    return (
-      <div className="text-center py-6 text-[var(--brand-ink-muted,#5B6B60)] text-sm">
-        No active promotions
-      </div>
-    );
-  }
-
-  // If no featured products but we have category cards, use a fallback product
-  const displayProduct = currentProduct || {
-    id: 'fallback',
-    name: 'Special Offers',
-    originalPrice: 999,
-    discountedPrice: 499,
-    imageUrl: undefined,
-  };
+  const displayProduct = currentProduct;
 
   // Calculate prices from actual product data using utility
   const { displayPrice, mrp } = calculateProductPrice(displayProduct);
@@ -609,8 +572,44 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
         paddingBottom: "0px",
         marginTop: "8px",
       }}>
+      {/* Top Promotional Header Banner */}
+      {(headingText || saleTextValue) && (
+        <div ref={housefullRef} className="px-4 mb-2">
+          <div
+            className="rounded-2xl overflow-hidden shadow-sm border border-[var(--brand-border,#E9E2D3)] px-3.5 py-2.5 text-white relative flex flex-col gap-1"
+            style={{
+              background: "linear-gradient(135deg, #14401F 0%, #1B5128 50%, #236B34 100%)",
+            }}>
+            {/* Row 1: Sale Heading + Date Badge */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-amber-300 animate-pulse text-xs flex-shrink-0">⚡</span>
+                <span className="font-extrabold uppercase tracking-wider text-xs sm:text-sm font-display text-white whitespace-nowrap">
+                  {headingText}
+                </span>
+              </div>
+              {dateRange && (
+                <span
+                  ref={dateRef}
+                  className="text-[9px] sm:text-[10px] text-amber-100 font-semibold bg-white/10 px-2.5 py-0.5 rounded-full border border-white/15 whitespace-nowrap flex-shrink-0">
+                  {dateRange}
+                </span>
+              )}
+            </div>
+            {/* Row 2: Sale Text / Subtitle */}
+            {saleTextValue && (
+              <div
+                ref={saleRef}
+                className="text-amber-200/90 text-[11px] sm:text-xs font-medium leading-tight pl-4">
+                {saleTextValue}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Main Content: Crazy Deals + Category Cards */}
-      <div className="px-4 mt-3 md:mt-4">
+      <div className="px-4 mt-2">
         <div ref={containerRef} className="flex gap-2">
           {/* Crazy Deals Section - Left */}
           <div className="flex-shrink-0 w-[100px] promo-card transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
@@ -734,14 +733,17 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
               the PromoStrip admin config has more than 4 entries. */}
           <div className="flex-1 grid grid-cols-2 gap-2">
             {visibleCategoryCards.map((card) => {
-              // Use subcategory images from the map if available, otherwise check card.subcategoryImages, then fallback to dummy product images
-              const rawSubImages = subcategoryImagesMap[card.id] || card.subcategoryImages || [];
+              // Use subcategory images from the map if available (filtering out placeholder text)
+              const rawSubImages = (subcategoryImagesMap[card.id] || card.subcategoryImages || []).filter(
+                (img) => img && !img.includes("placehold.co")
+              );
               const subcategoryImages = rawSubImages.length > 0
                 ? rawSubImages
-                : getDummyCategoryImages(card.title, card.categoryId || card.slug);
+                : getDummyCategoryImages(card.title, card.categoryId || card.slug).filter(
+                    (img) => img && !img.includes("placehold.co")
+                  );
               const hasSubcategoryImages = subcategoryImages.length > 0;
-              const categoryIcons = getCategoryIcons(card.categoryId || "");
-
+              const categoryIcons = getCategoryIcons(card.categoryId || card.slug || card.title || "");
 
               return (
                 <div key={card.id} className="promo-card">
@@ -775,17 +777,16 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
                         {card.title}
                       </div>
 
-                      {/* Subcategory Images or Emoji Icons - Horizontal Layout */}
+                      {/* Subcategory Images or Emoji Icons - Sized properly for mobile card */}
                       <div
-                        className="flex items-center justify-center gap-1 overflow-hidden"
+                        className="flex items-center justify-center gap-1.5 overflow-hidden py-1"
                         style={{ marginTop: "auto" }}>
                         {hasSubcategoryImages
-                          ? // Display subcategory images as small icons
-                            subcategoryImages.slice(0, 4).map((imageUrl, idx) => (
+                          ? // Display up to 2 subcategory images so they fit without overflowing
+                            subcategoryImages.slice(0, 2).map((imageUrl, idx) => (
                                 <div
                                   key={idx}
-                                  className="flex-shrink-0 bg-white rounded-xl flex items-center justify-center overflow-hidden border border-[var(--brand-border-light,#F2ECE0)] shadow-sm transition-all duration-300 group-hover:scale-[1.03]"
-                                  style={{ width: "64px", height: "64px" }}>
+                                  className="w-10 h-10 bg-white rounded-xl flex items-center justify-center overflow-hidden border border-[var(--brand-border-light,#F2ECE0)] shadow-xs transition-all duration-300 group-hover:scale-[1.05]">
                                   <img
                                     src={imageUrl}
                                     alt={`Subcategory ${idx + 1}`}
@@ -793,15 +794,12 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
                                     loading="lazy"
                                     decoding="async"
                                     onError={(e) => {
-                                      // Fallback to emoji if image fails to load
-                                      const target =
-                                        e.target as HTMLImageElement;
+                                      const target = e.target as HTMLImageElement;
                                       target.style.display = "none";
                                       const parent = target.parentElement;
                                       if (parent) {
-                                        parent.innerHTML =
-                                          categoryIcons[idx] || "📦";
-                                        parent.style.fontSize = "34px";
+                                        parent.innerHTML = categoryIcons[idx] || "📦";
+                                        parent.style.fontSize = "20px";
                                         parent.style.display = "flex";
                                         parent.style.alignItems = "center";
                                         parent.style.justifyContent = "center";
@@ -810,15 +808,13 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
                                   />
                                 </div>
                               ))
-                          : // Fallback to emoji icons if no subcategory images
-                            categoryIcons.slice(0, 4).map((icon, idx) => (
+                          : // Fallback to icons in sleek badges
+                            categoryIcons.slice(0, 2).map((icon, idx) => (
                               <div
                                 key={idx}
-                                className="flex-shrink-0 bg-transparent rounded-md flex items-center justify-center overflow-hidden transition-all duration-300 group-hover:scale-105"
+                                className="w-10 h-10 bg-white/80 rounded-xl flex items-center justify-center border border-[var(--brand-border-light,#F2ECE0)] shadow-xs transition-all duration-300 group-hover:scale-105"
                                 style={{
-                                  width: "64px",
-                                  height: "64px",
-                                  fontSize: "34px",
+                                  fontSize: "20px",
                                 }}>
                                 {icon}
                               </div>

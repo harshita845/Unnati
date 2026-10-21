@@ -10,7 +10,7 @@ import {
 } from "../../../services/api/admin/adminPromoStripService";
 import { getCategories, type Category } from "../../../services/api/categoryService";
 import { getHeaderCategoriesAdmin, type HeaderCategory } from "../../../services/api/headerCategoryService";
-import { getProducts as getAdminProducts, type Product } from "../../../services/api/admin/adminProductService";
+import { getProducts as getAdminProducts, getProductById, type Product } from "../../../services/api/admin/adminProductService";
 
 export default function AdminPromoStrip() {
   // Form state
@@ -21,6 +21,9 @@ export default function AdminPromoStrip() {
   const [endDate, setEndDate] = useState("");
   const [categoryCards, setCategoryCards] = useState<CategoryCard[]>([]);
   const [featuredProducts, setFeaturedProducts] = useState<string[]>([]);
+  const [selectedProductsMap, setSelectedProductsMap] = useState<
+    Record<string, { _id: string; productName: string; mainImage?: string; price?: number }>
+  >({});
   const [crazyDealsTitle, setCrazyDealsTitle] = useState("CRAZY DEALS");
   const [isActive, setIsActive] = useState(true);
   const [order, setOrder] = useState(0);
@@ -64,6 +67,31 @@ export default function AdminPromoStrip() {
       setProducts([]);
     }
   }, [productSearch]);
+
+  // Fetch details for any featured product IDs missing from selectedProductsMap
+  useEffect(() => {
+    const missingIds = featuredProducts.filter((id) => !selectedProductsMap[id]);
+    if (missingIds.length > 0) {
+      missingIds.forEach(async (id) => {
+        try {
+          const res = await getProductById(id);
+          if (res && res.success && res.data) {
+            setSelectedProductsMap((prev) => ({
+              ...prev,
+              [id]: {
+                _id: res.data._id,
+                productName: res.data.productName,
+                mainImage: res.data.mainImage,
+                price: res.data.price,
+              },
+            }));
+          }
+        } catch (e) {
+          console.warn("Failed to fetch product details for ID:", id);
+        }
+      });
+    }
+  }, [featuredProducts]);
 
   const fetchPromoStrips = async () => {
     try {
@@ -130,11 +158,50 @@ export default function AdminPromoStrip() {
       return;
     }
 
+    if (heading.length > 100) {
+      setError("Heading cannot exceed 100 characters");
+      return;
+    }
+
+    if (saleText.length > 100) {
+      setError("Sale text cannot exceed 100 characters");
+      return;
+    }
+
+    if (crazyDealsTitle && crazyDealsTitle.length > 60) {
+      setError("CRAZY DEALS Title cannot exceed 60 characters");
+      return;
+    }
+
     // Validate at least 4 featured products for carousel
     if (featuredProducts.length < 4) {
       setError("Please select at least 4 products for the CRAZY DEALS carousel section");
       return;
     }
+
+    // Validate category cards if any were added
+    for (let i = 0; i < categoryCards.length; i++) {
+      const card = categoryCards[i];
+      const catId = typeof card.categoryId === "string" ? card.categoryId : (card.categoryId as any)?._id;
+      if (!catId) {
+        setError(`Please select a category for Card ${i + 1}, or remove the card`);
+        return;
+      }
+    }
+
+    const sanitizedCategoryCards = categoryCards.map((card, idx) => {
+      const catId = typeof card.categoryId === "string" ? card.categoryId : (card.categoryId as any)?._id;
+      const catObj = categories.find((c) => c._id === catId);
+      const title = (card.title && card.title.trim()) || catObj?.name || "Category";
+      const badge = (card.badge && card.badge.trim()) || (card.discountPercentage ? `Up to ${card.discountPercentage}% OFF` : "SPECIAL OFFER");
+      return {
+        categoryId: catId,
+        title,
+        badge,
+        discountPercentage: Number(card.discountPercentage) || 0,
+        order: card.order !== undefined ? card.order : idx,
+      };
+    });
 
     const formData: PromoStripFormData = {
       headerCategorySlug,
@@ -142,14 +209,9 @@ export default function AdminPromoStrip() {
       saleText,
       startDate,
       endDate,
-      categoryCards: categoryCards.map((card) => ({
-        categoryId: card.categoryId,
-        title: card.title,
-        badge: card.badge,
-        discountPercentage: card.discountPercentage,
-        order: card.order,
-      })),
+      categoryCards: sanitizedCategoryCards,
       featuredProducts,
+      crazyDealsTitle: crazyDealsTitle.trim() || "CRAZY DEALS",
       isActive,
       order,
     };
@@ -197,14 +259,24 @@ export default function AdminPromoStrip() {
         };
       })
     );
-    setFeaturedProducts(
-      promoStrip.featuredProducts.map((p) => {
-        if (typeof p === "string") {
-          return p;
-        }
-        return (p as any)?._id || p;
-      })
-    );
+    const newMap: Record<string, { _id: string; productName: string; mainImage?: string; price?: number }> = {};
+    const ids: string[] = [];
+    promoStrip.featuredProducts.forEach((p) => {
+      if (typeof p === "object" && p !== null && (p as any)._id) {
+        const prod = p as any;
+        ids.push(prod._id);
+        newMap[prod._id] = {
+          _id: prod._id,
+          productName: prod.productName || "Product",
+          mainImage: prod.mainImage,
+          price: prod.price,
+        };
+      } else if (typeof p === "string") {
+        ids.push(p);
+      }
+    });
+    setFeaturedProducts(ids);
+    setSelectedProductsMap(newMap);
     setCrazyDealsTitle(promoStrip.crazyDealsTitle || "CRAZY DEALS");
     setIsActive(promoStrip.isActive);
     setOrder(promoStrip.order);
@@ -237,6 +309,7 @@ export default function AdminPromoStrip() {
     setEndDate("");
     setCategoryCards([]);
     setFeaturedProducts([]);
+    setSelectedProductsMap({});
     setCrazyDealsTitle("CRAZY DEALS");
     setIsActive(true);
     setOrder(0);
@@ -270,16 +343,30 @@ export default function AdminPromoStrip() {
     setCategoryCards(categoryCards.filter((_, i) => i !== index));
   };
 
-  const addFeaturedProduct = (productId: string) => {
-    if (!featuredProducts.includes(productId)) {
-      setFeaturedProducts([...featuredProducts, productId]);
+  const addFeaturedProduct = (product: Product | { _id: string; productName: string; mainImage?: string; price?: number }) => {
+    if (!featuredProducts.includes(product._id)) {
+      setFeaturedProducts((prev) => [...prev, product._id]);
+      setSelectedProductsMap((prev) => ({
+        ...prev,
+        [product._id]: {
+          _id: product._id,
+          productName: product.productName,
+          mainImage: product.mainImage,
+          price: product.price,
+        },
+      }));
     }
     setProductSearch("");
     setProducts([]);
   };
 
   const removeFeaturedProduct = (productId: string) => {
-    setFeaturedProducts(featuredProducts.filter((id) => id !== productId));
+    setFeaturedProducts((prev) => prev.filter((id) => id !== productId));
+    setSelectedProductsMap((prev) => {
+      const updated = { ...prev };
+      delete updated[productId];
+      return updated;
+    });
   };
 
   // Pagination
@@ -352,13 +439,19 @@ export default function AdminPromoStrip() {
 
               {/* Heading */}
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Heading <span className="text-red-500">*</span>
-                </label>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-medium text-neutral-700">
+                    Heading <span className="text-red-500">*</span>
+                  </label>
+                  <span className={`text-xs ${heading.length > 90 ? 'text-amber-600 font-semibold' : 'text-neutral-400'}`}>
+                    {heading.length}/100
+                  </span>
+                </div>
                 <input
                   type="text"
                   value={heading}
                   onChange={(e) => setHeading(e.target.value)}
+                  maxLength={100}
                   placeholder="e.g., HOUSEFULL SALE"
                   className="w-full px-3 py-2 border border-neutral-300 rounded bg-white focus:ring-2 focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)] outline-none"
                   required
@@ -367,17 +460,26 @@ export default function AdminPromoStrip() {
 
               {/* Sale Text */}
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  Sale Text <span className="text-red-500">*</span>
-                </label>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-medium text-neutral-700">
+                    Sale Text <span className="text-red-500">*</span>
+                  </label>
+                  <span className={`text-xs ${saleText.length > 90 ? 'text-amber-600 font-semibold' : 'text-neutral-400'}`}>
+                    {saleText.length}/100
+                  </span>
+                </div>
                 <input
                   type="text"
                   value={saleText}
                   onChange={(e) => setSaleText(e.target.value)}
-                  placeholder="e.g., SALE"
+                  maxLength={100}
+                  placeholder="e.g., SALE or Get everything at the Lowest Price"
                   className="w-full px-3 py-2 border border-neutral-300 rounded bg-white focus:ring-2 focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)] outline-none"
                   required
                 />
+                <p className="text-xs text-neutral-500 mt-1">
+                  Tagline or promotional highlight text (up to 100 characters)
+                </p>
               </div>
 
               {/* Date Range */}
@@ -435,45 +537,75 @@ export default function AdminPromoStrip() {
                           Remove
                         </button>
                       </div>
-                      <div className="space-y-2">
-                        <select
-                          value={typeof card.categoryId === 'string' ? card.categoryId : (card.categoryId as any)?._id || ''}
-                          onChange={(e) => updateCategoryCard(index, "categoryId", e.target.value)}
-                          className="w-full px-2 py-1 text-sm border border-neutral-300 rounded bg-white"
-                          required
-                        >
-                          <option value="">Select category</option>
-                          {Array.isArray(categories) && categories.map((cat) => (
-                            <option key={cat._id} value={cat._id}>
-                              {cat.name}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          type="text"
-                          value={card.title}
-                          onChange={(e) => updateCategoryCard(index, "title", e.target.value)}
-                          placeholder="Custom title"
-                          className="w-full px-2 py-1 text-sm border border-neutral-300 rounded bg-white"
-                        />
-                        <input
-                          type="text"
-                          value={card.badge}
-                          onChange={(e) => updateCategoryCard(index, "badge", e.target.value)}
-                          placeholder="Badge (e.g., Up to 55% OFFER)"
-                          className="w-full px-2 py-1 text-sm border border-neutral-300 rounded bg-white"
-                          required
-                        />
-                        <input
-                          type="number"
-                          value={card.discountPercentage}
-                          onChange={(e) => updateCategoryCard(index, "discountPercentage", parseFloat(e.target.value) || 0)}
-                          placeholder="Discount %"
-                          min="0"
-                          max="100"
-                          className="w-full px-2 py-1 text-sm border border-neutral-300 rounded bg-white"
-                          required
-                        />
+                      <div className="space-y-2.5">
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 mb-1">
+                            Category <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            value={typeof card.categoryId === 'string' ? card.categoryId : (card.categoryId as any)?._id || ''}
+                            onChange={(e) => {
+                              const catId = e.target.value;
+                              updateCategoryCard(index, "categoryId", catId);
+                              const selectedCat = categories.find((c) => c._id === catId);
+                              if (selectedCat && !card.title) {
+                                updateCategoryCard(index, "title", selectedCat.name);
+                              }
+                              if (!card.badge) {
+                                updateCategoryCard(index, "badge", "Up to 50% OFF");
+                              }
+                            }}
+                            className="w-full px-2 py-1.5 text-sm border border-neutral-300 rounded bg-white"
+                            required
+                          >
+                            <option value="">Select category</option>
+                            {Array.isArray(categories) && categories.map((cat) => (
+                              <option key={cat._id} value={cat._id}>
+                                {cat.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 mb-1">
+                            Display Title <span className="text-neutral-400 font-normal">(defaults to category name)</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={card.title}
+                            onChange={(e) => updateCategoryCard(index, "title", e.target.value)}
+                            placeholder="e.g. Bridal & Wedding Wear"
+                            className="w-full px-2 py-1.5 text-sm border border-neutral-300 rounded bg-white"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 mb-1">
+                              Badge
+                            </label>
+                            <input
+                              type="text"
+                              value={card.badge}
+                              onChange={(e) => updateCategoryCard(index, "badge", e.target.value)}
+                              placeholder="e.g. Up to 50% OFF"
+                              className="w-full px-2 py-1.5 text-sm border border-neutral-300 rounded bg-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 mb-1">
+                              Discount %
+                            </label>
+                            <input
+                              type="number"
+                              value={card.discountPercentage || ""}
+                              onChange={(e) => updateCategoryCard(index, "discountPercentage", parseFloat(e.target.value) || 0)}
+                              placeholder="e.g. 50"
+                              min="0"
+                              max="100"
+                              className="w-full px-2 py-1.5 text-sm border border-neutral-300 rounded bg-white"
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -482,13 +614,19 @@ export default function AdminPromoStrip() {
 
               {/* CRAZY DEALS Title */}
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-2">
-                  CRAZY DEALS Title
-                </label>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-medium text-neutral-700">
+                    CRAZY DEALS Title
+                  </label>
+                  <span className={`text-xs ${crazyDealsTitle.length > 50 ? 'text-amber-600 font-semibold' : 'text-neutral-400'}`}>
+                    {crazyDealsTitle.length}/60
+                  </span>
+                </div>
                 <input
                   type="text"
                   value={crazyDealsTitle}
                   onChange={(e) => setCrazyDealsTitle(e.target.value)}
+                  maxLength={60}
                   placeholder="e.g., CRAZY DEALS, SPECIAL OFFERS"
                   className="w-full px-3 py-2 border border-neutral-300 rounded bg-white focus:ring-2 focus:ring-[var(--primary-color)] focus:border-[var(--primary-color)] outline-none"
                 />
@@ -516,41 +654,96 @@ export default function AdminPromoStrip() {
                   <p className="text-xs text-neutral-500 mb-2">Type at least 3 characters to search</p>
                 )}
                 {products.length > 0 && (
-                  <div className="border border-neutral-300 rounded max-h-40 overflow-y-auto mb-2">
-                    {products.map((product) => (
-                      <div
-                        key={product._id}
-                        onClick={() => addFeaturedProduct(product._id)}
-                        className="p-2 hover:bg-neutral-50 cursor-pointer text-sm"
-                      >
-                        {product.productName}
-                      </div>
-                    ))}
+                  <div className="border border-neutral-300 rounded max-h-48 overflow-y-auto mb-2 bg-white divide-y divide-neutral-100 shadow-sm">
+                    {products.map((product) => {
+                      const isAlreadySelected = featuredProducts.includes(product._id);
+                      return (
+                        <div
+                          key={product._id}
+                          onClick={() => !isAlreadySelected && addFeaturedProduct(product)}
+                          className={`p-2 cursor-pointer text-sm flex items-center justify-between transition-colors ${
+                            isAlreadySelected ? "bg-neutral-100 opacity-60 cursor-not-allowed" : "hover:bg-neutral-50"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            {product.mainImage ? (
+                              <img src={product.mainImage} alt="" className="w-8 h-8 object-cover rounded bg-neutral-100 flex-shrink-0" />
+                            ) : (
+                              <div className="w-8 h-8 rounded bg-neutral-100 flex items-center justify-center text-xs text-neutral-400 flex-shrink-0">
+                                📦
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="font-medium text-neutral-800 text-xs truncate">{product.productName}</p>
+                              {product.category && (
+                                <p className="text-[10px] text-neutral-400">
+                                  {typeof product.category === "object" ? (product.category as any)?.name : ""}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0 ml-2 flex items-center gap-2">
+                            {product.price !== undefined && (
+                              <span className="text-xs font-semibold text-neutral-700">₹{product.price}</span>
+                            )}
+                            {isAlreadySelected ? (
+                              <span className="text-[10px] font-semibold text-neutral-500 bg-neutral-200 px-1.5 py-0.5 rounded">Selected</span>
+                            ) : (
+                              <span className="text-[10px] font-semibold text-[var(--primary-color)] bg-[var(--primary-color)]/10 px-1.5 py-0.5 rounded">+ Add</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 {productSearch.length >= 3 && products.length === 0 && (
                   <p className="text-xs text-neutral-500 mb-2">No products found</p>
                 )}
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {featuredProducts.map((productId) => {
-                    const product = products.find((p) => p._id === productId);
-                    return (
-                      <div
-                        key={productId}
-                        className="flex items-center gap-1 bg-[var(--primary-color)]/10 text-[var(--primary-color)] px-2 py-1 rounded text-sm"
-                      >
-                        <span>{product?.productName || productId}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeFeaturedProduct(productId)}
-                          className="text-[var(--primary-color)] hover:text-[var(--primary-dark)]"
+                {featuredProducts.length > 0 && (
+                  <div className="space-y-1.5 mb-2 max-h-56 overflow-y-auto">
+                    {featuredProducts.map((productId) => {
+                      const productInfo = selectedProductsMap[productId] || products.find((p) => p._id === productId);
+                      const name = productInfo?.productName || productId;
+                      const image = productInfo?.mainImage;
+
+                      return (
+                        <div
+                          key={productId}
+                          className="flex items-center justify-between bg-white border border-neutral-200 p-2 rounded-lg text-sm shadow-xs hover:border-[var(--primary-color)] transition-colors"
                         >
-                          ×
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {image ? (
+                              <img src={image} alt="" className="w-9 h-9 object-cover rounded bg-neutral-50 border border-neutral-100 flex-shrink-0" />
+                            ) : (
+                              <div className="w-9 h-9 rounded bg-neutral-100 flex items-center justify-center text-xs text-neutral-400 flex-shrink-0">
+                                📦
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <span className="font-medium text-neutral-800 text-xs block truncate" title={name}>
+                                {name}
+                              </span>
+                              {productInfo?.price !== undefined && (
+                                <span className="text-[11px] text-neutral-500">₹{productInfo.price}</span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFeaturedProduct(productId)}
+                            className="text-neutral-400 hover:text-red-500 p-1 rounded-md hover:bg-red-50 transition-colors flex-shrink-0 ml-2"
+                            title="Remove product"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <span className={`text-xs font-medium ${
                     featuredProducts.length >= 4 ? 'text-[var(--primary-dark)]' : 'text-orange-600'

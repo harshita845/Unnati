@@ -3,6 +3,7 @@ import { useLocation, Link } from 'react-router-dom';
 import { ShieldAlert, ArrowLeft } from 'lucide-react';
 import SellerHeader from './SellerHeader';
 import SubscriptionBanner from './SubscriptionBanner';
+import StockTransferBanner, { SELLER_STOCK_TRANSFER_EVENT } from './StockTransferBanner';
 import SellerSidebar from './SellerSidebar';
 import { useSellerSocket, SellerNotification } from '../hooks/useSellerSocket';
 import SellerNotificationAlert from './SellerNotificationAlert';
@@ -41,6 +42,11 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
   }, []);
 
   const handleNotificationReceived = useCallback((notification: SellerNotification) => {
+    // Stock sent to (or cancelled for) this store: the waiting-transfer banner and list refresh
+    if (notification.type === 'STOCK_TRANSFER' || notification.type === 'STOCK_TRANSFER_CANCELLED') {
+      window.dispatchEvent(new CustomEvent(SELLER_STOCK_TRANSFER_EVENT, { detail: notification.type === 'STOCK_TRANSFER' ? 'arrived' : 'cancelled' }));
+      return;
+    }
     // Every change refreshes open order pages; only a new order needs the store's attention
     broadcastSellerOrderUpdate(notification);
     if (notification.type === 'NEW_ORDER') setActiveNotification(notification);
@@ -167,6 +173,7 @@ export default function SellerLayout({ children }: SellerLayoutProps) {
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-[#F5F7F4]">
           <SubscriptionBanner />
+          <StockTransferBanner />
           {!isCurrentRouteAllowed ? (
             <div className="max-w-2xl mx-auto my-12 p-8 bg-white border border-neutral-200 rounded-2xl shadow-sm text-center">
               <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-200">

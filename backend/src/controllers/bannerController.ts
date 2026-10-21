@@ -179,12 +179,17 @@ export const getFlashDeals = asyncHandler(async (req: Request, res: Response) =>
     featuredDealProductIds = featuredDealProductIds.filter((id) => allowed.has(id));
   }
 
+  const rawTargetDate = settings.flashDeal?.targetDate ? new Date(settings.flashDeal.targetDate) : null;
+  const isExpired = rawTargetDate ? rawTargetDate.getTime() <= Date.now() : true;
+  const isCustomerScope = req.query.scope === 'customer';
+
   const data = {
-    flashDealTargetDate: settings.flashDeal?.targetDate
-      ? new Date(settings.flashDeal.targetDate).toISOString()
-      : new Date(Date.now() + 86400000).toISOString(),
+    flashDealTargetDate: rawTargetDate
+      ? rawTargetDate.toISOString()
+      : '',
     flashDealImage,
-    isActive: settings.flashDeal?.active ?? true,
+    isActive: isCustomerScope && isExpired ? false : (settings.flashDeal?.active ?? true),
+    isExpired,
     // Flash Deal Products (separate from Deal of the Day)
     flashDealProductIds,
     // Deal of the Day

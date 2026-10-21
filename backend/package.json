@@ -32,7 +32,8 @@
     "add:products-from-paths": "tsx src/scripts/addProductsFromImagePaths.ts",
     "search:backfill-embeddings": "tsx src/scripts/backfillProductEmbeddings.ts",
     "migrate:product-variants": "tsx src/scripts/migrateProductVariantModel.ts",
-    "test:ocr": "tsx --test tests/ocr/*.test.ts"
+    "test:ocr": "tsx --test tests/ocr/*.test.ts",
+    "test:gst": "tsx --test tests/gst/*.test.ts"
   },
   "keywords": [
     "express",

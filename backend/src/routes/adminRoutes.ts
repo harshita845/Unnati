@@ -4,6 +4,9 @@ import { uploadMultipleDocuments } from "../middleware/upload";
 
 // Dashboard Controllers
 import * as dashboardController from "../modules/admin/controllers/adminDashboardController";
+import * as backupController from "../modules/admin/controllers/adminBackupController";
+import * as gstReturnController from "../modules/admin/controllers/adminGstReturnController";
+import * as stockTransferController from "../modules/admin/controllers/adminStockTransferController";
 
 // Product Controllers
 import * as productController from "../modules/admin/controllers/adminProductController";
@@ -149,6 +152,24 @@ router.get(
 );
 // Top 15 sold products and top 15 customer searches for the same period
 router.get("/dashboard/top-insights", dashboardController.getTopInsightsController);
+
+// ==================== Data Backup (Super Admin) ====================
+router.get("/backups", backupController.getBackups);
+
+// ==================== Stock transfers between stores ====================
+router.get("/stock-transfers/stores", stockTransferController.getTransferStores);
+router.get("/stock-transfers/products", stockTransferController.getTransferProducts);
+router.get("/stock-transfers", stockTransferController.getTransfers);
+router.post("/stock-transfers", stockTransferController.createTransfer);
+router.post("/stock-transfers/:id/accept", stockTransferController.acceptTransferAsAdmin);
+router.post("/stock-transfers/:id/reject", stockTransferController.rejectTransferAsAdmin);
+router.post("/stock-transfers/:id/cancel", stockTransferController.cancelTransfer);
+
+// ==================== GST returns (GSTR-1, GSTR-3B) ====================
+router.get("/reports/gst-returns/stores", gstReturnController.getGstReturnStores);
+router.get("/reports/gst-returns", gstReturnController.getGstReturns);
+router.post("/backups", backupController.createBackup);
+router.get("/backups/:id/files/:index/download", backupController.getBackupFileLink);
 
 // ==================== Category Routes ====================
 router.post("/categories", productController.createCategory);

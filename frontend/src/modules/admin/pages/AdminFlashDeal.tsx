@@ -78,6 +78,26 @@ export default function AdminFlashDeal() {
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   };
 
+  const formatReadableDate = (isoString: string) => {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleString('en-IN', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  const isDealExpired = Boolean(
+    config.flashDealTargetDate &&
+    new Date(config.flashDealTargetDate).getTime() <= Date.now()
+  );
+
   const handleDateChange = (date: string) => {
     const time = getLocalTime(config.flashDealTargetDate) || '00:00';
     if (date) {
@@ -179,6 +199,36 @@ export default function AdminFlashDeal() {
                     <span className="text-gray-700 font-bold uppercase tracking-wider text-xs">Enable Flash Deal Section</span>
                 </label>
 
+                {config.flashDealTargetDate && (
+                  isDealExpired ? (
+                    <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-start gap-3">
+                      <span className="text-lg leading-none">⚠️</span>
+                      <div className="flex-1">
+                        <div className="font-bold text-sm text-amber-900 flex items-center gap-2">
+                          <span>Flash Deal Ended</span>
+                          <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">Expired</span>
+                        </div>
+                        <p className="text-amber-700 mt-1 leading-relaxed">
+                          This deal ended on <strong>{formatReadableDate(config.flashDealTargetDate)}</strong>. It is currently <strong>hidden from the user app</strong>. Set a future date & time below and click &quot;Save All Changes&quot; to reactivate it.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs flex items-start gap-3">
+                      <span className="text-lg leading-none">🟢</span>
+                      <div className="flex-1">
+                        <div className="font-bold text-sm text-emerald-900 flex items-center gap-2">
+                          <span>Flash Deal Active</span>
+                          <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900">Running</span>
+                        </div>
+                        <p className="text-emerald-700 mt-1 leading-relaxed">
+                          Active until <strong>{formatReadableDate(config.flashDealTargetDate)}</strong>.
+                        </p>
+                      </div>
+                    </div>
+                  )
+                )}
+
                 <div className="space-y-4 mb-6">
                     <label className="block">
                         <span className="text-gray-600 font-bold text-[10px] uppercase tracking-widest mb-1.5 block">End Date</span>
@@ -198,6 +248,12 @@ export default function AdminFlashDeal() {
                             onChange={(e) => handleTimeChange(e.target.value)}
                         />
                     </label>
+                    {config.flashDealTargetDate && (
+                      <div className="text-[11px] text-gray-500 font-medium bg-neutral-50 p-2.5 rounded-lg border border-neutral-200 flex items-center justify-between">
+                        <span>Selected End Time:</span>
+                        <span className="font-bold text-gray-800">{formatReadableDate(config.flashDealTargetDate)}</span>
+                      </div>
+                    )}
                 </div>
 
                 <div className="mb-6">

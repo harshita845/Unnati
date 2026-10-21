@@ -33,13 +33,13 @@ const PromoStripSchema = new Schema<IPromoStrip>(
       type: String,
       required: [true, "Heading is required"],
       trim: true,
-      maxlength: [50, "Heading cannot exceed 50 characters"],
+      maxlength: [100, "Heading cannot exceed 100 characters"],
     },
     saleText: {
       type: String,
       required: [true, "Sale text is required"],
       trim: true,
-      maxlength: [20, "Sale text cannot exceed 20 characters"],
+      maxlength: [100, "Sale text cannot exceed 100 characters"],
     },
     startDate: {
       type: Date,
@@ -64,19 +64,19 @@ const PromoStripSchema = new Schema<IPromoStrip>(
         },
         title: {
           type: String,
-          required: true,
           trim: true,
+          default: "",
         },
         badge: {
           type: String,
-          required: true,
           trim: true,
+          default: "SPECIAL OFFER",
         },
         discountPercentage: {
           type: Number,
-          required: true,
           min: [0, "Discount percentage cannot be negative"],
           max: [100, "Discount percentage cannot exceed 100"],
+          default: 0,
         },
         order: {
           type: Number,
@@ -93,7 +93,7 @@ const PromoStripSchema = new Schema<IPromoStrip>(
     crazyDealsTitle: {
       type: String,
       trim: true,
-      maxlength: [30, "Crazy Deals title cannot exceed 30 characters"],
+      maxlength: [60, "Crazy Deals title cannot exceed 60 characters"],
       default: "CRAZY DEALS",
     },
     isActive: {
