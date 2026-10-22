@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ProductCard from "./components/ProductCard";
-import { getProductById } from "../../services/api/customerProductService";
+import { getProductById, getProducts } from "../../services/api/customerProductService";
 import { bannerService } from "../../services/bannerService";
 import BannerSlider from "./components/banners/BannerSlider";
 import { useLocation } from "../../hooks/useLocation";
+import { mapApiProductForCustomerDisplay } from "../../utils/customerVariantUtils";
 
 // Use the admin-managed Customer App Theme so the hero band reflects the brand
 // color, not the (per-tab) header-category palette.
@@ -26,16 +27,51 @@ export default function FlashDealsPage() {
         let fetchedProducts: any[] = [];
 
         // 1. Specific IDs from Flash Deal configuration
-        if (configResponse.flashDealProductIds && configResponse.flashDealProductIds.length > 0) {
-          const promises = configResponse.flashDealProductIds.map((id: string) => getProductById(id, location?.latitude, location?.longitude));
+        if (configResponse?.flashDealProductIds && configResponse.flashDealProductIds.length > 0) {
+          const promises = configResponse.flashDealProductIds.map((id: string) =>
+            getProductById(id, location?.latitude, location?.longitude).catch(() => null)
+          );
           const results = await Promise.all(promises);
           fetchedProducts = results
-            .filter((res) => res.success && res.data)
+            .filter((res) => res && res.success && res.data)
             .map((res) => ({
-              ...res.data,
-              id: (res.data as any)._id || (res.data as any).id,
-              isAvailable: (res.data as any).isAvailableAtLocation !== false,
+              ...mapApiProductForCustomerDisplay(res!.data),
+              id: (res!.data as any)._id || (res!.data as any).id,
+              isAvailable: (res!.data as any).isAvailableAtLocation !== false,
             }));
+        }
+
+        // 2. Fallback: If no specific products configured or none found, fetch discounted products
+        if (fetchedProducts.length === 0) {
+          const prodRes = await getProducts({
+            sort: 'discount',
+            limit: 30,
+            latitude: location?.latitude,
+            longitude: location?.longitude,
+            city: location?.city,
+          });
+
+          if (prodRes?.success && Array.isArray(prodRes.data) && prodRes.data.length > 0) {
+            fetchedProducts = prodRes.data.map((p: any) => ({
+              ...mapApiProductForCustomerDisplay(p),
+              id: p._id || p.id,
+              isAvailable: p.isAvailableAtLocation !== false,
+            }));
+          } else {
+            // Secondary fallback without location restrictions (e.g. for preview / unlocated users)
+            const fallbackRes = await getProducts({
+              sort: 'discount',
+              limit: 30,
+              city: 'Indore',
+            });
+            if (fallbackRes?.success && Array.isArray(fallbackRes.data)) {
+              fetchedProducts = fallbackRes.data.map((p: any) => ({
+                ...mapApiProductForCustomerDisplay(p),
+                id: p._id || p.id,
+                isAvailable: p.isAvailableAtLocation !== false,
+              }));
+            }
+          }
         }
 
         setProducts(fetchedProducts);
@@ -48,7 +84,7 @@ export default function FlashDealsPage() {
     };
 
     fetchFlashDeals();
-  }, []);
+  }, [location?.latitude, location?.longitude, location?.city]);
 
   return (
     <div className="min-h-screen bg-[var(--brand-cream,#FDF9F2)] text-[var(--brand-ink,#1C2B20)] pb-20">

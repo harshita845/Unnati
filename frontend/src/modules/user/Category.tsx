@@ -1,7 +1,6 @@
 import { useParams, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useState, useMemo, useEffect, useRef } from "react";
 import ProductCard from "./components/ProductCard";
-
 import { motion, AnimatePresence } from "framer-motion";
 import {
   getProducts,
@@ -24,9 +23,16 @@ export default function CategoryPage() {
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [sortBy, setSortBy] = useState<string>("default");
-  const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
+
+  // Dynamic filter state
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [selectedPrices, setSelectedPrices] = useState<string[]>([]);
+  const [selectedDiscounts, setSelectedDiscounts] = useState<string[]>([]);
+  const [inStockOnly, setInStockOnly] = useState(false);
   const [filterSearchQuery, setFilterSearchQuery] = useState("");
   const [selectedFilterCategory, setSelectedFilterCategory] = useState("Type");
+
   const [products, setProducts] = useState<any[]>([]);
 
   const sortOptions = [
@@ -35,7 +41,9 @@ export default function CategoryPage() {
     { id: "price-desc", label: "Price: High to Low" },
     { id: "name-asc", label: "Name: A to Z" },
     { id: "name-desc", label: "Name: Z to A" },
+    { id: "discount-desc", label: "Discount: High to Low" },
   ];
+
   const [loading, setLoading] = useState(true);
   const [categoryLoading, setCategoryLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +53,6 @@ export default function CategoryPage() {
   const productsContainerRef = useRef<HTMLDivElement>(null);
 
   // Fetch Category Details
-  // Fetch Category Details (only when category ID changes)
   useEffect(() => {
     const fetchCategoryDetails = async () => {
       setCategoryLoading(true);
@@ -114,11 +121,6 @@ export default function CategoryPage() {
       setLoading(true);
       setError(null);
       try {
-        // If the ID in the URL is actually for a subcategory, we should use the parent category ID
-        // which we fetch in the other useEffect and store in 'category'.
-        // However, for fetching products, the backend getProducts handles 'category' (parent)
-        // and 'subcategory' separately.
-
         const params: any = { 
           category: category?._id || id,
           page: currentPage,
@@ -138,7 +140,6 @@ export default function CategoryPage() {
 
         const response = await getProducts(params);
         if (response.success) {
-          // Ensure products have default tags/name array for filtering logic if missing
           const safeProducts = response.data.map((p: any) => {
             const name = p.name || p.productName || "";
             return {
@@ -182,8 +183,6 @@ export default function CategoryPage() {
         const productElement = document.getElementById(`product-${scrollToProductId}`);
         if (productElement) {
           productElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          
-          // Add a temporary highlight effect
           productElement.classList.add('ring-2', 'ring-[var(--customer-primary)]', 'ring-offset-2', 'transition-all');
           setTimeout(() => {
             productElement.classList.remove('ring-2', 'ring-[var(--customer-primary)]', 'ring-offset-2');
@@ -191,7 +190,6 @@ export default function CategoryPage() {
 
           lastProductScrolledRef.current = true;
           
-          // Clear the state so it doesn't scroll again on re-render
           if (location.state?.scrollToProduct) {
             navigate(location.pathname + location.search, { 
               replace: true, 
@@ -199,7 +197,6 @@ export default function CategoryPage() {
             });
           }
         } else if (state?.scrollRestore) {
-          // Fallback to coordinate-based scroll if element not found
           const mainElement = document.querySelector('main');
           if (state.scrollRestore.preferredTarget === 'main' && mainElement) {
              mainElement.scrollTop = state.scrollRestore.mainTop;
@@ -213,36 +210,292 @@ export default function CategoryPage() {
     }
   }, [loading, products.length, location.state, navigate, location.pathname, location.search]);
 
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-    // Scroll to top of product container for smooth UX
-    if (productsContainerRef.current) {
-        productsContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+  // Dynamic filter options generated from the current category's products
+  const filterData = useMemo(() => {
+    const typeMap = new Map<string, number>();
+    const brandMap = new Map<string, number>();
+    let under500 = 0;
+    let p500to1000 = 0;
+    let p1000to2500 = 0;
+    let p2500to5000 = 0;
+    let above5000 = 0;
+    let d50 = 0;
+    let d30 = 0;
+    let d20 = 0;
+    let d10 = 0;
+    let inStockCount = 0;
+
+    products.forEach((p) => {
+      const priceInfo = calculateCardPrice(p);
+      const price = priceInfo.displayPrice;
+      if (price < 500) under500++;
+      else if (price <= 1000) p500to1000++;
+      else if (price <= 2500) p1000to2500++;
+      else if (price <= 5000) p2500to5000++;
+      else above5000++;
+
+      if (priceInfo.discount >= 50) d50++;
+      if (priceInfo.discount >= 30) d30++;
+      if (priceInfo.discount >= 20) d20++;
+      if (priceInfo.discount >= 10) d10++;
+
+      if (p.listing?.inStock || (p.stock && p.stock > 0)) inStockCount++;
+
+      const bName =
+        typeof p.brand === "object" && p.brand?.name
+          ? p.brand.name
+          : typeof p.brand === "string" && p.brand.trim()
+          ? p.brand.trim()
+          : null;
+      if (bName) {
+        brandMap.set(bName, (brandMap.get(bName) || 0) + 1);
+      }
+
+      if (Array.isArray(p.tags)) {
+        p.tags.forEach((tag: string) => {
+          if (tag && tag.trim()) {
+            const formatted = tag.trim();
+            typeMap.set(formatted, (typeMap.get(formatted) || 0) + 1);
+          }
+        });
+      }
+
+      const subName =
+        typeof p.subcategory === "object" && p.subcategory?.name
+          ? p.subcategory.name
+          : null;
+      if (subName) {
+        typeMap.set(subName, (typeMap.get(subName) || 0) + 1);
+      }
+    });
+
+    return {
+      types: Array.from(typeMap.entries()).map(([name, count]) => ({
+        id: name,
+        name,
+        count,
+      })),
+      brands: Array.from(brandMap.entries()).map(([name, count]) => ({
+        id: name,
+        name,
+        count,
+      })),
+      prices: [
+        { id: "under-500", name: "Under ₹500", count: under500 },
+        { id: "500-1000", name: "₹500 - ₹1,000", count: p500to1000 },
+        { id: "1000-2500", name: "₹1,000 - ₹2,500", count: p1000to2500 },
+        { id: "2500-5000", name: "₹2,500 - ₹5,000", count: p2500to5000 },
+        { id: "above-5000", name: "Above ₹5,000", count: above5000 },
+      ].filter((p) => p.count > 0 || products.length === 0),
+      discounts: [
+        { id: "disc-50", name: "50% or more", count: d50 },
+        { id: "disc-30", name: "30% or more", count: d30 },
+        { id: "disc-20", name: "20% or more", count: d20 },
+        { id: "disc-10", name: "10% or more", count: d10 },
+      ].filter((d) => d.count > 0 || products.length === 0),
+      availability: [
+        { id: "in-stock", name: "In Stock Only", count: inStockCount },
+      ],
+    };
+  }, [products]);
+
+  const availableFilterCategories = useMemo(() => {
+    const cats: { id: string; label: string; count: number }[] = [];
+    if (filterData.types.length > 0) {
+      cats.push({
+        id: "Type",
+        label: "Category & Type",
+        count: filterData.types.length,
+      });
+    }
+    if (filterData.brands.length > 0) {
+      cats.push({ id: "Brand", label: "Brand", count: filterData.brands.length });
+    }
+    cats.push({ id: "Price", label: "Price Range", count: filterData.prices.length });
+    cats.push({
+      id: "Discount",
+      label: "Discount",
+      count: filterData.discounts.length,
+    });
+    cats.push({ id: "Availability", label: "Availability", count: 1 });
+    return cats;
+  }, [filterData]);
+
+  // Ensure selectedFilterCategory is valid
+  useEffect(() => {
+    if (
+      availableFilterCategories.length > 0 &&
+      !availableFilterCategories.some((c) => c.id === selectedFilterCategory)
+    ) {
+      setSelectedFilterCategory(availableFilterCategories[0].id);
+    }
+  }, [availableFilterCategories, selectedFilterCategory]);
+
+  const currentCategoryOptions = useMemo(() => {
+    let options: { id: string; name: string; count: number }[] = [];
+    if (selectedFilterCategory === "Type") options = filterData.types;
+    else if (selectedFilterCategory === "Brand") options = filterData.brands;
+    else if (selectedFilterCategory === "Price") options = filterData.prices;
+    else if (selectedFilterCategory === "Discount") options = filterData.discounts;
+    else if (selectedFilterCategory === "Availability")
+      options = filterData.availability;
+
+    if (!filterSearchQuery.trim()) return options;
+    return options.filter((opt) =>
+      opt.name.toLowerCase().includes(filterSearchQuery.toLowerCase())
+    );
+  }, [selectedFilterCategory, filterData, filterSearchQuery]);
+
+  const totalActiveFilters = useMemo(() => {
+    return (
+      selectedTypes.length +
+      selectedBrands.length +
+      selectedPrices.length +
+      selectedDiscounts.length +
+      (inStockOnly ? 1 : 0)
+    );
+  }, [selectedTypes, selectedBrands, selectedPrices, selectedDiscounts, inStockOnly]);
+
+  const handleToggleOption = (categoryKey: string, id: string) => {
+    if (categoryKey === "Type") {
+      setSelectedTypes((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      );
+    } else if (categoryKey === "Brand") {
+      setSelectedBrands((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      );
+    } else if (categoryKey === "Price") {
+      setSelectedPrices((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      );
+    } else if (categoryKey === "Discount") {
+      setSelectedDiscounts((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      );
+    } else if (categoryKey === "Availability") {
+      setInStockOnly((prev) => !prev);
     }
   };
 
-  // Sort and filter category products
+  const isOptionChecked = (categoryKey: string, id: string): boolean => {
+    if (categoryKey === "Type") return selectedTypes.includes(id);
+    if (categoryKey === "Brand") return selectedBrands.includes(id);
+    if (categoryKey === "Price") return selectedPrices.includes(id);
+    if (categoryKey === "Discount") return selectedDiscounts.includes(id);
+    if (categoryKey === "Availability") return inStockOnly;
+    return false;
+  };
+
+  const hasCategorySelectedFilters = (categoryKey: string): boolean => {
+    if (categoryKey === "Type") return selectedTypes.length > 0;
+    if (categoryKey === "Brand") return selectedBrands.length > 0;
+    if (categoryKey === "Price") return selectedPrices.length > 0;
+    if (categoryKey === "Discount") return selectedDiscounts.length > 0;
+    if (categoryKey === "Availability") return inStockOnly;
+    return false;
+  };
+
+  const handleClearAllFilters = () => {
+    setSelectedTypes([]);
+    setSelectedBrands([]);
+    setSelectedPrices([]);
+    setSelectedDiscounts([]);
+    setInStockOnly(false);
+    setFilterSearchQuery("");
+  };
+
+  const formatSubcatName = (name: string) => {
+    if (!name) return "";
+    const match = name.match(/subcategory\s*\d+/i);
+    if (match && name.length > 18) {
+      return match[0];
+    }
+    return name;
+  };
+
+  // Filter products by all active filter dimensions
   const categoryProducts = useMemo(() => {
     let result = [...products];
 
-    // Filter tags if selected
-    if (selectedFilters.length > 0) {
+    // Filter by Types / Tags / Name / Subcategory
+    if (selectedTypes.length > 0) {
       result = result.filter((product) => {
         const name = (product.name || product.productName || "").toLowerCase();
-        return selectedFilters.some((filterName) =>
-          name.includes(filterName.toLowerCase())
-        );
+        const pTags = Array.isArray(product.tags)
+          ? product.tags.map((t: string) => t.toLowerCase())
+          : [];
+        const subName = (
+          typeof product.subcategory === "object" && product.subcategory?.name
+            ? product.subcategory.name
+            : ""
+        ).toLowerCase();
+        return selectedTypes.some((t) => {
+          const lowerT = t.toLowerCase();
+          return name.includes(lowerT) || pTags.includes(lowerT) || subName === lowerT;
+        });
       });
+    }
+
+    // Filter by Brands
+    if (selectedBrands.length > 0) {
+      result = result.filter((product) => {
+        const bName =
+          typeof product.brand === "object" && product.brand?.name
+            ? product.brand.name
+            : typeof product.brand === "string"
+            ? product.brand
+            : "";
+        return selectedBrands.some((b) => b.toLowerCase() === bName.toLowerCase());
+      });
+    }
+
+    // Filter by Price Ranges
+    if (selectedPrices.length > 0) {
+      result = result.filter((product) => {
+        const price = calculateCardPrice(product).displayPrice;
+        return selectedPrices.some((priceId) => {
+          if (priceId === "under-500") return price < 500;
+          if (priceId === "500-1000") return price >= 500 && price <= 1000;
+          if (priceId === "1000-2500") return price >= 1000 && price <= 2500;
+          if (priceId === "2500-5000") return price >= 2500 && price <= 5000;
+          if (priceId === "above-5000") return price > 5000;
+          return true;
+        });
+      });
+    }
+
+    // Filter by Discounts
+    if (selectedDiscounts.length > 0) {
+      result = result.filter((product) => {
+        const discount = calculateCardPrice(product).discount;
+        return selectedDiscounts.some((discId) => {
+          if (discId === "disc-50") return discount >= 50;
+          if (discId === "disc-30") return discount >= 30;
+          if (discId === "disc-20") return discount >= 20;
+          if (discId === "disc-10") return discount >= 10;
+          return true;
+        });
+      });
+    }
+
+    // Filter by inStockOnly
+    if (inStockOnly) {
+      result = result.filter(
+        (product) => product.listing?.inStock || (product.stock && product.stock > 0)
+      );
     }
 
     // Sort products
     if (sortBy === "price-asc") {
       result.sort(
-        (a, b) => calculateCardPrice(a).displayPrice - calculateCardPrice(b).displayPrice
+        (a, b) =>
+          calculateCardPrice(a).displayPrice - calculateCardPrice(b).displayPrice
       );
     } else if (sortBy === "price-desc") {
       result.sort(
-        (a, b) => calculateCardPrice(b).displayPrice - calculateCardPrice(a).displayPrice
+        (a, b) =>
+          calculateCardPrice(b).displayPrice - calculateCardPrice(a).displayPrice
       );
     } else if (sortBy === "name-asc") {
       result.sort((a, b) =>
@@ -252,10 +505,22 @@ export default function CategoryPage() {
       result.sort((a, b) =>
         (b.name || b.productName || "").localeCompare(a.name || a.productName || "")
       );
+    } else if (sortBy === "discount-desc") {
+      result.sort(
+        (a, b) => calculateCardPrice(b).discount - calculateCardPrice(a).discount
+      );
     }
 
     return result;
-  }, [products, selectedFilters, sortBy]);
+  }, [
+    products,
+    selectedTypes,
+    selectedBrands,
+    selectedPrices,
+    selectedDiscounts,
+    inStockOnly,
+    sortBy,
+  ]);
 
   if ((categoryLoading || loading) && !products.length && !category) {
     return null; // Let global IconLoader handle it
@@ -294,113 +559,6 @@ export default function CategoryPage() {
     );
   }
 
-  // Extract filter options from products
-  const getFilterOptions = () => {
-    const filterMap = new Map<string, number>();
-
-    products.forEach((product) => {
-      // Extract main ingredient/type from product name
-      const name = (product.name || product.productName || "").toLowerCase();
-      if (!name) return;
-
-      // Remove common prefixes like "fresh", "organic", etc.
-      const cleanName = name
-        .replace(/^(fresh|organic|premium|best|new)\s+/i, "")
-        .trim();
-
-      const commonTypes = [
-        { keywords: ["tomato", "tomatoes"], display: "Tomato" },
-        { keywords: ["potato", "potatoes"], display: "Potato" },
-        { keywords: ["chilli", "chili", "chilies"], display: "Chilli" },
-        { keywords: ["spinach"], display: "Spinach" },
-        { keywords: ["brinjal", "eggplant"], display: "Brinjal" },
-        { keywords: ["onion", "onions"], display: "Onion" },
-        { keywords: ["peanut", "peanuts"], display: "Peanuts" },
-        { keywords: ["lemon", "lemons"], display: "Lemon" },
-        { keywords: ["mushroom", "mushrooms"], display: "Mushroom" },
-        {
-          keywords: ["capsicum", "bell pepper", "pepper"],
-          display: "Capsicum",
-        },
-        { keywords: ["ginger"], display: "Ginger" },
-        { keywords: ["carrot", "carrots"], display: "Carrot" },
-        { keywords: ["fenugreek", "methi"], display: "Fenugreek" },
-        { keywords: ["broccoli"], display: "Broccoli" },
-        { keywords: ["cucumber", "cucumbers"], display: "Cucumber" },
-        { keywords: ["cabbage"], display: "Cabbage" },
-        { keywords: ["cauliflower"], display: "Cauliflower" },
-        { keywords: ["ladyfinger", "okra"], display: "Ladyfinger" },
-        { keywords: ["beans"], display: "Beans" },
-        { keywords: ["peas"], display: "Peas" },
-        { keywords: ["garlic"], display: "Garlic" },
-        { keywords: ["apple", "apples"], display: "Apple" },
-        { keywords: ["banana", "bananas"], display: "Banana" },
-        { keywords: ["orange", "oranges"], display: "Orange" },
-        { keywords: ["mango", "mangoes"], display: "Mango" },
-      ];
-
-      for (const type of commonTypes) {
-        if (type.keywords.some((keyword) => cleanName.includes(keyword))) {
-          filterMap.set(type.display, (filterMap.get(type.display) || 0) + 1);
-          break;
-        }
-      }
-    });
-
-    return Array.from(filterMap.entries())
-      .map(([name, count]) => ({ name, count, icon: getIconForFilter(name) }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  };
-
-  const getIconForFilter = (name: string): string => {
-    const iconMap: Record<string, string> = {
-      Tomato: "🍅",
-      Potato: "🥔",
-      Chilli: "🌶️",
-      Spinach: "🥬",
-      Brinjal: "🍆",
-      Onion: "🧅",
-      Peanuts: "🥜",
-      Lemon: "🍋",
-      Mushroom: "🍄",
-      Capsicum: "🫑",
-      Ginger: "🫚",
-      Carrot: "🥕",
-      Fenugreek: "🌿",
-      Broccoli: "🥦",
-      Cucumber: "🥒",
-      Cabbage: "🥬",
-      Cauliflower: "🥦",
-      Apple: "🍎",
-      Banana: "🍌",
-      Orange: "🍊",
-      Mango: "🥭",
-    };
-    return iconMap[name] || "🥬";
-  };
-
-  const filterOptions = getFilterOptions();
-  const filteredOptions = filterOptions.filter((option) =>
-    option.name.toLowerCase().includes(filterSearchQuery.toLowerCase())
-  );
-
-  const handleFilterToggle = (filterName: string) => {
-    setSelectedFilters((prev) =>
-      prev.includes(filterName)
-        ? prev.filter((f) => f !== filterName)
-        : [...prev, filterName]
-    );
-  };
-
-  const handleClearFilters = () => {
-    setSelectedFilters([]);
-  };
-
-  const handleApplyFilters = () => {
-    // Apply filters logic here
-    setIsFiltersOpen(false);
-  };
-
   return (
     <div className="flex flex-col bg-white h-screen overflow-hidden font-sans">
       {/* Header */}
@@ -410,20 +568,18 @@ export default function CategoryPage() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => navigate(-1)}
-                className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center text-neutral-700 hover:bg-neutral-100 rounded-full transition-colors"
+                className="p-1 -ml-1 text-neutral-600 hover:text-neutral-900 rounded-full hover:bg-neutral-100 transition-colors"
                 aria-label="Go back">
                 <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
+                  className="w-5 h-5 md:w-6 md:h-6"
                   fill="none"
-                  xmlns="http://www.w3.org/2000/svg">
+                  stroke="currentColor"
+                  viewBox="0 0 24 24">
                   <path
-                    d="M15 18L9 12L15 6"
-                    stroke="currentColor"
-                    strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 19l-7-7 7-7"
                   />
                 </svg>
               </button>
@@ -446,11 +602,10 @@ export default function CategoryPage() {
                 <button
                   key={subcat.id || subcat._id}
                   type="button"
+                  title={subcat.name}
                   onClick={() => {
                     const subId = String(subcat.id || subcat._id);
-                    console.log("Clicked subcategory:", subId);
                     setSelectedSubcategory(subId);
-                    // Update URL search params
                     const newParams = new URLSearchParams(searchParams);
                     if (subId === "all") {
                       newParams.delete("subcategory");
@@ -465,7 +620,7 @@ export default function CategoryPage() {
                   style={{
                     minHeight: "72px",
                   }}>
-                  {/* Active Indicator - curved blob on left + small orange dot */}
+                  {/* Active Indicator */}
                   {isSelected && (
                     <>
                       <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-10 bg-[var(--brand-green,#236B34)] rounded-r-full"></div>
@@ -473,14 +628,14 @@ export default function CategoryPage() {
                     </>
                   )}
 
-                  {/* Image Container */}
+                  {/* Image / Icon Container */}
                   <div
                     className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg mb-1 flex-shrink-0 overflow-hidden transition-all duration-200 shadow-sm ${
                       isSelected
                         ? "ring-2 ring-[var(--brand-green,#236B34)] ring-offset-2 bg-white"
                         : "bg-neutral-50 border border-neutral-100 group-hover:shadow-md"
                     }`}>
-                    {subcat.image ? (
+                    {subcat.image && !subcat.image.includes("placehold.co") ? (
                       <img
                         src={subcat.image}
                         alt={subcat.name}
@@ -496,7 +651,7 @@ export default function CategoryPage() {
                         }}
                       />
                     ) : (
-                      <span className="text-2xl">{subcat.icon || "📦"}</span>
+                      <span className="text-xl">{subcat.icon || "📦"}</span>
                     )}
                   </div>
 
@@ -511,11 +666,11 @@ export default function CategoryPage() {
                       wordBreak: "break-word",
                       maxWidth: "100%",
                       display: "-webkit-box",
-                      WebkitLineClamp: 2,
+                      WebkitLineClamp: 3,
                       WebkitBoxOrient: "vertical",
                       overflow: "hidden"
                     }}>
-                    {subcat.name}
+                    {formatSubcatName(subcat.name)}
                   </span>
                 </button>
               );
@@ -525,18 +680,18 @@ export default function CategoryPage() {
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col overflow-hidden bg-[var(--brand-cream,#FDF9F2)]/40">
-          {/* Filter/Sort Bar - Updated layout with inline Filter Dropdown */}
-          <div className="px-4 md:px-6 lg:px-8 py-1.5 md:py-2 bg-white border-b border-neutral-200 flex-shrink-0 relative z-30">
-            <div className="flex items-center gap-1.5 md:gap-2 overflow-x-auto scrollbar-hide -mx-4 md:-mx-6 lg:-mx-8 px-4 md:px-6 lg:px-8 scroll-smooth">
+          {/* Filter/Sort Bar */}
+          <div className="px-3 md:px-6 lg:px-8 py-2 bg-white border-b border-neutral-200 flex-shrink-0 relative z-20">
+            <div className="flex items-center gap-1.5 md:gap-2 overflow-x-auto scrollbar-hide -mx-3 md:-mx-6 lg:-mx-8 px-3 md:px-6 lg:px-8 scroll-smooth">
               {/* Filters Button */}
               <button
                 onClick={() => {
                   setIsFiltersOpen(!isFiltersOpen);
                   setIsSortOpen(false);
                 }}
-                className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap flex-shrink-0 ${
-                  isFiltersOpen
-                    ? "bg-neutral-100 text-neutral-900 border border-neutral-400"
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full transition-colors whitespace-nowrap flex-shrink-0 ${
+                  isFiltersOpen || totalActiveFilters > 0
+                    ? "bg-[var(--brand-leaf-tint,#EAF5E0)] text-[var(--brand-green-deep,#14401F)] border border-[var(--brand-green,#236B34)] font-semibold shadow-xs"
                     : "bg-white text-neutral-700 border border-neutral-300 hover:bg-neutral-50"
                 }`}>
                 <svg
@@ -557,7 +712,12 @@ export default function CategoryPage() {
                   />
                 </svg>
                 <span>Filters</span>
-                <span className="text-neutral-500 text-[10px] ml-0.5">
+                {totalActiveFilters > 0 && (
+                  <span className="w-4 h-4 rounded-full bg-[var(--brand-green,#236B34)] text-white text-[10px] flex items-center justify-center font-bold">
+                    {totalActiveFilters}
+                  </span>
+                )}
+                <span className="text-neutral-500 text-[10px]">
                   {isFiltersOpen ? "▴" : "▾"}
                 </span>
               </button>
@@ -568,9 +728,9 @@ export default function CategoryPage() {
                   setIsSortOpen(!isSortOpen);
                   setIsFiltersOpen(false);
                 }}
-                className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap flex-shrink-0 ${
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full transition-colors whitespace-nowrap flex-shrink-0 ${
                   isSortOpen || sortBy !== "default"
-                    ? "bg-neutral-100 text-neutral-900 border border-neutral-400 font-semibold"
+                    ? "bg-[var(--brand-leaf-tint,#EAF5E0)] text-[var(--brand-green-deep,#14401F)] border border-[var(--brand-green,#236B34)] font-semibold shadow-xs"
                     : "bg-white text-neutral-700 border border-neutral-300 hover:bg-neutral-50"
                 }`}>
                 <svg
@@ -593,12 +753,12 @@ export default function CategoryPage() {
                     ? "Sort"
                     : sortOptions.find((o) => o.id === sortBy)?.label || "Sort"}
                 </span>
-                <span className="text-neutral-500 text-[10px] ml-0.5">
+                <span className="text-neutral-500 text-[10px]">
                   {isSortOpen ? "▴" : "▾"}
                 </span>
               </button>
 
-              {/* Category Buttons */}
+              {/* Subcategory Pills */}
               {subcategories
                 .filter((subcat) => (subcat.id || subcat._id) !== "all")
                 .map((subcat) => {
@@ -609,227 +769,35 @@ export default function CategoryPage() {
                       key={subId}
                       onClick={() => {
                         setSelectedSubcategory(subId);
-                        // Update URL search params
                         const newParams = new URLSearchParams(searchParams);
                         newParams.set("subcategory", subId);
                         navigate({ search: newParams.toString() }, { replace: true });
                       }}
-                      className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors flex-shrink-0 whitespace-nowrap ${
+                      className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full transition-colors flex-shrink-0 whitespace-nowrap ${
                         isSelected
-                          ? "bg-white border border-neutral-300 text-neutral-900"
+                          ? "bg-[var(--brand-leaf-tint,#EAF5E0)] border border-[var(--brand-green,#236B34)] text-[var(--brand-green-deep,#14401F)] font-semibold"
                           : "bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
                       }`}>
                       <span className="text-sm flex-shrink-0">
-                        {subcat.image ? (
+                        {subcat.image && !subcat.image.includes("placehold.co") ? (
                           <img
                             src={subcat.image}
                             alt=""
-                            className="w-4 h-4 object-cover rounded-full"
+                            className="w-3.5 h-3.5 object-cover rounded-full"
                           />
                         ) : (
                           subcat.icon || "📦"
                         )}
                       </span>
-                      <span>{subcat.name}</span>
+                      <span>{formatSubcatName(subcat.name)}</span>
                     </button>
                   );
                 })}
             </div>
-
-            {/* Inline Filters Dropdown Menu */}
-            <AnimatePresence>
-              {isFiltersOpen && (
-                <>
-                  {/* Transparent overlay for dismiss on click outside */}
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setIsFiltersOpen(false)}
-                  />
-
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                    transition={{ duration: 0.15 }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute left-4 top-full mt-1 z-50 w-[340px] sm:w-[420px] bg-white rounded-xl shadow-2xl border border-neutral-200 flex flex-col overflow-hidden max-h-[460px]">
-                    {/* Search Bar */}
-                    <div className="p-3 border-b border-neutral-200 bg-white">
-                      <div className="relative">
-                        <svg
-                          className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-neutral-400"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                          />
-                        </svg>
-                        <input
-                          type="text"
-                          placeholder="Search across filters..."
-                          value={filterSearchQuery}
-                          onChange={(e) => setFilterSearchQuery(e.target.value)}
-                          className="w-full pl-9 pr-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--customer-primary)] focus:bg-white text-xs text-neutral-700 placeholder:text-neutral-400"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Content Area */}
-                    <div className="flex flex-1 overflow-hidden min-h-[200px] max-h-[300px]">
-                      {/* Left Column - Filter Categories */}
-                      <div className="w-28 border-r border-neutral-200 flex-shrink-0 bg-neutral-50 py-1">
-                        <button
-                          onClick={() => setSelectedFilterCategory("Type")}
-                          className={`w-full px-3 py-2.5 text-left text-xs font-medium transition-colors ${
-                            selectedFilterCategory === "Type"
-                              ? "bg-[var(--customer-primary-alpha-10)] text-[var(--customer-primary-dark)] border-l-2 border-[var(--customer-primary-dark)] font-semibold"
-                              : "text-neutral-600 hover:bg-neutral-100"
-                          }`}>
-                          Type
-                        </button>
-                        <button
-                          onClick={() => setSelectedFilterCategory("Properties")}
-                          className={`w-full px-3 py-2.5 text-left text-xs font-medium transition-colors ${
-                            selectedFilterCategory === "Properties"
-                              ? "bg-[var(--customer-primary-alpha-10)] text-[var(--customer-primary-dark)] border-l-2 border-[var(--customer-primary-dark)] font-semibold"
-                              : "text-neutral-600 hover:bg-neutral-100"
-                          }`}>
-                          Properties
-                        </button>
-                      </div>
-
-                      {/* Right Column - Filter Options */}
-                      <div className="flex-1 overflow-y-auto p-2">
-                        {filteredOptions.length > 0 ? (
-                          filteredOptions.map((option) => {
-                            const isChecked = selectedFilters.includes(option.name);
-                            return (
-                              <button
-                                key={option.name}
-                                onClick={() => handleFilterToggle(option.name)}
-                                className="w-full flex items-center gap-2.5 px-2.5 py-2 hover:bg-neutral-100/70 rounded-lg transition-colors text-left">
-                                <span className="text-base flex-shrink-0 w-5 h-5 flex items-center justify-center">
-                                  {option.icon}
-                                </span>
-                                <span className="flex-1 text-xs font-medium text-neutral-700 truncate">
-                                  {option.name}
-                                </span>
-                                <span className="text-xs text-neutral-400">
-                                  ({option.count})
-                                </span>
-                                <div className="w-4 h-4 flex items-center justify-center flex-shrink-0 ml-1">
-                                  {isChecked ? (
-                                    <div className="w-4 h-4 border border-[var(--customer-primary-dark)] bg-[var(--customer-primary-dark)] rounded flex items-center justify-center">
-                                      <svg
-                                        className="w-3 h-3 text-white"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24">
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          strokeWidth={3}
-                                          d="M5 13l4 4L19 7"
-                                        />
-                                      </svg>
-                                    </div>
-                                  ) : (
-                                    <div className="w-4 h-4 border border-neutral-300 rounded bg-white" />
-                                  )}
-                                </div>
-                              </button>
-                            );
-                          })
-                        ) : (
-                          <div className="p-4 text-center text-xs text-neutral-400">
-                            No matching filters found
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Footer Buttons */}
-                    <div className="p-3 border-t border-neutral-200 flex gap-2 bg-neutral-50/50">
-                      <button
-                        onClick={handleClearFilters}
-                        className="flex-1 px-3 py-2 border border-neutral-300 text-neutral-700 rounded-lg font-medium text-xs hover:bg-white hover:border-neutral-400 transition-colors bg-white shadow-sm">
-                        Clear Filter
-                      </button>
-                      <button
-                        onClick={handleApplyFilters}
-                        className={`flex-1 px-3 py-2 rounded-lg font-medium text-xs transition-colors shadow-sm ${
-                          selectedFilters.length > 0
-                            ? "bg-[var(--customer-primary-dark)] text-white hover:bg-[var(--customer-primary-darker)]"
-                            : "bg-neutral-300 text-neutral-500 cursor-not-allowed"
-                        }`}
-                        disabled={selectedFilters.length === 0}>
-                        Apply ({selectedFilters.length})
-                      </button>
-                    </div>
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
-
-            {/* Inline Sort Dropdown Menu */}
-            <AnimatePresence>
-              {isSortOpen && (
-                <>
-                  {/* Transparent overlay for dismiss on click outside */}
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setIsSortOpen(false)}
-                  />
-
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                    transition={{ duration: 0.15 }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute left-[76px] sm:left-24 top-full mt-1 z-50 w-48 bg-white rounded-xl shadow-2xl border border-neutral-200 py-1.5 overflow-hidden">
-                    {sortOptions.map((option) => (
-                      <button
-                        key={option.id}
-                        onClick={() => {
-                          setSortBy(option.id);
-                          setIsSortOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between px-3.5 py-2 text-xs text-left transition-colors ${
-                          sortBy === option.id
-                            ? "bg-[var(--customer-primary-alpha-10)] text-[var(--customer-primary-dark)] font-semibold"
-                            : "text-neutral-700 hover:bg-neutral-50"
-                        }`}>
-                        <span>{option.label}</span>
-                        {sortBy === option.id && (
-                          <svg
-                            className="w-4 h-4 text-[var(--customer-primary-dark)] flex-shrink-0 ml-2"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2.5}
-                              d="M5 13l4 4L19 7"
-                            />
-                          </svg>
-                        )}
-                      </button>
-                    ))}
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
           </div>
 
-          {/* Scrollable Content */}
+          {/* Scrollable Products Grid / Empty state */}
           <div ref={productsContainerRef} className="flex-1 overflow-y-auto scrollbar-hide bg-white">
-            {/* Products Grid */}
             {loading ? (
               <div className="px-3 md:px-6 lg:px-8 py-4 md:py-6">
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-4">
@@ -851,7 +819,7 @@ export default function CategoryPage() {
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-4">
                   {categoryProducts.map((product) => (
                     <ProductCard
-                      key={product.id}
+                      key={product.id || product._id}
                       product={product}
                       showHeartIcon={false}
                       showStockInfo={false}
@@ -863,15 +831,289 @@ export default function CategoryPage() {
                 </div>
               </div>
             ) : (
-              <div className="px-4 md:px-6 lg:px-8 py-8 md:py-12 text-center">
-                <p className="text-neutral-500 md:text-lg">
-                  No products found in this category.
+              <div className="px-4 py-16 flex flex-col items-center justify-center text-center">
+                <div className="w-16 h-16 rounded-2xl bg-neutral-100 flex items-center justify-center text-3xl mb-3 shadow-xs">
+                  🛍️
+                </div>
+                <h3 className="text-sm md:text-base font-bold text-neutral-800 mb-1">
+                  {totalActiveFilters > 0 ? "No Matching Products" : "No Products Found"}
+                </h3>
+                <p className="text-xs text-neutral-500 max-w-xs mb-4">
+                  {totalActiveFilters > 0
+                    ? "Try adjusting or clearing your filters to see more products."
+                    : selectedSubcategory !== "all"
+                    ? "We couldn't find any products in this specific subcategory right now."
+                    : "No products currently available in this category."}
                 </p>
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {totalActiveFilters > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAllFilters}
+                      className="px-3.5 py-1.5 text-xs font-semibold bg-[var(--brand-green,#236B34)] text-white rounded-lg shadow-xs hover:opacity-90 transition-opacity"
+                    >
+                      Clear Filters
+                    </button>
+                  )}
+                  {selectedSubcategory !== "all" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedSubcategory("all");
+                        const newParams = new URLSearchParams(searchParams);
+                        newParams.delete("subcategory");
+                        navigate({ search: newParams.toString() }, { replace: true });
+                      }}
+                      className="px-3.5 py-1.5 text-xs font-semibold bg-white border border-neutral-300 text-neutral-700 rounded-lg shadow-xs hover:bg-neutral-50 transition-colors"
+                    >
+                      View All {category?.name || "Category"} Products
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Responsive Filters Modal / Bottom Sheet */}
+      <AnimatePresence>
+        {isFiltersOpen && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+              onClick={() => setIsFiltersOpen(false)}
+            />
+
+            {/* Content Drawer / Dialog */}
+            <motion.div
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
+              transition={{ type: "spring", damping: 26, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative z-50 w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border border-neutral-200 flex flex-col overflow-hidden max-h-[85vh] sm:max-h-[560px]"
+            >
+              {/* Mobile Drag Indicator */}
+              <div className="w-12 h-1.5 bg-neutral-300 rounded-full mx-auto mt-2.5 mb-1 sm:hidden flex-shrink-0" />
+
+              {/* Modal Header */}
+              <div className="px-4 py-3 border-b border-neutral-200 flex items-center justify-between bg-white flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-sm sm:text-base text-neutral-800">Filters</h3>
+                  {totalActiveFilters > 0 && (
+                    <span className="text-[11px] font-semibold bg-[var(--brand-green,#236B34)] text-white px-2 py-0.5 rounded-full">
+                      {totalActiveFilters} active
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  {totalActiveFilters > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAllFilters}
+                      className="text-xs font-semibold text-neutral-500 hover:text-red-600 transition-colors"
+                    >
+                      Reset All
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsFiltersOpen(false)}
+                    className="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center text-neutral-600 transition-colors"
+                    aria-label="Close filters"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* Search across current options */}
+              <div className="p-2.5 border-b border-neutral-100 bg-neutral-50/70 flex-shrink-0">
+                <div className="relative">
+                  <svg
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-neutral-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Search across filters..."
+                    value={filterSearchQuery}
+                    onChange={(e) => setFilterSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-3 py-1.5 bg-white border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--brand-green,#236B34)] text-xs text-neutral-700 placeholder:text-neutral-400"
+                  />
+                </div>
+              </div>
+
+              {/* 2-Column Filter Body */}
+              <div className="flex flex-1 overflow-hidden min-h-[220px] max-h-[360px]">
+                {/* Left Column: Filter Categories */}
+                <div className="w-32 sm:w-40 border-r border-neutral-200 flex-shrink-0 bg-neutral-50 py-1 overflow-y-auto">
+                  {availableFilterCategories.map((cat) => {
+                    const isCatActive = selectedFilterCategory === cat.id;
+                    const hasSelected = hasCategorySelectedFilters(cat.id);
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedFilterCategory(cat.id);
+                          setFilterSearchQuery("");
+                        }}
+                        className={`w-full px-3 py-2.5 text-left text-xs transition-colors flex items-center justify-between ${
+                          isCatActive
+                            ? "bg-white text-[var(--brand-green,#236B34)] font-bold border-l-4 border-[var(--brand-green,#236B34)] shadow-xs"
+                            : "text-neutral-600 hover:bg-neutral-100 font-medium"
+                        }`}
+                      >
+                        <span className="truncate">{cat.label}</span>
+                        {hasSelected && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand-green,#236B34)] flex-shrink-0 ml-1" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Right Column: Filter Options */}
+                <div className="flex-1 overflow-y-auto p-2 bg-white">
+                  {currentCategoryOptions.length > 0 ? (
+                    <div className="space-y-1">
+                      {currentCategoryOptions.map((opt) => {
+                        const checked = isOptionChecked(selectedFilterCategory, opt.id);
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => handleToggleOption(selectedFilterCategory, opt.id)}
+                            className="w-full flex items-center gap-2.5 px-2.5 py-2 hover:bg-neutral-50 rounded-lg transition-colors text-left"
+                          >
+                            <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+                              {checked ? (
+                                <div className="w-4 h-4 rounded bg-[var(--brand-green,#236B34)] flex items-center justify-center text-white">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </div>
+                              ) : (
+                                <div className="w-4 h-4 border border-neutral-300 rounded bg-white" />
+                              )}
+                            </div>
+                            <span className="flex-1 text-xs font-medium text-neutral-700 truncate">
+                              {opt.name}
+                            </span>
+                            {opt.count !== undefined && (
+                              <span className="text-[11px] text-neutral-400 font-normal">
+                                ({opt.count})
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center text-xs text-neutral-400">
+                      No matching options found
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Modal Action Footer */}
+              <div className="p-3 border-t border-neutral-200 flex gap-2.5 bg-neutral-50/80 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={handleClearAllFilters}
+                  className="flex-1 py-2.5 border border-neutral-300 text-neutral-700 rounded-xl font-medium text-xs hover:bg-white transition-colors bg-white shadow-xs"
+                >
+                  Clear Filter
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsFiltersOpen(false)}
+                  className="flex-1 py-2.5 bg-[var(--brand-green,#236B34)] hover:bg-[var(--brand-green-deep,#14401F)] text-white rounded-xl font-semibold text-xs transition-colors shadow-sm"
+                >
+                  {totalActiveFilters > 0 ? `Apply (${totalActiveFilters})` : "Apply Filters"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Responsive Sort Modal / Dropdown */}
+      <AnimatePresence>
+        {isSortOpen && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-start justify-center sm:justify-start">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="fixed inset-0 bg-black/40 backdrop-blur-xs sm:bg-transparent"
+              onClick={() => setIsSortOpen(false)}
+            />
+
+            {/* Sort Sheet / Popover */}
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 20, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative z-50 w-full sm:w-56 bg-white rounded-t-2xl sm:rounded-xl shadow-2xl border border-neutral-200 overflow-hidden sm:absolute sm:left-[170px] sm:top-[105px]"
+            >
+              <div className="p-3 border-b border-neutral-100 flex items-center justify-between sm:hidden">
+                <span className="font-bold text-sm text-neutral-800">Sort Products</span>
+                <button
+                  onClick={() => setIsSortOpen(false)}
+                  className="text-neutral-400 hover:text-neutral-600 text-sm font-semibold"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="py-1">
+                {sortOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => {
+                      setSortBy(option.id);
+                      setIsSortOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-4 py-2.5 text-xs text-left transition-colors ${
+                      sortBy === option.id
+                        ? "bg-[var(--brand-leaf-tint,#EAF5E0)] text-[var(--brand-green-deep,#14401F)] font-bold"
+                        : "text-neutral-700 hover:bg-neutral-50"
+                    }`}
+                  >
+                    <span>{option.label}</span>
+                    {sortBy === option.id && (
+                      <svg className="w-4 h-4 text-[var(--brand-green,#236B34)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

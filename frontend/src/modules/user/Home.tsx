@@ -529,7 +529,7 @@ export default function Home() {
       <div
         className="w-full px-4 pt-[22px] pb-[18px] md:px-4 md:pt-0 md:pb-1 mt-0.5 md:mt-1"
       >
-          <BannerSlider position="HOME_MAIN_SLIDER" roundedClass="rounded-2xl md:rounded-2xl" />
+          <BannerSlider position="HOME_MAIN_SLIDER" roundedClass="rounded-2xl md:rounded-2xl" activeCategory={activeTab} />
       </div>
       {/* Featured Categories Section */}
       <FeaturedCategoriesSection />
@@ -697,6 +697,11 @@ export default function Home() {
           shops={homeData.shops || []}
           currentCity={location?.city}
         />
+
+        {/* 6. Footer Banner (Configured from Admin Banner Setup) */}
+        <div className="w-full px-2 md:px-4 lg:px-4 mt-6 mb-2">
+          <BannerSlider position="Footer Banner" roundedClass="rounded-2xl md:rounded-2xl" />
+        </div>
 
       </div>
     </div>

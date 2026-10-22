@@ -46,7 +46,7 @@ export const getBanners = asyncHandler(async (req: Request, res: Response) => {
  * @access  Private/Admin
  */
 export const createBanner = asyncHandler(async (req: Request, res: Response) => {
-  const { position, resourceType, resourceId, resourceName, imageUrl, isActive } = req.body;
+  const { position, resourceType, resourceId, resourceName, imageUrl, isActive, title, subtitle, redirectType, redirectValue } = req.body;
 
   const banner = await Banner.create({
     position,
@@ -55,6 +55,10 @@ export const createBanner = asyncHandler(async (req: Request, res: Response) => 
     resourceName,
     imageUrl,
     isActive: isActive !== undefined ? isActive : true,
+    title,
+    subtitle,
+    redirectType,
+    redirectValue,
   });
 
   res.status(201).json({

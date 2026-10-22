@@ -504,7 +504,28 @@ export default function OrderDetail() {
     error: trackingError,
     reconnectAttempts,
     reconnect,
-  } = useDeliveryTracking(id);
+  } = useDeliveryTracking(id, {
+    onStatusUpdate: (newStatus) => {
+      setOrderStatus(newStatus as OrderStatus);
+      setOrder((prev: any) => (prev ? { ...prev, status: newStatus } : prev));
+    },
+    onOtpUpdate: ({ deliveryOtp, expiresAt }) => {
+      setOrder((prev: any) =>
+        prev ? { ...prev, deliveryOtp, deliveryOtpExpiresAt: expiresAt } : prev
+      );
+    },
+    onPartnerAccepted: (partner) => {
+      setOrder((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              deliveryPartner: partner,
+              deliveryBoy: partner?._id || partner?.id || prev?.deliveryBoy,
+            }
+          : prev
+      );
+    },
+  });
 
   // Seller locations for the order
   const [sellerLocations, setSellerLocations] = useState<any[]>([]);
@@ -1194,9 +1215,10 @@ export default function OrderDetail() {
       )}
 
       {/* Delivery Partner Card */}
-      {/* Show while live tracking runs, and always once the delivery OTP exists (GPS may be unavailable) */}
+      {/* Show while live tracking runs, and always once the delivery OTP exists or order is Out for Delivery */}
       {((isConnected && deliveryLocation) ||
-        (order?.deliveryOtp && ['Picked up', 'Out for Delivery'].includes(order?.status))) && (
+        (order?.deliveryOtp && ['Picked up', 'Out for Delivery'].includes(order?.status)) ||
+        (order?.status === 'Out for Delivery')) && (
         <DeliveryPartnerCard
           partner={{
             name: order?.deliveryPartner?.name || "Delivery Partner",
@@ -1204,8 +1226,8 @@ export default function OrderDetail() {
             profileImage: order?.deliveryPartner?.profileImage,
             vehicleNumber: order?.deliveryPartner?.vehicleNumber,
           }}
-          eta={routeInfo ? Math.ceil(routeInfo.durationValue / 60) : eta}
-          distance={routeInfo ? routeInfo.distanceValue : distance}
+          eta={distance > 0 ? eta : (routeInfo?.durationValue ? Math.ceil(routeInfo.durationValue / 60) : eta)}
+          distance={distance > 0 ? distance : (routeInfo?.distanceValue ?? distance)}
           isTracking={!!(isConnected && deliveryLocation)}
           deliveryOtp={order?.deliveryOtp}
           otpExpiryTime={order?.deliveryOtpExpiresAt}

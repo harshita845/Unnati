@@ -29,8 +29,7 @@ const findHeaderCategoryBySlug = async (value: string) => {
   const normalizedSlug = normalizeSlug(rawSlug);
   const namePattern = rawSlug.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
 
-  return HeaderCategory.findOne({
-    status: "Published",
+  const query: any = {
     $or: [
       { slug: rawSlug },
       { slug: { $regex: new RegExp(`^${escapeRegex(rawSlug)}$`, "i") } },
@@ -40,7 +39,18 @@ const findHeaderCategoryBySlug = async (value: string) => {
         ? [{ name: { $regex: new RegExp(`^${escapeRegex(namePattern)}$`, "i") } }]
         : []),
     ],
+  };
+
+  const found = await HeaderCategory.findOne({
+    status: { $in: ["Published", "Active", "active", "published"] },
+    ...query,
   })
+    .select("_id")
+    .lean();
+
+  if (found) return found;
+
+  return HeaderCategory.findOne(query)
     .select("_id")
     .lean();
 };

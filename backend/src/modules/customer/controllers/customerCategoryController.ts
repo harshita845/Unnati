@@ -170,32 +170,33 @@ export const getCategoryById = async (req: Request, res: Response) => {
 
     // If not found by ID, try by slug or name (keeping existing logic for friendliness)
     if (!category) {
+      const rawTrimmed = String(id || "").trim();
+      const namePattern = rawTrimmed.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
+      const slugPattern = rawTrimmed.toLowerCase().replace(/\s+/g, "-");
+
       category = await Category.findOne({
-        slug: id,
-        status: "Active",
+        $or: [
+          { slug: rawTrimmed },
+          { slug: slugPattern },
+          { slug: { $regex: new RegExp(`^${rawTrimmed}$`, "i") } },
+          { slug: { $regex: new RegExp(`^${slugPattern}$`, "i") } },
+          { name: { $regex: new RegExp(`^${rawTrimmed}$`, "i") } },
+          { name: { $regex: new RegExp(`^${namePattern}$`, "i") } },
+        ],
+        status: { $in: ["Active", "active", "Published", "published"] }
       }).lean();
 
       if (!category) {
         category = await Category.findOne({
-          slug: { $regex: new RegExp(`^${id}$`, "i") },
-          status: "Active",
+          $or: [
+            { slug: rawTrimmed },
+            { slug: slugPattern },
+            { slug: { $regex: new RegExp(`^${rawTrimmed}$`, "i") } },
+            { slug: { $regex: new RegExp(`^${slugPattern}$`, "i") } },
+            { name: { $regex: new RegExp(`^${rawTrimmed}$`, "i") } },
+            { name: { $regex: new RegExp(`^${namePattern}$`, "i") } },
+          ],
         }).lean();
-      }
-
-      if (!category) {
-        let namePattern = id.replace(/[-_]/g, " ");
-        category = await Category.findOne({
-          name: { $regex: new RegExp(`^${namePattern}$`, "i") },
-          status: "Active",
-        }).lean();
-
-        if (!category && id.includes("and")) {
-           const withAmpersand = id.replace(/-and-/g, " & ").replace(/-/g, " ");
-           category = await Category.findOne({
-             name: { $regex: new RegExp(`^${withAmpersand}$`, "i") },
-             status: "Active",
-           }).lean();
-        }
       }
     }
 
@@ -210,7 +211,7 @@ export const getCategoryById = async (req: Request, res: Response) => {
         // Fetch siblings (all children of this parent)
         const subcategories = await Category.find({
           parentId: { $in: [parentId, parentId.toString()] },
-          status: "Active"
+          status: { $in: ["Active", "active", "Published", "published"] }
         })
           .select("name image order slug icon")
           .sort({ order: 1 });
@@ -251,26 +252,55 @@ export const getCategoryById = async (req: Request, res: Response) => {
         }
       }
 
-      // Check if it is a HeaderCategory slug or ID
+      // Check if it is a HeaderCategory slug, name, or ID
       const isObjectId = mongoose.Types.ObjectId.isValid(id);
-      const headerCategory = await HeaderCategory.findOne(
-        isObjectId
-          ? { $or: [{ _id: id }, { slug: id }], status: "Published" }
-          : { slug: id, status: "Published" }
-      ).lean();
+      const rawTrimmed = String(id || "").trim();
+      const namePattern = rawTrimmed.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
+      const slugPattern = rawTrimmed.toLowerCase().replace(/\s+/g, "-");
+
+      const headerCategoryQuery: any = {
+        $or: [
+          ...(isObjectId ? [{ _id: id }] : []),
+          { slug: rawTrimmed },
+          { slug: slugPattern },
+          { slug: { $regex: new RegExp(`^${rawTrimmed}$`, "i") } },
+          { slug: { $regex: new RegExp(`^${slugPattern}$`, "i") } },
+          { name: { $regex: new RegExp(`^${rawTrimmed}$`, "i") } },
+          { name: { $regex: new RegExp(`^${namePattern}$`, "i") } },
+        ],
+      };
+
+      let headerCategory = await HeaderCategory.findOne({
+        ...headerCategoryQuery,
+        status: { $in: ["Published", "Active", "active", "published"] },
+      }).lean();
+
+      if (!headerCategory) {
+        headerCategory = await HeaderCategory.findOne(headerCategoryQuery).lean();
+      }
 
       if (headerCategory) {
-        console.log(`[getCategoryById] Item ${id} is a HeaderCategory. Finding its main categories.`);
+        console.log(`[getCategoryById] Item ${id} is a HeaderCategory (${headerCategory.name}). Finding its main categories.`);
         
         // Find all root categories under this header category
-        const subcategoriesList = await Category.find({
+        let subcategoriesList = await Category.find({
           headerCategoryId: headerCategory._id,
-          parentId: null,
-          status: "Active"
+          $or: [{ parentId: null }, { parentId: { $exists: false } }],
+          status: { $in: ["Active", "active", "Published", "published"] },
         })
           .select("name image order slug icon")
           .sort({ order: 1 })
           .lean();
+
+        if (!subcategoriesList || subcategoriesList.length === 0) {
+          subcategoriesList = await Category.find({
+            headerCategoryId: headerCategory._id,
+            status: { $in: ["Active", "active", "Published", "published"] },
+          })
+            .select("name image order slug icon")
+            .sort({ order: 1 })
+            .lean();
+        }
 
         const resultData = {
           category: {

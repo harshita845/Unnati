@@ -171,16 +171,26 @@ export const initializeSocket = (httpServer: HttpServer) => {
             }
 
             try {
-                // Verify order belongs to this customer
-                const order = await Order.findOne({ _id: orderId, customer: user.userId });
+                // Verify order belongs to this customer, or user is assigned delivery partner, or admin
+                const order = await Order.findById(orderId).select('customer deliveryBoy status deliveryOtp deliveryOtpExpiresAt');
 
                 if (!order) {
-                    console.warn(`⚠️ User ${user.userId} tried to track unauthorized order: ${orderId}`);
-                    socket.emit('tracking-error', { message: 'Unauthorized or order not found' });
+                    console.warn(`⚠️ Order not found for tracking: ${orderId}`);
+                    socket.emit('tracking-error', { message: 'Order not found' });
                     return;
                 }
 
-                console.log(`📦 Customer ${user.userId} tracking order: ${orderId}`);
+                const isCustomer = String(order.customer) === String(user.userId);
+                const isDeliveryPartner = order.deliveryBoy && String(order.deliveryBoy) === String(user.userId);
+                const isAdmin = user.userType === 'Admin';
+
+                if (!isCustomer && !isDeliveryPartner && !isAdmin) {
+                    console.warn(`⚠️ User ${user.userId} unauthorized to track order: ${orderId}`);
+                    socket.emit('tracking-error', { message: 'Unauthorized' });
+                    return;
+                }
+
+                console.log(`📦 User ${user.userId} tracking order: ${orderId}`);
                 socket.join(`order-${orderId}`);
 
                 // Send acknowledgment
@@ -188,6 +198,36 @@ export const initializeSocket = (httpServer: HttpServer) => {
                     orderId,
                     message: 'Live tracking started',
                 });
+
+                // Immediately send current order status
+                if (order.status) {
+                    socket.emit('order-status-updated', {
+                        orderId,
+                        status: order.status,
+                    });
+                }
+
+                // Immediately send delivery OTP if active
+                if (order.deliveryOtp) {
+                    socket.emit('delivery-otp-refreshed', {
+                        orderId,
+                        deliveryOtp: order.deliveryOtp,
+                        expiresAt: order.deliveryOtpExpiresAt,
+                    });
+                }
+
+                // Immediately send latest live location, distance, and ETA if available
+                const tracking = await DeliveryTracking.findOne({ order: orderId });
+                if (tracking && tracking.currentLocation?.latitude && tracking.currentLocation?.longitude) {
+                    socket.emit('location-update', {
+                        orderId,
+                        location: tracking.currentLocation,
+                        eta: tracking.eta ?? 1,
+                        distance: tracking.distance ?? 0,
+                        status: tracking.status ?? 'in_transit',
+                        timestamp: tracking.currentLocation.timestamp || new Date(),
+                    });
+                }
             } catch (error) {
                 console.error(`❌ Error in track-order for order ${orderId}:`, error);
                 socket.emit('tracking-error', { message: 'Internal server error' });

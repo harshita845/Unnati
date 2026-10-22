@@ -7,6 +7,7 @@ import * as dashboardController from "../modules/admin/controllers/adminDashboar
 import * as backupController from "../modules/admin/controllers/adminBackupController";
 import * as gstReturnController from "../modules/admin/controllers/adminGstReturnController";
 import * as stockTransferController from "../modules/admin/controllers/adminStockTransferController";
+import * as productPhotoController from "../modules/admin/controllers/adminProductPhotoController";
 
 // Product Controllers
 import * as productController from "../modules/admin/controllers/adminProductController";
@@ -155,6 +156,10 @@ router.get("/dashboard/top-insights", dashboardController.getTopInsightsControll
 
 // ==================== Data Backup (Super Admin) ====================
 router.get("/backups", backupController.getBackups);
+
+// ==================== Product Photos (demo / missing pictures) ====================
+router.get("/product-photos", productPhotoController.getProductPhotos);
+router.post("/product-photos/mark-real", productPhotoController.markProductPhotoReal);
 
 // ==================== Stock transfers between stores ====================
 router.get("/stock-transfers/stores", stockTransferController.getTransferStores);

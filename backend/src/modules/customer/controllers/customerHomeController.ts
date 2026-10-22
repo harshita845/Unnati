@@ -742,13 +742,34 @@ export const getHomeContent = async (req: Request, res: Response) => {
             ? true
             : (sellerIdStr ? nearby.has(sellerIdStr) : false);
           return { ...p, isAvailable };
-        });
+        })
+        // Only deals the customer can actually order (from stores that deliver to them)
+        .filter((p: any) => p.isAvailable);
 
       if (mappedProducts.length === 0) {
         promoStrip = null;
       } else {
+        // Each card shows pictures of real products from its own category (and its
+        // subcategories), from stores that deliver to the customer
+        const cards = await Promise.all(
+          ((promoStrip as any).categoryCards || []).map(async (card: any) => {
+            const catId = card?.categoryId?._id || card?.categoryId;
+            if (!catId) return { ...card, productImages: [] };
+            const filter: any = {
+              $or: [{ category: catId }, { subcategory: catId }],
+              status: "Active",
+              publish: true,
+              subscriptionHidden: { $ne: true },
+              mainImage: { $nin: [null, ""] },
+            };
+            if (locationProvided) filter.seller = { $in: nearbySellerIds };
+            const products = await Product.find(filter).select("mainImage productName").sort({ createdAt: -1 }).limit(3).lean();
+            return { ...card, productImages: products.map((x: any) => ({ id: String(x._id), name: x.productName, image: x.mainImage })) };
+          })
+        );
         promoStrip = {
           ...(promoStrip as any),
+          categoryCards: cards,
           featuredProducts: mappedProducts,
         };
       }

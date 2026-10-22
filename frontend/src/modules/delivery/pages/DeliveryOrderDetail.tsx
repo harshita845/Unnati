@@ -803,47 +803,60 @@ export default function DeliveryOrderDetail() {
 
             {/* Action dock: one clear next step at a time */}
             {!showOtpInput && !terminal && (
-                <div className="fixed bottom-24 left-4 right-4 max-w-lg mx-auto z-30">
+                <div className="fixed bottom-20 sm:bottom-24 left-3 right-3 sm:left-4 sm:right-4 max-w-lg mx-auto z-30 box-border">
                     {isOffer ? (
                         waitingForStores ? (
-                            <div className="py-4 px-5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-semibold text-center shadow-lg">
+                            <div className="w-full py-3.5 px-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs sm:text-sm font-semibold text-center shadow-lg whitespace-normal break-words box-border">
                                 Waiting for every store to accept this order
                             </div>
                         ) : (
-                            <button onClick={handleAcceptOffer} disabled={actionBusy} className="w-full py-4 rounded-2xl bg-[var(--primary-dark)] text-white font-bold text-lg shadow-xl active:scale-[0.98] disabled:opacity-60">
+                            <button
+                                onClick={handleAcceptOffer}
+                                disabled={actionBusy}
+                                className="w-full py-3.5 px-4 rounded-2xl bg-[var(--primary-dark)] text-white font-bold text-sm sm:text-base shadow-xl active:scale-[0.98] disabled:opacity-60 whitespace-normal break-words box-border"
+                            >
                                 {actionBusy ? 'Accepting…' : 'Accept order'}
                             </button>
                         )
                     ) : collecting ? (
-                        <div className="flex gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3 w-full box-border">
                             <button
                                 onClick={() => openBarcodeScanner(() => setShowScanner(true))}
-                                className="w-16 rounded-2xl bg-neutral-900 text-white flex items-center justify-center shadow-lg active:scale-95"
+                                className="w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded-2xl bg-neutral-900 text-white flex items-center justify-center shadow-lg active:scale-95"
                                 title="Scan the store's pickup code"
                                 aria-label="Scan the store's pickup code"
                             >
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><rect x="7" y="7" width="10" height="10" rx="1"></rect>
                                 </svg>
                             </button>
                             <button
                                 onClick={() => setShowScanner(true)}
                                 disabled={actionBusy || !remainingStores.some((st) => st.ready)}
-                                className="flex-1 py-4 rounded-2xl bg-neutral-900 text-white font-bold text-base shadow-xl active:scale-[0.98] disabled:opacity-60"
+                                className="flex-1 min-w-0 py-3 px-3 sm:px-4 rounded-2xl bg-neutral-900 text-white font-bold text-xs sm:text-sm shadow-xl active:scale-[0.98] disabled:opacity-60 text-center leading-tight whitespace-normal break-words box-border"
                             >
-                                {actionBusy
-                                    ? 'Verifying…'
-                                    : remainingStores.some((st) => st.ready)
-                                        ? `Verify pickup${nextStop?.type === 'store' ? ` at ${nextStop.storeName}` : ''}`
-                                        : `Waiting for ${remainingStores.map((st) => st.storeName).join(', ')} to pack`}
+                                <span className="line-clamp-2">
+                                    {actionBusy
+                                        ? 'Verifying…'
+                                        : remainingStores.some((st) => st.ready)
+                                            ? `Verify pickup${nextStop?.type === 'store' ? ` at ${nextStop.storeName}` : ''}`
+                                            : `Waiting for ${remainingStores.map((st) => st.storeName).join(', ')} to pack`}
+                                </span>
                             </button>
                         </div>
                     ) : readyToStart ? (
-                        <button onClick={handleStartDelivery} disabled={actionBusy} className="w-full py-4 rounded-2xl bg-[var(--primary-dark)] text-white font-bold text-lg shadow-xl active:scale-[0.98] disabled:opacity-60">
+                        <button
+                            onClick={handleStartDelivery}
+                            disabled={actionBusy}
+                            className="w-full py-3.5 px-4 rounded-2xl bg-[var(--primary-dark)] text-white font-bold text-sm sm:text-base shadow-xl active:scale-[0.98] disabled:opacity-60 text-center leading-snug whitespace-normal break-words box-border"
+                        >
                             {actionBusy ? 'Starting…' : 'All stores collected: start delivery'}
                         </button>
                     ) : outForDelivery ? (
-                        <button onClick={() => setShowOtpInput(true)} className="w-full py-4 rounded-2xl bg-[var(--primary-dark)] text-white font-bold text-lg shadow-xl active:scale-[0.98]">
+                        <button
+                            onClick={() => setShowOtpInput(true)}
+                            className="w-full py-3.5 px-4 rounded-2xl bg-[var(--primary-dark)] text-white font-bold text-sm sm:text-base shadow-xl active:scale-[0.98] text-center whitespace-normal break-words box-border"
+                        >
                             Enter delivery OTP
                         </button>
                     ) : null}

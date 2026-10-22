@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { spring } from '../../../../lib/motion';
 
@@ -14,6 +15,7 @@ interface Props {
   /** @deprecated Use aspect-ratio fitting instead of fixed heights */
   heightClass?: string;
   roundedClass?: string;
+  activeCategory?: string;
 }
 
 const FALLBACK_BANNERS: Record<string, Banner[]> = {
@@ -27,6 +29,7 @@ const FALLBACK_BANNERS: Record<string, Banner[]> = {
       position: 'Main Banner',
       resourceType: 'Category',
       resourceId: 'grocery',
+      categoryName: 'Grocery',
       isActive: true,
     },
     {
@@ -38,6 +41,7 @@ const FALLBACK_BANNERS: Record<string, Banner[]> = {
       position: 'Main Banner',
       resourceType: 'Category',
       resourceId: 'electronics',
+      categoryName: 'Electronics',
       isActive: true,
     },
     {
@@ -49,6 +53,7 @@ const FALLBACK_BANNERS: Record<string, Banner[]> = {
       position: 'Main Banner',
       resourceType: 'Category',
       resourceId: 'fashion',
+      categoryName: 'Fashion',
       isActive: true,
     }
   ],
@@ -62,6 +67,7 @@ const FALLBACK_BANNERS: Record<string, Banner[]> = {
       position: 'Main Banner',
       resourceType: 'Category',
       resourceId: 'grocery',
+      categoryName: 'Grocery',
       isActive: true,
     },
     {
@@ -73,6 +79,7 @@ const FALLBACK_BANNERS: Record<string, Banner[]> = {
       position: 'Main Banner',
       resourceType: 'Category',
       resourceId: 'electronics',
+      categoryName: 'Electronics',
       isActive: true,
     },
     {
@@ -84,6 +91,7 @@ const FALLBACK_BANNERS: Record<string, Banner[]> = {
       position: 'Main Banner',
       resourceType: 'Category',
       resourceId: 'fashion',
+      categoryName: 'Fashion',
       isActive: true,
     }
   ]
@@ -93,9 +101,13 @@ export default function BannerSlider({
   position,
   className = '',
   roundedClass = 'rounded-none',
+  activeCategory,
 }: Props) {
+  const navigate = useNavigate();
   const [banners, setBanners] = useState<Banner[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const isDraggingRef = useRef(false);
 
   useEffect(() => {
     const fetchBanners = async () => {
@@ -123,7 +135,19 @@ export default function BannerSlider({
     fetchBanners();
   }, [position]);
 
-  const [isPaused, setIsPaused] = useState(false);
+  // Sync with active category if selected from home header tabs
+  useEffect(() => {
+    if (!activeCategory || activeCategory === 'all' || banners.length === 0) return;
+    const targetSlug = activeCategory.toLowerCase();
+    const matchIndex = banners.findIndex((b) => {
+      const catId = String(b.resourceId || '').toLowerCase();
+      const catName = String(b.categoryName || b.resourceName || '').toLowerCase();
+      return catId === targetSlug || catName.includes(targetSlug) || targetSlug.includes(catName);
+    });
+    if (matchIndex !== -1) {
+      setCurrentIndex(matchIndex);
+    }
+  }, [activeCategory, banners]);
 
   useEffect(() => {
     if (banners.length <= 1 || isPaused) return;
@@ -135,6 +159,30 @@ export default function BannerSlider({
     return () => clearInterval(interval);
   }, [banners.length, isPaused, currentIndex]);
 
+  const handleBannerClick = (banner: Banner) => {
+    if (isDraggingRef.current) return;
+    if (!banner) return;
+
+    const catTarget = banner.resourceId || banner.categoryName || banner.resourceName;
+    if (banner.resourceType === 'Category' && catTarget && catTarget !== 'No Category Selected') {
+      navigate(`/category/${catTarget}`);
+    } else if (banner.resourceType === 'Product' && banner.resourceId) {
+      navigate(`/product/${banner.resourceId}`);
+    } else if (banner.redirectType === 'CATEGORY' && banner.redirectValue) {
+      navigate(`/category/${banner.redirectValue}`);
+    } else if (banner.redirectType === 'PRODUCT' && banner.redirectValue) {
+      navigate(`/product/${banner.redirectValue}`);
+    } else if (banner.redirectType === 'URL' && banner.redirectValue) {
+      window.location.href = banner.redirectValue;
+    } else if (banner.categoryName && banner.categoryName !== 'No Category Selected') {
+      navigate(`/category/${encodeURIComponent(banner.categoryName)}`);
+    } else if (banner.resourceName && banner.resourceName !== 'No Category Selected') {
+      navigate(`/category/${encodeURIComponent(banner.resourceName)}`);
+    } else {
+      navigate('/categories');
+    }
+  };
+
   if (banners.length === 0) return null;
 
   const aspectClass = getBannerAspectClass(position);
@@ -145,9 +193,7 @@ export default function BannerSlider({
   );
 
   return (
-    <div
-      className={`w-full relative group ${className}`}
-    >
+    <div className={`w-full relative group ${className}`}>
       <motion.div
         className={`w-full relative overflow-hidden ${roundedClass} ${aspectClass} bg-transparent shadow-[0_4px_20px_rgba(0,0,0,0.08)] rounded-xl md:rounded-2xl`}
         // Swipe left/right to change banner; it springs back into place (vertical page scroll still works)
@@ -155,10 +201,16 @@ export default function BannerSlider({
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.18}
         dragTransition={{ bounceStiffness: 500, bounceDamping: 30 }}
+        onDragStart={() => {
+          isDraggingRef.current = true;
+        }}
         onDragEnd={(_, info) => {
           const swipe = info.offset.x + info.velocity.x * 0.2;
           if (swipe < -50) setCurrentIndex((prev) => (prev + 1) % banners.length);
           else if (swipe > 50) setCurrentIndex((prev) => (prev - 1 + banners.length) % banners.length);
+          setTimeout(() => {
+            isDraggingRef.current = false;
+          }, 80);
         }}
         // Autoplay waits while a finger or the mouse is on the banner
         onPointerDown={() => setIsPaused(true)}
@@ -169,22 +221,50 @@ export default function BannerSlider({
       >
         {banners.map((banner, index) => {
           const isActive = index === currentIndex;
+          const bannerCategory =
+            banner.categoryName && banner.categoryName !== 'No Category Selected'
+              ? banner.categoryName
+              : banner.resourceName && banner.resourceName !== 'No Category Selected'
+              ? banner.resourceName
+              : null;
+
           return (
             <div
-              key={banner.id}
-              className={`absolute inset-0 transition-all duration-[1200ms] ease-in-out ${
+              key={banner.id || index}
+              onClick={() => handleBannerClick(banner)}
+              role="button"
+              tabIndex={isActive ? 0 : -1}
+              aria-label={`Open ${bannerCategory || banner.title || 'category'}`}
+              onKeyDown={(e) => {
+                if (isActive && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  handleBannerClick(banner);
+                }
+              }}
+              className={`absolute inset-0 transition-all duration-[1200ms] ease-in-out cursor-pointer select-none ${
                 isActive ? 'opacity-100 scale-100 z-10' : 'opacity-0 scale-105 z-0 pointer-events-none'
               }`}
             >
               <img
                 src={banner.image || banner.imageUrl}
-                alt={banner.title || 'Banner'}
-                className={`w-full h-full object-cover object-center transition-transform duration-[6000ms] ease-out ${
+                alt={banner.title || bannerCategory || 'Banner'}
+                className={`w-full h-full object-cover object-center transition-transform duration-[6000ms] ease-out pointer-events-none ${
                   isActive ? 'scale-[1.04] md:scale-105' : 'scale-100'
                 }`}
                 loading={index === 0 ? 'eager' : 'lazy'}
                 draggable={false}
               />
+
+              {/* Floating Category Tag Badge */}
+              {isActive && bannerCategory && (
+                <div className="absolute top-2.5 left-2.5 sm:top-3.5 sm:left-3.5 z-20 pointer-events-none">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md text-white text-[11px] sm:text-xs font-bold tracking-tight border border-white/20 shadow-md">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>{bannerCategory}</span>
+                    <span className="text-white/70 font-normal hidden sm:inline">• Tap to view items &rarr;</span>
+                  </span>
+                </div>
+              )}
               
               {/* Dynamic text overlay optimized for desktop */}
               {showTextOverlay && isActive && (
@@ -192,7 +272,7 @@ export default function BannerSlider({
                   <div className="max-w-xl space-y-2 md:space-y-3">
                     {/* Top small label / tag for premium feel (desktop only) */}
                     <span className="hidden md:inline-block px-3 py-1 bg-emerald-500/80 backdrop-blur-md rounded-full text-[11px] font-bold tracking-widest uppercase text-white mb-1">
-                      Exclusive Deal
+                      {bannerCategory || 'Exclusive Deal'}
                     </span>
                     
                     {typeof banner.title === 'string' && banner.title && (
@@ -215,17 +295,13 @@ export default function BannerSlider({
                     {/* Interactive button (desktop only) */}
                     <div className="hidden md:block pt-3 pointer-events-auto">
                       <button 
-                        className="flex items-center gap-2 px-6 py-2.5 bg-white text-neutral-900 rounded-full font-bold text-sm hover:bg-emerald-500 hover:text-white transform hover:-translate-y-0.5 transition-all duration-300 shadow-lg"
+                        className="flex items-center gap-2 px-6 py-2.5 bg-white text-neutral-900 rounded-full font-bold text-sm hover:bg-emerald-500 hover:text-white transform hover:-translate-y-0.5 transition-all duration-300 shadow-lg cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (banner.resourceType === 'Category' && banner.resourceId) {
-                            window.location.href = `/category/${banner.resourceId}`;
-                          } else {
-                            window.location.href = '/categories';
-                          }
+                          handleBannerClick(banner);
                         }}
                       >
-                        <span>Shop Now</span>
+                        <span>Shop {bannerCategory ? bannerCategory : 'Now'}</span>
                         <svg className="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                         </svg>
@@ -240,15 +316,18 @@ export default function BannerSlider({
 
         {/* Elegant Dot Indicators */}
         {banners.length > 1 && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2 z-20">
             {banners.map((_, idx) => (
               <motion.button
                 key={idx}
-                onClick={() => setCurrentIndex(idx)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentIndex(idx);
+                }}
                 aria-label={`Go to banner ${idx + 1}`}
                 animate={{ width: idx === currentIndex ? 32 : 10 }}
                 transition={spring.snappy}
-                className={`relative h-1.5 rounded-full overflow-hidden ${
+                className={`relative h-1.5 rounded-full overflow-hidden cursor-pointer ${
                   idx === currentIndex ? 'bg-emerald-500/40' : 'bg-white/50 hover:bg-white/80'
                 }`}
               >
@@ -272,18 +351,24 @@ export default function BannerSlider({
         {banners.length > 1 && (
           <>
             <button
-              onClick={() => setCurrentIndex((prev) => (prev - 1 + banners.length) % banners.length)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setCurrentIndex((prev) => (prev - 1 + banners.length) % banners.length);
+              }}
               aria-label="Previous banner"
-              className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-emerald-500 hover:text-white backdrop-blur-md text-white p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 shadow-md z-20 border border-white/20 hidden md:flex items-center justify-center transform active:scale-95 hover:scale-105"
+              className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-emerald-500 hover:text-white backdrop-blur-md text-white p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 shadow-md z-20 border border-white/20 hidden md:flex items-center justify-center transform active:scale-95 hover:scale-105 cursor-pointer"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
             <button
-              onClick={() => setCurrentIndex((prev) => (prev + 1) % banners.length)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setCurrentIndex((prev) => (prev + 1) % banners.length);
+              }}
               aria-label="Next banner"
-              className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-emerald-500 hover:text-white backdrop-blur-md text-white p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 shadow-md z-20 border border-white/20 hidden md:flex items-center justify-center transform active:scale-95 hover:scale-105"
+              className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-emerald-500 hover:text-white backdrop-blur-md text-white p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 shadow-md z-20 border border-white/20 hidden md:flex items-center justify-center transform active:scale-95 hover:scale-105 cursor-pointer"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />

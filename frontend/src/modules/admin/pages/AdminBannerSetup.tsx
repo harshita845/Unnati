@@ -18,6 +18,7 @@ export default function AdminBannerSetup() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [editingBannerId, setEditingBannerId] = useState<string | null>(null);
+  const [filterPosition, setFilterPosition] = useState<string>('All');
 
   useEffect(() => {
     loadBanners();
@@ -94,6 +95,8 @@ export default function AdminBannerSetup() {
                 resourceId,
                 resourceName,
                 categoryName: resourceName,
+                redirectType: resourceType === 'Category' ? 'CATEGORY' : 'NONE',
+                redirectValue: resourceId,
                 imageUrl: finalImageUrl
             });
             showToast("Banner updated successfully", "success");
@@ -110,6 +113,8 @@ export default function AdminBannerSetup() {
                     resourceId,
                     resourceName,
                     categoryName: resourceName,
+                    redirectType: resourceType === 'Category' ? 'CATEGORY' : 'NONE',
+                    redirectValue: resourceId,
                     imageUrl: finalImageUrl,
                     isActive: true // Default active
                 });
@@ -121,7 +126,6 @@ export default function AdminBannerSetup() {
         setSelectedFiles([]);
         setPreviewUrls([]);
         setSelectedCategory('');
-        setBannerType('Main Banner');
         if (fileInputRef.current) fileInputRef.current.value = '';
 
         // Reload List
@@ -137,6 +141,7 @@ export default function AdminBannerSetup() {
   const handleEdit = (banner: Banner) => {
     setEditingBannerId(banner.id || null);
     setBannerType(banner.position);
+    setFilterPosition(banner.position);
     setSelectedCategory(banner.resourceId || '');
     setPreviewUrls([banner.imageUrl || banner.image || '']);
     setSelectedFiles([]);
@@ -191,7 +196,11 @@ export default function AdminBannerSetup() {
                       <select
                         className="w-full border border-gray-300 rounded-md p-2.5 outline-none focus:ring-1 focus:ring-[var(--primary-color)] bg-white"
                         value={bannerType}
-                        onChange={(e) => setBannerType(e.target.value as BannerPosition)}
+                        onChange={(e) => {
+                          const val = e.target.value as BannerPosition;
+                          setBannerType(val);
+                          setFilterPosition(val);
+                        }}
                       >
                          <option value="Main Banner">Main Banner (Home Slider)</option>
                          <option value="Popup Banner">Popup Banner</option>
@@ -274,8 +283,35 @@ export default function AdminBannerSetup() {
           {/* RIGHT: View Banner Table */}
           <div className="w-full lg:w-2/3">
              <div className="bg-white rounded-lg shadow-sm overflow-hidden h-full flex flex-col">
-                <div className="p-4 border-b flex justify-between items-center">
-                   <h3 className="font-semibold text-gray-700 text-lg">View Banner</h3>
+                <div className="p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                   <div>
+                     <h3 className="font-semibold text-gray-700 text-lg">View Banners</h3>
+                     <p className="text-xs text-gray-500 mt-0.5">
+                       {banners.length} total banner{banners.length === 1 ? '' : 's'} configured
+                     </p>
+                   </div>
+                   <div className="flex items-center gap-2">
+                     <label className="text-xs font-medium text-gray-600 whitespace-nowrap">Filter Section:</label>
+                     <select
+                       value={filterPosition}
+                       onChange={(e) => {
+                         const val = e.target.value;
+                         setFilterPosition(val);
+                         if (val !== 'All' && !editingBannerId) {
+                           setBannerType(val as BannerPosition);
+                         }
+                       }}
+                       className="text-xs border border-gray-300 rounded-md py-1.5 px-2 bg-white text-gray-700 outline-none focus:ring-1 focus:ring-[var(--primary-color)] font-medium"
+                     >
+                       <option value="All">All Sections ({banners.length})</option>
+                       <option value="Main Banner">Main Banner (Home Slider) ({banners.filter(b => b.position === 'Main Banner').length})</option>
+                       <option value="Flash Deals">Flash Deals Section Slider ({banners.filter(b => b.position === 'Flash Deals').length})</option>
+                       <option value="Deal of the Day">Deal of the Day Slider ({banners.filter(b => b.position === 'Deal of the Day').length})</option>
+                       <option value="Main Section Banner">Main Section Banner ({banners.filter(b => b.position === 'Main Section Banner').length})</option>
+                       <option value="Footer Banner">Footer Banner ({banners.filter(b => b.position === 'Footer Banner').length})</option>
+                       <option value="Popup Banner">Popup Banner ({banners.filter(b => b.position === 'Popup Banner').length})</option>
+                     </select>
+                   </div>
                 </div>
 
                 <div className="overflow-x-auto flex-1">
@@ -292,14 +328,16 @@ export default function AdminBannerSetup() {
                              </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100">
-                             {banners.map((banner, index) => (
+                             {banners
+                               .filter(b => filterPosition === 'All' || b.position === filterPosition)
+                               .map((banner, index) => (
                                  <tr key={banner.id} className="hover:bg-gray-50 group">
                                     <td className="px-6 py-4 text-gray-500 font-medium">{index + 1}</td>
                                     <td className="px-6 py-4">
                                        <div className="flex flex-col">
                                            <span className="text-gray-700 font-medium text-sm">{banner.categoryName || banner.resourceName || 'No Category Selected'}</span>
-                                           <span className="text-[10px] bg-[var(--primary-color)]/10 text-[var(--primary-color)] px-1.5 py-0.5 rounded w-fit mt-1">
-                                               {banner.position === 'Main Banner' ? 'Header' :
+                                           <span className="text-[10px] bg-[var(--primary-color)]/10 text-[var(--primary-color)] px-1.5 py-0.5 rounded w-fit mt-1 font-semibold">
+                                               {banner.position === 'Main Banner' ? 'Header / Home Slider' :
                                                 banner.position === 'Main Section Banner' ? 'Home section' :
                                                 banner.position === 'Deal of the Day' ? 'Deal of the day' : banner.position}
                                            </span>
@@ -315,12 +353,14 @@ export default function AdminBannerSetup() {
                                            <button
                                               onClick={() => handleEdit(banner)}
                                               className="p-1.5 bg-[var(--primary-color)] text-white rounded shadow-sm hover:opacity-90"
+                                              title="Edit banner"
                                            >
                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                                            </button>
                                            <button
                                               onClick={() => handleDelete(banner.id)}
                                               className="p-1.5 bg-red-600 text-white rounded shadow-sm hover:opacity-90"
+                                              title="Delete banner"
                                            >
                                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                                            </button>
@@ -328,10 +368,12 @@ export default function AdminBannerSetup() {
                                     </td>
                                  </tr>
                              ))}
-                             {banners.length === 0 && !loading && (
+                             {banners.filter(b => filterPosition === 'All' || b.position === filterPosition).length === 0 && !loading && (
                                  <tr>
                                      <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
-                                         No banners found
+                                         {filterPosition === 'All'
+                                            ? 'No banners found'
+                                            : `No banners found for "${filterPosition}". Use the form on the left to add one!`}
                                      </td>
                                  </tr>
                              )}
@@ -340,14 +382,19 @@ export default function AdminBannerSetup() {
                    )}
                 </div>
 
-                {/* Pagination Placeholder */}
-                <div className="p-4 border-t text-xs text-gray-500 flex justify-between">
-                     <span>Showing 1 to {banners.length} of {banners.length} entries</span>
-                     <div className="flex gap-1">
-                         <button className="px-2 py-1 border rounded hover:bg-gray-50">Previous</button>
-                         <button className="px-2 py-1 border rounded bg-[var(--primary-color)] text-white">1</button>
-                         <button className="px-2 py-1 border rounded hover:bg-gray-50">Next</button>
-                     </div>
+                {/* Pagination / Count summary */}
+                <div className="p-4 border-t text-xs text-gray-500 flex justify-between items-center">
+                     <span>
+                       Showing {banners.filter(b => filterPosition === 'All' || b.position === filterPosition).length} of {banners.length} total banner entries
+                     </span>
+                     {filterPosition !== 'All' && (
+                       <button
+                         onClick={() => setFilterPosition('All')}
+                         className="text-xs text-[var(--primary-color)] hover:underline font-medium"
+                       >
+                         View All Sections
+                       </button>
+                     )}
                 </div>
 
              </div>

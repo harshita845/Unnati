@@ -26,12 +26,19 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const { isAuthenticated, token } = useAuth();
 
-  const getSharingText = (link: string) => `प्रिय ग्राहकों, अब 🛍️ अपने पसंदीदा स्टोर गीता स्टोर्स सरपंच साहब की दुकान से सीधे अपने 📱 मोबाइल से खरीदारी करें। अपने प्रोडक्ट घर पर पाएं। 🚚 एक्सप्रेस कॉन्टैक्ट-लेस डिलीवरी, 💳 ऑनलाइन भुगतान और बहुत कुछ। ऑर्डर करने के लिए 👉 https://${link} पर जाएं`;
+  const getSharingText = (link: string) => {
+    const cleanLink = link.replace(/^https?:\/\//, '');
+    return `Dear Customers, now shop directly from your favorite store Unnati Stores right from your mobile! Get your products delivered to your doorstep. 🚚 Fast & contactless delivery, 💳 secure online payments, and exciting offers. To order, visit 👉 https://${cleanLink}`;
+  };
+
+  const defaultStoreLink = typeof window !== "undefined" && !window.location.host.includes("localhost")
+    ? window.location.host
+    : "unnati-frontend-cyan.vercel.app";
 
   // State hooks - All placed at the very top
-  const [storeLink, setStoreLink] = useState("Ecommerce-82938.store.shoopy.in");
+  const [storeLink, setStoreLink] = useState(defaultStoreLink);
   const [showShareModal, setShowShareModal] = useState(false);
-  const [sharingText, setSharingText] = useState(getSharingText("Ecommerce-82938.store.shoopy.in"));
+  const [sharingText, setSharingText] = useState(getSharingText(defaultStoreLink));
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [newOrders, setNewOrders] = useState<RecentOrder[]>([]);
@@ -504,11 +511,13 @@ export default function AdminDashboard() {
 
             <button
               onClick={() => {
+                const cleanLink = storeLink.replace(/^https?:\/\//, '');
+                const url = `https://${cleanLink}`;
                 if (navigator.share) {
                   navigator.share({
-                    title: 'Ecommerce',
+                    title: 'Unnati Stores',
                     text: sharingText,
-                    url: `https://${storeLink}`
+                    url: url
                   }).catch(err => console.log('Error sharing', err));
                 } else {
                   navigator.clipboard.writeText(sharingText);

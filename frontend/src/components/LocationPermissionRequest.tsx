@@ -23,6 +23,8 @@ export default function LocationPermissionRequest({
   const [showManualInput, setShowManualInput] = useState(isChangeMode);
   const [manualAddress, setManualAddress] = useState('');
   const [manualLat, setManualLat] = useState(0);
+  const [saveError, setSaveError] = useState('');
+  const [savingManual, setSavingManual] = useState(false);
   const [manualLng, setManualLng] = useState(0);
   const [availableCities, setAvailableCities] = useState<Array<{ city: string; latitude?: number; longitude?: number }>>([]);
   const [loadingCities, setLoadingCities] = useState(false);
@@ -97,23 +99,65 @@ export default function LocationPermissionRequest({
   };
 
   const handleManualLocationSelect = (address: string, lat: number, lng: number, _placeName: string) => {
+    setSaveError('');
     setManualAddress(address);
     setManualLat(lat);
     setManualLng(lng);
   };
 
-  const handleSaveManualLocation = async () => {
-    if (!manualAddress) return;
+  /**
+   * Typed text without picking a suggestion has no coordinates yet: use a serviceable city with
+   * that name, else look the address up (Google, then OpenStreetMap).
+   */
+  const findCoordinates = async (text: string): Promise<{ lat: number; lng: number; address: string } | null> => {
+    const query = text.trim();
+    const city = availableCities.find((c) => c.city.trim().toLowerCase() === query.toLowerCase());
+    if (city?.latitude && city?.longitude) return { lat: city.latitude, lng: city.longitude, address: city.city };
 
+    type Geo = { geocode: (r: object) => Promise<{ results: Array<{ formatted_address?: string; geometry?: { location?: { lat(): number; lng(): number } } }> }> };
+    const geocoder = (window as unknown as { google?: { maps?: { Geocoder?: new () => Geo } } }).google?.maps?.Geocoder;
+    if (geocoder) {
+      try {
+        const { results } = await new geocoder().geocode({ address: query, componentRestrictions: { country: 'in' } });
+        const loc = results?.[0]?.geometry?.location;
+        if (loc) return { lat: loc.lat(), lng: loc.lng(), address: results[0].formatted_address || query };
+      } catch {
+        // fall through to OpenStreetMap
+      }
+    }
     try {
-      await updateLocation({
-        latitude: manualLat || 0,
-        longitude: manualLng || 0,
-        address: manualAddress,
-      });
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=in&limit=1`);
+      const [hit] = await res.json();
+      if (hit?.lat && hit?.lon) return { lat: Number(hit.lat), lng: Number(hit.lon), address: hit.display_name || query };
+    } catch {
+      // nothing found
+    }
+    return null;
+  };
+
+  const handleSaveManualLocation = async () => {
+    if (!manualAddress.trim() || savingManual) return;
+    setSaveError('');
+    setSavingManual(true);
+    try {
+      let lat = manualLat;
+      let lng = manualLng;
+      let address = manualAddress;
+      if (!lat || !lng) {
+        const found = await findCoordinates(manualAddress);
+        if (!found) {
+          setSaveError("Couldn't find that place. Pick one from the suggestions or choose a city below.");
+          return;
+        }
+        ({ lat, lng, address } = found);
+      }
+      await updateLocation({ latitude: lat, longitude: lng, address });
       onLocationGranted();
     } catch (error) {
       console.error('Failed to save manual location:', error);
+      setSaveError("Couldn't save this location. Please try again.");
+    } finally {
+      setSavingManual(false);
     }
   };
 
@@ -235,10 +279,16 @@ export default function LocationPermissionRequest({
           {manualAddress && (
             <button
               onClick={handleSaveManualLocation}
-              className="w-full py-2.5 bg-[var(--brand-green,#236B34)] hover:bg-[var(--brand-green-dark,#1B5128)] text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer"
+              disabled={savingManual}
+              className="w-full py-2.5 bg-[var(--brand-green,#236B34)] hover:bg-[var(--brand-green-dark,#1B5128)] text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-60"
             >
-              Confirm & Save Location
+              {savingManual ? 'Finding location…' : 'Confirm & Save Location'}
             </button>
+          )}
+          {saveError && (
+            <p role="alert" className="text-xs font-medium text-red-600 text-left">
+              {saveError}
+            </p>
           )}
         </div>
 

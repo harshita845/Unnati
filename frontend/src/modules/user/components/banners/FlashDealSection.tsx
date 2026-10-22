@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useThemeContext } from '../../../../context/ThemeContext';
 import { bannerService } from '../../../../services/bannerService';
-import { getProductById } from '../../../../services/api/customerProductService';
+import { getProductById, getProducts } from '../../../../services/api/customerProductService';
 import { calculateCardPrice } from '../../../../utils/priceUtils';
 import { mapApiProductForCustomerDisplay } from '../../../../utils/customerVariantUtils';
 import { useLocation } from '../../../../hooks/useLocation';
@@ -52,7 +52,7 @@ export default function FlashDealSection() {
             let fetchedProducts: any[] = [];
 
             // 1. Try to fetch from specific IDs if configured
-            if (data.flashDealProductIds && data.flashDealProductIds.length > 0) {
+            if (data?.flashDealProductIds && data.flashDealProductIds.length > 0) {
                 const promises = data.flashDealProductIds.slice(0, 10).map(async (id) => {
                     try {
                         return await getProductById(id, location?.latitude, location?.longitude);
@@ -70,6 +70,23 @@ export default function FlashDealSection() {
                     }));
             }
 
+            // 2. Fallback: If no specific products configured or none found, fetch discounted products
+            if (fetchedProducts.length === 0) {
+                const prodRes = await getProducts({
+                    sort: 'discount',
+                    limit: 10,
+                    latitude: location?.latitude,
+                    longitude: location?.longitude,
+                    city: location?.city || 'Indore',
+                });
+                if (prodRes?.success && Array.isArray(prodRes.data)) {
+                    fetchedProducts = prodRes.data.map((res: any) => ({
+                        ...mapApiProductForCustomerDisplay(res),
+                        isAvailable: res.isAvailableAtLocation !== false,
+                    }));
+                }
+            }
+
             setProducts(fetchedProducts);
             setIsLoaded(true);
         } catch (error) {
@@ -78,7 +95,7 @@ export default function FlashDealSection() {
         }
     };
     fetchConfig();
-  }, [activeCategory]);
+  }, [activeCategory, location?.latitude, location?.longitude, location?.city]);
 
   useEffect(() => {
      if (config.flashDealTargetDate) {

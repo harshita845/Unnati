@@ -17,6 +17,13 @@ interface LocationUpdate {
     timestamp: Date
 }
 
+interface TrackingCallbacks {
+    onStatusUpdate?: (status: string) => void
+    onOtpUpdate?: (data: { deliveryOtp: string; expiresAt?: string | Date }) => void
+    onPartnerAccepted?: (partner: any) => void
+    onLocationUpdate?: (location: { lat: number; lng: number }, eta: number, distance: number) => void
+}
+
 interface TrackingData {
     deliveryLocation: { lat: number; lng: number } | null
     eta: number
@@ -26,12 +33,19 @@ interface TrackingData {
     lastUpdate: Date | null
     error: string | null
     reconnectAttempts: number
+    orderStatus?: string
+    deliveryOtp?: string
+    deliveryOtpExpiresAt?: string | Date
+    deliveryPartner?: any
 }
 
 const MAX_RECONNECT_ATTEMPTS = 5
 const INITIAL_RECONNECT_DELAY = 2000 // 2 seconds
 
-export const useDeliveryTracking = (orderId: string | undefined) => {
+export const useDeliveryTracking = (
+    orderId: string | undefined,
+    callbacks?: TrackingCallbacks
+) => {
     const [trackingData, setTrackingData] = useState<TrackingData>({
         deliveryLocation: null,
         eta: 30,
@@ -42,6 +56,9 @@ export const useDeliveryTracking = (orderId: string | undefined) => {
         error: null,
         reconnectAttempts: 0,
     })
+
+    const callbacksRef = useRef<TrackingCallbacks | undefined>(callbacks)
+    callbacksRef.current = callbacks
 
     const socketRef = useRef<Socket | null>(null)
     const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -100,11 +117,43 @@ export const useDeliveryTracking = (orderId: string | undefined) => {
 
         socket.on('delivery-boy-accepted', (data: any) => {
             console.log('✅ Delivery boy accepted order:', data)
-            // Start tracking when delivery boy accepts
+            const partner = data?.deliveryBoy || data
             setTrackingData(prev => ({
                 ...prev,
                 isConnected: true,
+                deliveryPartner: partner || prev.deliveryPartner,
             }))
+            callbacksRef.current?.onPartnerAccepted?.(partner)
+        })
+
+        socket.on('order-status-updated', (data: { orderId: string; status: string }) => {
+            console.log('📦 Order status updated via socket:', data)
+            setTrackingData(prev => ({
+                ...prev,
+                orderStatus: data.status,
+                status: data.status,
+            }))
+            callbacksRef.current?.onStatusUpdate?.(data.status)
+        })
+
+        socket.on('delivery-otp-refreshed', (data: { orderId: string; deliveryOtp: string; expiresAt?: string | Date }) => {
+            console.log('🔑 Delivery OTP refreshed via socket:', data)
+            setTrackingData(prev => ({
+                ...prev,
+                deliveryOtp: data.deliveryOtp,
+                deliveryOtpExpiresAt: data.expiresAt,
+            }))
+            callbacksRef.current?.onOtpUpdate?.(data)
+        })
+
+        socket.on('order-delivered', (data: any) => {
+            console.log('🎉 Order delivered via socket:', data)
+            setTrackingData(prev => ({
+                ...prev,
+                orderStatus: 'Delivered',
+                status: 'delivered',
+            }))
+            callbacksRef.current?.onStatusUpdate?.('Delivered')
         })
 
         socket.on('location-update', (update: LocationUpdate) => {
@@ -138,6 +187,12 @@ export const useDeliveryTracking = (orderId: string | undefined) => {
                 lastUpdate: timestamp,
                 error: null,
             }))
+
+            callbacksRef.current?.onLocationUpdate?.(
+                { lat: update.location.latitude, lng: update.location.longitude },
+                update.eta,
+                update.distance
+            )
         })
 
         socket.on('disconnect', (reason: any) => {

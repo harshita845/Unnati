@@ -16,21 +16,33 @@ export default function HomeThreePromoBanners() {
       try {
         // 1. Try to load banners configured for Main Section Banner
         const promoBanners = await bannerService.getBannersByPosition("Main Section Banner");
-        if (isMounted && promoBanners && promoBanners.length >= 3) {
-          const mapped = promoBanners.slice(0, 3).map((b, idx) => ({
-            id: b.id,
-            title: b.title || b.categoryName || "Special Offer",
-            subtitle: b.subtitle || "Handpicked for you",
-            priceText: "Shop",
-            price: "Now",
-            imageUrl: b.image || b.imageUrl,
-            bgColor: BG_COLORS[idx % BG_COLORS.length],
-            link: b.redirectType === 'CATEGORY' && b.redirectValue 
-              ? `/category/${b.redirectValue}` 
-              : b.redirectType === 'PRODUCT' && b.redirectValue 
-              ? `/product/${b.redirectValue}` 
-              : '/categories',
-          }));
+        if (isMounted && promoBanners && promoBanners.length > 0) {
+          const mapped = promoBanners.slice(0, 3).map((b, idx) => {
+            const catTarget = b.resourceId || b.categoryName || b.resourceName;
+            let link = '/categories';
+            if (b.resourceType === 'Category' && catTarget && catTarget !== 'No Category Selected') {
+              link = `/category/${catTarget}`;
+            } else if (b.redirectType === 'CATEGORY' && b.redirectValue) {
+              link = `/category/${b.redirectValue}`;
+            } else if (b.resourceType === 'Product' && b.resourceId) {
+              link = `/product/${b.resourceId}`;
+            } else if (b.redirectType === 'PRODUCT' && b.redirectValue) {
+              link = `/product/${b.redirectValue}`;
+            } else if (b.categoryName && b.categoryName !== 'No Category Selected') {
+              link = `/category/${encodeURIComponent(b.categoryName)}`;
+            }
+
+            return {
+              id: b.id,
+              title: b.title || (b.categoryName && b.categoryName !== 'No Category Selected' ? b.categoryName : "Special Offer"),
+              subtitle: b.subtitle || "Handpicked for you",
+              priceText: "Shop",
+              price: "Now",
+              imageUrl: b.image || b.imageUrl,
+              bgColor: BG_COLORS[idx % BG_COLORS.length],
+              link,
+            };
+          });
           setBanners(mapped);
           return;
         }
@@ -69,7 +81,7 @@ export default function HomeThreePromoBanners() {
 
   return (
     <div className="px-2 md:px-4 lg:px-4 py-2 mt-2 mb-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
+      <div className={`grid grid-cols-1 ${banners.length === 2 ? 'md:grid-cols-2' : banners.length >= 3 ? 'md:grid-cols-3' : ''} gap-4 lg:gap-6`}>
         {banners.map((banner) => (
           <motion.div
             key={banner.id}

@@ -7,6 +7,11 @@ export interface IBanner extends Document {
   resourceName?: string; // Store name for easier display, optional
   imageUrl: string;
   isActive: boolean;
+  categoryName?: string;
+  title?: string;
+  subtitle?: string;
+  redirectType?: string;
+  redirectValue?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,6 +44,26 @@ const bannerSchema = new Schema<IBanner>(
     isActive: {
       type: Boolean,
       default: true,
+    },
+    title: {
+      type: String,
+      required: false,
+    },
+    subtitle: {
+      type: String,
+      required: false,
+    },
+    categoryName: {
+      type: String,
+      required: false,
+    },
+    redirectType: {
+      type: String,
+      required: false,
+    },
+    redirectValue: {
+      type: String,
+      required: false,
     },
   },
   {

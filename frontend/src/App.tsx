@@ -242,6 +242,7 @@ const AdminGSTReport = lazy(() => import("./modules/admin/pages/AdminGSTReport")
 const AdminGstReturns = lazy(() => import("./modules/admin/pages/AdminGstReturns"));
 const AdminDataBackup = lazy(() => import("./modules/admin/pages/AdminDataBackup"));
 const AdminStockTransfer = lazy(() => import("./modules/admin/pages/AdminStockTransfer"));
+const AdminProductPhotos = lazy(() => import("./modules/admin/pages/AdminProductPhotos"));
 const AdminPaymentReport = lazy(() => import("./modules/admin/pages/AdminPaymentReport"));
 const AdminOnlineOrderReport = lazy(() => import("./modules/admin/pages/AdminOnlineOrderReport"));
 const AdminPOSInvoiceReport = lazy(() => import("./modules/admin/pages/AdminPOSInvoiceReport"));
@@ -590,6 +591,7 @@ function App() {
                              <Route path="product/storage-location" element={<AdminStorageLocationSetup />} />
                              <Route path="product/list" element={<AdminStockManagement />} />
                              <Route path="product/stock-transfer" element={<AdminStockTransfer />} />
+                             <Route path="product/photos" element={<AdminProductPhotos />} />
                             <Route path="product/add" element={<AdminAddProduct />} />
                             <Route path="product/edit/:id" element={<AdminAddProduct />} />
                             <Route path="manage-seller/add" element={<AdminAddSeller />} />

@@ -1,9 +1,9 @@
 import { useLayoutEffect, useRef, useState, useEffect, useMemo } from "react";
 import { gsap } from "gsap";
+import { AnimatePresence, motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { getTheme } from "../../../utils/themes";
 import { getCachedHomeContent, getHomeContent } from "../../../services/api/customerHomeService";
-import { getSubcategories } from "../../../services/api/categoryService";
 import { useLocation } from "../../../hooks/useLocation";
 import { calculateProductPrice } from "../../../utils/priceUtils";
 
@@ -17,7 +17,8 @@ interface PromoCard {
   categoryId?: string;
   slug?: string;
   bgColor?: string;
-  subcategoryImages?: string[]; // Array of subcategory image URLs
+  /** Pictures of real products in this category (from stores that deliver to the customer) */
+  productImages?: string[];
 }
 
 // Icon mappings for each category
@@ -50,62 +51,6 @@ const getCategoryIcons = (categoryId: string) => {
   return iconMap[id] || ["🛍️", "🏷️", "✨", "🎁"];
 };
 
-const getDummyCategoryImages = (title: string, categoryId?: string): string[] => {
-  const t = (title || "").toLowerCase();
-  const cid = (categoryId || "").toLowerCase();
-
-  if (t.includes("wedding") || t.includes("bridal") || cid.includes("wedding") || cid.includes("bridal")) {
-    return [
-      "https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=200&auto=format&fit=crop&q=80",
-    ];
-  }
-  if (t.includes("cricket") || t.includes("sport") || t.includes("bat") || cid.includes("cricket") || cid.includes("sport")) {
-    return [
-      "https://images.unsplash.com/photo-1531415074868-036b107e775a?w=200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=200&auto=format&fit=crop&q=80",
-    ];
-  }
-  if (t.includes("wool") || t.includes("thermal") || t.includes("winter") || cid.includes("wool") || cid.includes("thermal")) {
-    return [
-      "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1578587018452-892bacefd3f2?w=200&auto=format&fit=crop&q=80",
-    ];
-  }
-  if (t.includes("clean") || t.includes("detergent") || cid.includes("clean") || cid.includes("detergent")) {
-    return [
-      "https://images.unsplash.com/photo-1585421514284-efb74c2b69ba?w=200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=200&auto=format&fit=crop&q=80",
-    ];
-  }
-  if (t.includes("home") || t.includes("decor") || cid.includes("home")) {
-    return [
-      "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?w=200&auto=format&fit=crop&q=80",
-    ];
-  }
-  if (t.includes("net") || t.includes("mosquito") || t.includes("machhar")) {
-    return [
-      "https://images.unsplash.com/photo-1616046229478-9901c5536a45?w=200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=200&auto=format&fit=crop&q=80",
-    ];
-  }
-  if (t.includes("water") || t.includes("bottle") || t.includes("can")) {
-    return [
-      "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1556817411-31ae72fa3ea0?w=200&auto=format&fit=crop&q=80",
-    ];
-  }
-  if (t.includes("towel") || t.includes("bath") || t.includes("cloth")) {
-    return [
-      "https://images.unsplash.com/photo-1616627547584-bf28cee262db?w=200&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=200&auto=format&fit=crop&q=80",
-    ];
-  }
-  return [];
-};
-
-
 interface PromoStripProps {
   activeTab?: string;
 }
@@ -126,17 +71,17 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
   const [headingText, setHeadingText] = useState(theme.bannerText);
   const [saleTextValue, setSaleTextValue] = useState(theme.saleText);
   const [dateRange, setDateRange] = useState("");
+  const [saleEnds, setSaleEnds] = useState<number | null>(null);
+  const [nowTick, setNowTick] = useState(Date.now());
   const [crazyDealsTitle, setCrazyDealsTitle] = useState("CRAZY DEALS");
-  const [subcategoryImagesMap, setSubcategoryImagesMap] = useState<Record<string, string[]>>({});
   const containerRef = useRef<HTMLDivElement>(null);
   const snowflakesRef = useRef<HTMLDivElement>(null);
   const housefullRef = useRef<HTMLDivElement>(null);
   const saleRef = useRef<HTMLDivElement>(null);
   const dateRef = useRef<HTMLDivElement>(null);
   const [currentProductIndex, setCurrentProductIndex] = useState(0);
-  const priceContainerRef = useRef<HTMLDivElement>(null);
-  const productNameRef = useRef<HTMLDivElement>(null);
-  const productImageRef = useRef<HTMLDivElement>(null);
+  // Rotation pauses while the customer is touching / hovering the deal
+  const [paused, setPaused] = useState(false);
   const [loading, setLoading] = useState(true);
   const [hasData, setHasData] = useState(false);
 
@@ -144,76 +89,6 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
     () => categoryCards.slice(0, VISIBLE_PROMO_CARD_LIMIT),
     [categoryCards]
   );
-
-  const subcategoryFetchKey = useMemo(
-    () =>
-      visibleCategoryCards
-        .map((card) => `${card.id}:${card.categoryId ?? ""}`)
-        .join("|"),
-    [visibleCategoryCards]
-  );
-
-  // Fetch subcategory images only for visible promo cards, with cancellation on re-run/unmount
-  useEffect(() => {
-    if (!subcategoryFetchKey) {
-      setSubcategoryImagesMap({});
-      return;
-    }
-
-    let cancelled = false;
-    const timeoutId = window.setTimeout(async () => {
-      const imagesMap: Record<string, string[]> = {};
-      const batchSize = 2;
-
-      for (let i = 0; i < visibleCategoryCards.length; i += batchSize) {
-        if (cancelled) return;
-
-        const batch = visibleCategoryCards.slice(i, i + batchSize);
-        await Promise.all(
-          batch.map(async (card) => {
-            const categoryId = card.categoryId;
-            if (!categoryId || cancelled) return;
-
-            try {
-              const response = await getSubcategories(categoryId, { limit: 4 });
-              if (cancelled) return;
-
-              if (response.success && response.data) {
-                const images = response.data
-                  .filter((subcat) => subcat.subcategoryImage)
-                  .map((subcat) => subcat.subcategoryImage!)
-                  .slice(0, 4);
-
-                if (images.length > 0) {
-                  imagesMap[card.id] = images;
-                }
-              }
-            } catch (error) {
-              if (!cancelled) {
-                console.error(
-                  `Error fetching subcategories for category ${categoryId}:`,
-                  error
-                );
-              }
-            }
-          })
-        );
-
-        if (i + batchSize < visibleCategoryCards.length && !cancelled) {
-          await new Promise((resolve) => setTimeout(resolve, 50));
-        }
-      }
-
-      if (!cancelled) {
-        setSubcategoryImagesMap(imagesMap);
-      }
-    }, 300);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timeoutId);
-    };
-  }, [subcategoryFetchKey, visibleCategoryCards]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -273,6 +148,7 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
             setCrazyDealsTitle("CRAZY DEALS");
           }
 
+          setSaleEnds(end ? end.getTime() : null);
           // Format date range
           if (start && end) {
             newDateRange = `${start.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()} - ${end.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()}`;
@@ -292,6 +168,7 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
                   categoryId: category?._id || card.categoryId,
                   slug: category?.slug || card.categoryId,
                   imageUrl: category?.image,
+                  productImages: Array.isArray(card.productImages) ? (card.productImages as Array<{ image?: string }>).map((x) => x?.image).filter((u): u is string => Boolean(u)) : [],
                   bgColor: "bg-yellow-50",
                 };
               });
@@ -303,8 +180,8 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
               const product = typeof p === 'object' ? p : null;
               const price = Number(product?.price) || 0;
               const mrp = Number(product?.mrp) || Number(product?.compareAtPrice) || 0;
-              const originalPrice = mrp > 0 ? mrp : (price > 0 ? Math.round(price * 1.2) : 999);
-              const discountedPrice = price > 0 ? price : 499;
+              const originalPrice = mrp > 0 ? mrp : 0;
+              const discountedPrice = price > 0 ? price : 0;
 
               // Try multiple image field names and fallbacks
               const imageUrl =
@@ -321,14 +198,16 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
                                  (typeof product?.name === 'string' ? product.name : null) || "Product";
 
               return {
+                // The real product (variations, discPrice…) so its actual price is shown
+                ...(product || {}),
                 id: product?._id || p,
                 _id: product?._id || p,
                 name: productName,
                 productName: productName,
                 price: price,
                 mrp: mrp,
-                originalPrice: isNaN(originalPrice) ? 999 : originalPrice,
-                discountedPrice: isNaN(discountedPrice) ? 499 : discountedPrice,
+                originalPrice: isNaN(originalPrice) ? 0 : originalPrice,
+                discountedPrice: isNaN(discountedPrice) ? 0 : discountedPrice,
                 imageUrl: imageUrl,
               };
             });
@@ -364,6 +243,22 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
     fetchData();
 
   }, [activeTab]);
+
+  // Countdown chip: refresh every minute
+  useEffect(() => {
+    if (!saleEnds) return;
+    const t = setInterval(() => setNowTick(Date.now()), 60 * 1000);
+    return () => clearInterval(t);
+  }, [saleEnds]);
+  const endsIn = (() => {
+    if (!saleEnds) return "";
+    const ms = saleEnds - nowTick;
+    if (ms <= 0) return "";
+    const d = Math.floor(ms / 86400000);
+    const h = Math.floor((ms % 86400000) / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
+  })();
 
   // Reset product index when activeTab changes or featuredProducts change
   useEffect(() => {
@@ -470,13 +365,13 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
 
   // Product rotation animation
   useEffect(() => {
-    if (featuredProducts.length <= 1) return;
+    if (featuredProducts.length <= 1 || paused) return;
     const interval = setInterval(() => {
       setCurrentProductIndex((prev) => (prev + 1) % featuredProducts.length);
-    }, 3000);
+    }, 3500);
 
     return () => clearInterval(interval);
-  }, [featuredProducts.length]);
+  }, [featuredProducts.length, paused]);
 
   // Reset product index when featuredProducts change
   useEffect(() => {
@@ -484,47 +379,6 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
       setCurrentProductIndex(0);
     }
   }, [featuredProducts.length, currentProductIndex]);
-
-  // Animate product change
-  useEffect(() => {
-    const elements = [
-      priceContainerRef.current,
-      productNameRef.current,
-      productImageRef.current,
-    ];
-    if (elements.some((el) => !el)) return;
-
-    const tween = gsap.to(elements, {
-      opacity: 0,
-      x: -30,
-      duration: 0.3,
-      ease: "power2.in",
-      onComplete: () => {
-        const currentElements = [
-          priceContainerRef.current,
-          productNameRef.current,
-          productImageRef.current,
-        ];
-        if (currentElements.some((el) => !el)) return;
-
-        gsap.set(currentElements, {
-          x: 30,
-          opacity: 0,
-        });
-
-        gsap.to(currentElements, {
-          opacity: 1,
-          x: 0,
-          duration: 0.4,
-          ease: "power2.out",
-        });
-      },
-    });
-
-    return () => {
-      tween.kill();
-    };
-  }, [currentProductIndex]);
 
   const currentProduct = featuredProducts.length > 0 ? featuredProducts[currentProductIndex] : null;
 
@@ -539,12 +393,11 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
   const { displayPrice, mrp } = calculateProductPrice(displayProduct);
 
   // Fallback prices if product data is incomplete
-  const finalDiscountedPrice = displayPrice > 0 ? displayPrice : (Number.isFinite(displayProduct.discountedPrice) ? displayProduct.discountedPrice : 499);
-  const finalOriginalPrice = mrp > 0 ? mrp : (Number.isFinite(displayProduct.originalPrice) ? displayProduct.originalPrice : 999);
-
-  // Ensure prices are valid numbers
-  const safeOriginalPrice = Number.isFinite(finalOriginalPrice) ? Math.round(finalOriginalPrice) : 999;
-  const safeDiscountedPrice = Number.isFinite(finalDiscountedPrice) ? Math.round(finalDiscountedPrice) : 499;
+  const finalDiscountedPrice = displayPrice > 0 ? displayPrice : Number(displayProduct.discountedPrice) || 0;
+  const finalOriginalPrice = mrp > 0 ? mrp : Number(displayProduct.originalPrice) || 0;
+  const safeDiscountedPrice = Math.round(finalDiscountedPrice);
+  // MRP is only shown struck-through when it is really higher than the selling price
+  const safeOriginalPrice = finalOriginalPrice > finalDiscountedPrice ? Math.round(finalOriginalPrice) : 0;
 
   // Helper function to handle product navigation
   const handleProductClick = (e: React.MouseEvent) => {
@@ -576,22 +429,22 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
       {(headingText || saleTextValue) && (
         <div ref={housefullRef} className="px-4 mb-2">
           <div
-            className="rounded-2xl overflow-hidden shadow-sm border border-[var(--brand-border,#E9E2D3)] px-3.5 py-2.5 text-white relative flex flex-col gap-1"
+            className="rounded-2xl overflow-hidden shadow-sm border border-amber-200 px-3.5 py-2.5 relative flex flex-col gap-1"
             style={{
-              background: "linear-gradient(135deg, #14401F 0%, #1B5128 50%, #236B34 100%)",
+              background: "linear-gradient(135deg, #FFF8EA 0%, #FFEBC6 100%)",
             }}>
             {/* Row 1: Sale Heading + Date Badge */}
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-amber-300 animate-pulse text-xs flex-shrink-0">⚡</span>
-                <span className="font-extrabold uppercase tracking-wider text-xs sm:text-sm font-display text-white whitespace-nowrap">
+                <span className="text-orange-500 animate-pulse text-xs flex-shrink-0">⚡</span>
+                <span className="font-extrabold uppercase tracking-wider text-xs sm:text-sm font-display text-[var(--brand-green-dark,#1B5128)] whitespace-nowrap">
                   {headingText}
                 </span>
               </div>
               {dateRange && (
                 <span
                   ref={dateRef}
-                  className="text-[9px] sm:text-[10px] text-amber-100 font-semibold bg-white/10 px-2.5 py-0.5 rounded-full border border-white/15 whitespace-nowrap flex-shrink-0">
+                  className="text-[9px] sm:text-[10px] text-amber-800 font-semibold bg-white/80 px-2.5 py-0.5 rounded-full border border-amber-200 whitespace-nowrap flex-shrink-0">
                   {dateRange}
                 </span>
               )}
@@ -600,8 +453,13 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
             {saleTextValue && (
               <div
                 ref={saleRef}
-                className="text-amber-200/90 text-[11px] sm:text-xs font-medium leading-tight pl-4">
-                {saleTextValue}
+                className="flex items-center justify-between gap-2 pl-4">
+                <span className="text-amber-900/80 text-[11px] sm:text-xs font-medium leading-tight">{saleTextValue}</span>
+                {endsIn && (
+                  <span className="flex-shrink-0 rounded-full bg-gradient-to-r from-orange-500 to-rose-500 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm">
+                    ⏱ Ends in {endsIn}
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -614,19 +472,18 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
           {/* Crazy Deals Section - Left */}
           <div className="flex-shrink-0 w-[100px] promo-card transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
             <div
-              className="h-full rounded-2xl p-1.5 flex flex-col items-center justify-between relative overflow-hidden border border-[var(--brand-border,#E9E2D3)] shadow-md"
+              className="h-full rounded-2xl p-1.5 flex flex-col items-center justify-between relative overflow-hidden border border-orange-200 shadow-sm"
               style={{
-                background: "linear-gradient(135deg, #14401F 0%, #1B5128 50%, #236B34 100%)",
+                background: "linear-gradient(170deg, #FFF4E6 0%, #FFE2C4 100%)",
                 minHeight: "122px",
               }}>
               {/* CRAZY DEALS - Two lines, bigger, premium gold text */}
               <div className="text-center mb-1" style={{ marginTop: "4px" }}>
                 <div
-                  className="font-extrabold leading-tight tracking-wider uppercase bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-100 bg-clip-text text-transparent font-display"
+                  className="font-extrabold leading-tight tracking-wider uppercase bg-gradient-to-r from-orange-600 to-rose-600 bg-clip-text text-transparent font-display"
                   style={{
                     fontSize: "14px",
                     fontFamily: "var(--font-display, 'Fraunces', serif)",
-                    textShadow: "0 2px 4px rgba(0,0,0,0.3)",
                   }}>
                   {crazyDealsTitle.split(" ").map((word, idx) => (
                     <div key={idx}>{word}</div>
@@ -634,96 +491,81 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
                 </div>
               </div>
 
-              {/* Price Banners - Compact */}
+              {/* The deal on show: slides in when it changes; tap to open it */}
               <div
-                ref={priceContainerRef}
-                className="flex flex-col items-center mb-1 relative">
-                {/* Original Price - Darker Banner */}
-                <div
-                  className="bg-black/40 rounded-sm px-1.5 inline-block relative z-10 border border-white/10"
-                  style={{
-                    height: "fit-content",
-                    lineHeight: "1",
-                    paddingTop: "2px",
-                    paddingBottom: "2px",
-                  }}>
-                  <span className="text-white/60 text-[9px] font-medium line-through leading-none font-price">
-                    ₹{safeOriginalPrice}
-                  </span>
-                </div>
-                {/* Discounted Price - Signature Gradient Banner */}
-                <div
-                  className="bg-gradient-to-r from-[var(--brand-amber,#FFB020)] via-[var(--brand-orange,#F97316)] to-[var(--brand-orange-deep,#E8590C)] rounded-full px-2 inline-block relative -mt-0.5 z-20 shadow-sm"
-                  style={{
-                    height: "fit-content",
-                    lineHeight: "1",
-                    paddingTop: "2.5px",
-                    paddingBottom: "2.5px",
-                  }}>
-                  <span className="text-white text-[11px] font-extrabold leading-none tracking-wide font-price">
-                    ₹{safeDiscountedPrice}
-                  </span>
-                </div>
-              </div>
-
-              {/* Product Name - Compact - Clickable - White/Gray for dark background */}
-              <div
-                ref={productNameRef}
-                onClick={handleProductClick}
-                className="text-white/90 font-medium text-[10px] text-center mb-1 cursor-pointer hover:text-white hover:underline line-clamp-1 w-full px-0.5 transition-colors"
-                title={displayProduct.productName || displayProduct.name}>
-                {displayProduct.productName || displayProduct.name}
-              </div>
-
-              {/* Product Thumbnail - Bottom Center, sized to container */}
-              <div
-                ref={productImageRef}
-                className="flex-1 flex items-end justify-center w-full"
-                style={{ minHeight: "55px", maxHeight: "75px" }}>
-                <div
-                  onClick={handleProductClick}
-                  className="w-16 h-18 rounded-xl bg-white/10 flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-90 transition-opacity border border-white/10"
-                  style={{ background: "transparent" }}>
-                  {displayProduct.imageUrl ? (
-                    <img
-                      src={displayProduct.imageUrl}
-                      alt={displayProduct.name}
-                      className="w-full h-full object-contain filter drop-shadow-sm transition-transform duration-300 hover:scale-105"
-                      loading="lazy"
-                      decoding="async"
-                      style={{
-                        mixBlendMode: "normal",
-                        backgroundColor: "transparent",
-                      }}
-                      referrerPolicy="no-referrer"
-                      onError={(e) => {
-                        // Hide broken image and show fallback
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'none';
-                        const parent = target.parentElement;
-                        if (parent && !parent.querySelector('.product-fallback')) {
-                          const fallback = document.createElement('div');
-                          fallback.className = 'product-fallback w-full h-full bg-gradient-to-b from-yellow-100 to-yellow-50 flex items-center justify-center rounded';
-                          const icon = document.createElement('div');
-                          icon.className = 'w-7 h-9 bg-yellow-200 rounded-sm relative';
-                          icon.innerHTML = `
-                            <div class="absolute top-0 left-1/2 transform -translate-x-1/2 w-2.5 h-2.5 bg-blue-400 rounded-full"></div>
-                            <div class="absolute bottom-0 left-0 right-0 h-1.5 bg-white/80"></div>
-                          `;
-                          fallback.appendChild(icon);
-                          parent.appendChild(fallback);
-                        }
-                      }}
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-b from-yellow-100 to-yellow-50 flex items-center justify-center rounded">
-                      <div className="w-7 h-9 bg-yellow-200 rounded-sm relative">
-                        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-2.5 h-2.5 bg-blue-400 rounded-full"></div>
-                        <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/80"></div>
+                className="flex w-full flex-1 flex-col items-center"
+                onMouseEnter={() => setPaused(true)}
+                onMouseLeave={() => setPaused(false)}
+                onTouchStart={() => setPaused(true)}
+                onTouchEnd={() => setPaused(false)}>
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.button
+                    type="button"
+                    key={String(displayProduct.id || currentProductIndex)}
+                    onClick={handleProductClick}
+                    initial={{ opacity: 0, x: 24 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -24 }}
+                    transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                    whileTap={{ scale: 0.95 }}
+                    className="flex w-full flex-1 flex-col items-center"
+                    aria-label={`Open ${displayProduct.productName || displayProduct.name}`}>
+                    {/* Prices */}
+                    {safeDiscountedPrice > 0 && (
+                      <div className="flex flex-col items-center mb-1 relative">
+                        {safeOriginalPrice > 0 && (
+                          <div className="bg-white/80 rounded-sm px-1.5 inline-block relative z-10 border border-orange-100 py-0.5 leading-none">
+                            <span className="text-neutral-500 text-[9px] font-medium line-through leading-none font-price">₹{safeOriginalPrice}</span>
+                          </div>
+                        )}
+                        <div className="bg-gradient-to-r from-[var(--brand-amber,#FFB020)] via-[var(--brand-orange,#F97316)] to-[var(--brand-orange-deep,#E8590C)] rounded-full px-2 inline-block relative -mt-0.5 z-20 shadow-sm py-[2.5px] leading-none">
+                          <span className="text-white text-[11px] font-extrabold leading-none tracking-wide font-price">₹{safeDiscountedPrice}</span>
+                        </div>
+                      </div>
+                    )}
+                    {/* Name */}
+                    <div
+                      className="text-neutral-800 font-semibold text-[10px] text-center mb-1 line-clamp-2 w-full px-0.5"
+                      title={displayProduct.productName || displayProduct.name}>
+                      {displayProduct.productName || displayProduct.name}
+                    </div>
+                    {/* Picture */}
+                    <div className="flex-1 flex items-end justify-center w-full" style={{ minHeight: "55px", maxHeight: "75px" }}>
+                      <div className="w-16 h-[72px] rounded-xl bg-white flex items-center justify-center overflow-hidden border border-orange-100 shadow-md">
+                        {displayProduct.imageUrl ? (
+                          <img
+                            src={displayProduct.imageUrl}
+                            alt={displayProduct.name}
+                            className="w-full h-full object-contain"
+                            loading="lazy"
+                            decoding="async"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <span className="text-2xl" aria-hidden="true">🎁</span>
+                        )}
                       </div>
                     </div>
-                  )}
-                </div>
+                  </motion.button>
+                </AnimatePresence>
+
+                {/* One dot per deal: shows which is on screen; tap to jump to it */}
+                {featuredProducts.length > 1 && (
+                  <div className="mt-1.5 flex items-center justify-center gap-1">
+                    {featuredProducts.map((_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        aria-label={`Show deal ${i + 1}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCurrentProductIndex(i);
+                        }}
+                        className={`h-1.5 rounded-full transition-all duration-300 ${i === currentProductIndex ? "w-4 bg-orange-500" : "w-1.5 bg-orange-200"}`}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -733,15 +575,8 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
               the PromoStrip admin config has more than 4 entries. */}
           <div className="flex-1 grid grid-cols-2 gap-2">
             {visibleCategoryCards.map((card) => {
-              // Use subcategory images from the map if available (filtering out placeholder text)
-              const rawSubImages = (subcategoryImagesMap[card.id] || card.subcategoryImages || []).filter(
-                (img) => img && !img.includes("placehold.co")
-              );
-              const subcategoryImages = rawSubImages.length > 0
-                ? rawSubImages
-                : getDummyCategoryImages(card.title, card.categoryId || card.slug).filter(
-                    (img) => img && !img.includes("placehold.co")
-                  );
+              // Pictures of real products in this category; else the category's own picture; else icons
+              const subcategoryImages = (card.productImages?.length ? card.productImages : card.imageUrl ? [card.imageUrl] : []).filter(Boolean);
               const hasSubcategoryImages = subcategoryImages.length > 0;
               const categoryIcons = getCategoryIcons(card.categoryId || card.slug || card.title || "");
 
@@ -758,7 +593,7 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
                     <div
                       className="w-full flex justify-center"
                       style={{ paddingTop: "0", paddingBottom: "2px" }}>
-                      <div className="bg-gradient-to-r from-[var(--brand-green-dark,#1B5128)] to-[var(--brand-green,#236B34)] text-white text-[11px] font-extrabold px-3 py-0.5 rounded-b-lg tracking-wider text-center inline-block uppercase shadow-sm font-sans">
+                      <div className="bg-emerald-50 border border-t-0 border-emerald-200 text-[var(--brand-green-dark,#1B5128)] text-[10px] font-extrabold px-3 py-0.5 rounded-b-lg tracking-wider text-center inline-block uppercase font-sans">
                         {card.badge}
                       </div>
                     </div>

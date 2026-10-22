@@ -125,3 +125,24 @@ export const createStockTransfer = async (data: {
 /** Admin: cancel a pending transfer (stock goes back), or accept / reject one sent to the admin's own store */
 export const answerStockTransfer = async (id: string, action: "accept" | "reject" | "cancel", note?: string): Promise<{ message: string }> =>
   (await api.post(`/admin/stock-transfers/${id}/${action}`, { note })).data;
+
+// ---------------- Product Photos (demo / missing pictures)
+
+export type PhotoStatus = "missing" | "demo" | "real";
+export interface ProductPhotoRow {
+  id: string;
+  name: string;
+  image: string;
+  store: string;
+  status: PhotoStatus;
+  live: boolean;
+}
+
+export const getProductPhotos = async (params: { status?: PhotoStatus | "all"; sellerId?: string; search?: string }) =>
+  (await api.get("/admin/product-photos", { params, timeout: 3 * 60 * 1000 })).data.data as {
+    counts: Record<PhotoStatus, number>;
+    total: number;
+    products: ProductPhotoRow[];
+  };
+
+export const markProductPhotoReal = async (url: string, real = true) => (await api.post("/admin/product-photos/mark-real", { url, real })).data;
