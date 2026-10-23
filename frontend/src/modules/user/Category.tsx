@@ -54,11 +54,11 @@ export default function CategoryPage() {
 
   // Fetch Category Details
   useEffect(() => {
-    const fetchCategoryDetails = async () => {
+    const fetchCategoryDetails = async (forceRefresh: boolean = false) => {
       setCategoryLoading(true);
       setError(null);
       try {
-        const response = await getCategoryById(id!);
+        const response = await getCategoryById(id!, forceRefresh);
         if (response.success && response.data) {
           const {
             category: cat,
@@ -100,9 +100,24 @@ export default function CategoryPage() {
     };
 
     if (id) {
-      fetchCategoryDetails();
+      fetchCategoryDetails(false);
       setCurrentPage(1); // Reset to page 1 when category changes
     }
+
+    const handleCategoriesUpdated = (e?: any) => {
+      if (!e || !e.detail || e.detail.type === 'categories' || e.detail.type === 'all') {
+        if (id) fetchCategoryDetails(true);
+      }
+    };
+    window.addEventListener("unnati_categories_updated", handleCategoriesUpdated);
+    window.addEventListener("unnati_content_updated", handleCategoriesUpdated);
+    window.addEventListener("focus", handleCategoriesUpdated);
+
+    return () => {
+      window.removeEventListener("unnati_categories_updated", handleCategoriesUpdated);
+      window.removeEventListener("unnati_content_updated", handleCategoriesUpdated);
+      window.removeEventListener("focus", handleCategoriesUpdated);
+    };
   }, [id]);
 
   // Sync selected subcategory if URL search params change
@@ -117,7 +132,7 @@ export default function CategoryPage() {
 
   // Fetch Products when category or subcategory changes
   useEffect(() => {
-    const fetchProducts = async () => {
+    const fetchProducts = async (forceRefresh: boolean = false) => {
       setLoading(true);
       setError(null);
       try {
@@ -138,7 +153,7 @@ export default function CategoryPage() {
           params.city = userLocation.city;
         }
 
-        const response = await getProducts(params);
+        const response = await getProducts(params, forceRefresh);
         if (response.success) {
           const safeProducts = response.data.map((p: any) => {
             const name = p.name || p.productName || "";
@@ -164,8 +179,22 @@ export default function CategoryPage() {
     };
 
     if (id) {
-      fetchProducts();
+      fetchProducts(false);
     }
+
+    const handleProductsUpdated = (e?: any) => {
+      if (!e || !e.detail || e.detail.type === 'products' || e.detail.type === 'all') {
+        if (id) fetchProducts(true);
+      }
+    };
+
+    window.addEventListener("productUpdated", handleProductsUpdated);
+    window.addEventListener("unnati_content_updated", handleProductsUpdated);
+
+    return () => {
+      window.removeEventListener("productUpdated", handleProductsUpdated);
+      window.removeEventListener("unnati_content_updated", handleProductsUpdated);
+    };
   }, [id, selectedSubcategory, category?._id, userLocation, currentPage]);
 
   // Scroll to last product on back or when coming from "View All"
@@ -637,6 +666,7 @@ export default function CategoryPage() {
                     }`}>
                     {subcat.image && !subcat.image.includes("placehold.co") ? (
                       <img
+                        key={subcat.image}
                         src={subcat.image}
                         alt={subcat.name}
                         className="w-full h-full object-cover"

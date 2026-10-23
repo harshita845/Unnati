@@ -74,15 +74,23 @@ export const getCachedProducts = (params?: Record<string, unknown>) =>
  * Get products with filters (Public)
  * Location (latitude/longitude) is required to filter products by seller's service radius
  */
-export const getProducts = async (params?: GetProductsParams): Promise<ProductListResponse> => {
+export const getProducts = async (params?: GetProductsParams, forceRefresh: boolean = false): Promise<ProductListResponse> => {
     const cacheKey = buildCacheKey('customer-products', params as Record<string, unknown> | undefined);
+    if (forceRefresh) {
+        apiCache.delete(cacheKey);
+        apiCache.invalidatePattern(/customer-products/, false);
+    }
     return apiCache.getOrFetch(
         cacheKey,
         async () => {
-            const response = await api.get<ProductListResponse>('/customer/products', { params });
+            const requestParams = forceRefresh ? { ...params, _t: Date.now() } : params;
+            const response = await api.get<ProductListResponse>('/customer/products', {
+                params: requestParams,
+                headers: forceRefresh ? { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } : undefined
+            });
             return response.data;
         },
-        2 * 60 * 1000
+        forceRefresh ? 0 : 2 * 60 * 1000
     );
 };
 
@@ -100,7 +108,12 @@ export const getSearchSuggestions = async (q: string, latitude?: number, longitu
  * Get product details by ID (Public)
  * Location (latitude/longitude) is required to verify product availability
  */
-export const getProductById = async (id: string, latitude?: number, longitude?: number): Promise<ProductDetailResponse> => {
+export const getProductById = async (
+    id: string,
+    latitude?: number,
+    longitude?: number,
+    forceRefresh: boolean = false
+): Promise<ProductDetailResponse> => {
     const cleanId = id ? id.trim().replace(/\.+$/, "") : "";
     const params: any = {};
     if (latitude !== undefined && longitude !== undefined) {
@@ -108,45 +121,71 @@ export const getProductById = async (id: string, latitude?: number, longitude?: 
         params.longitude = longitude;
     }
     const cacheKey = buildCacheKey(`customer-product:${cleanId}`, params);
+    if (forceRefresh) {
+        apiCache.delete(cacheKey);
+        apiCache.invalidatePattern(new RegExp(`customer-product:${cleanId}`));
+    }
     return apiCache.getOrFetch(
         cacheKey,
         async () => {
             const response = await api.get<ProductDetailResponse>(`/customer/products/${cleanId}`, { params });
             return response.data;
         },
-        2 * 60 * 1000
+        30 * 1000 // 30 seconds cache (ensures admin updates reflect promptly)
     );
 };
 
 /**
  * Get category details by ID or slug (Public)
  */
-export const getCategoryById = async (id: string): Promise<any> => {
+export const getCategoryById = async (id: string, forceRefresh: boolean = false): Promise<any> => {
     const cacheKey = buildCacheKey(`customer-category:${id}`);
+    if (forceRefresh) {
+        apiCache.delete(cacheKey);
+    }
     return apiCache.getOrFetch(
         cacheKey,
         async () => {
-            const response = await api.get<any>(`/customer/categories/${id}`);
+            const params: any = forceRefresh ? { _t: Date.now() } : {};
+            const response = await api.get<any>(`/customer/categories/${id}`, {
+                params,
+                headers: forceRefresh ? { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } : undefined
+            });
             return response.data;
         },
-        5 * 60 * 1000
+        forceRefresh ? 0 : 5 * 60 * 1000
     );
 };
 
 /**
  * Get all categories (Public)
  * Using /tree endpoint to get hierarchy if available, otherwise just /
- * Cached for 10 minutes as categories don't change frequently
+ * Cached for short duration; supports forceRefresh for instant updates from admin
  */
-export const getCategories = async (tree: boolean = false): Promise<CategoryListResponse> => {
+export const getCategories = async (
+    tree: boolean = false,
+    forceRefresh: boolean = false
+): Promise<CategoryListResponse> => {
     const cacheKey = `customer-categories-${tree ? 'tree' : 'list'}`;
+    if (forceRefresh) {
+        apiCache.delete(cacheKey);
+        apiCache.delete("customer-categories-list");
+        apiCache.delete("customer-categories-tree");
+        apiCache.delete("customer-categories-list-false");
+        apiCache.delete("customer-categories-list-true");
+    }
     return apiCache.getOrFetch(
         cacheKey,
         async () => {
-    const url = tree ? '/customer/categories/tree' : '/customer/categories';
-    const response = await api.get<CategoryListResponse>(url);
-    return response.data;
+            const url = tree ? '/customer/categories/tree' : '/customer/categories';
+            const params: any = forceRefresh ? { _t: Date.now() } : {};
+            const response = await api.get<CategoryListResponse>(url, {
+                params,
+                headers: forceRefresh ? { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } : undefined
+            });
+            return response.data;
         },
-        10 * 60 * 1000 // 10 minutes cache
+        forceRefresh ? 0 : 30 * 1000
     );
 };
+

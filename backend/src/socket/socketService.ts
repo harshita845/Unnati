@@ -460,3 +460,19 @@ export const emitLocationUpdate = (
         timestamp: new Date(),
     });
 };
+
+export const notifyContentUpdated = (
+    type: 'categories' | 'products' | 'banners' | 'promo' | 'home' | 'deals'
+) => {
+    const io = globalIO;
+    if (io) {
+        const timestamp = Date.now();
+        io.emit('contentUpdated', { type, timestamp });
+        if (type === 'categories') io.emit('categoriesUpdated', { timestamp });
+        if (type === 'products') io.emit('productUpdated', { timestamp });
+        if (type === 'banners') io.emit('bannersUpdated', { timestamp });
+        if (type === 'promo') io.emit('promoUpdated', { timestamp });
+        if (type === 'deals') io.emit('dealsUpdated', { timestamp });
+        if (type === 'home') io.emit('homeUpdated', { timestamp });
+    }
+};

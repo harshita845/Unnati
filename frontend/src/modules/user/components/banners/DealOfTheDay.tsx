@@ -65,6 +65,20 @@ export default function DealOfTheDay() {
       }
     };
     fetchDealProducts();
+
+    const handleDealsUpdate = (e?: any) => {
+      if (!e || !e.detail || e.detail.type === 'deals' || e.detail.type === 'all') {
+        fetchDealProducts();
+      }
+    };
+
+    window.addEventListener('unnati_deals_updated', fetchDealProducts);
+    window.addEventListener('unnati_content_updated', handleDealsUpdate);
+
+    return () => {
+      window.removeEventListener('unnati_deals_updated', fetchDealProducts);
+      window.removeEventListener('unnati_content_updated', handleDealsUpdate);
+    };
   }, []);
 
   // Auto-scroll effect

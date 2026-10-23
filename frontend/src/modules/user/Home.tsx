@@ -477,10 +477,101 @@ export default function Home() {
       }
     };
     void loadTabProducts();
-    return () => {
-      stale = true;
-    };
   }, [activeTab, location?.latitude, location?.longitude, location?.city, currentPage]);
+
+  // Re-fetch home content and products in real time whenever an admin updates categories, products, banners, etc.
+  useEffect(() => {
+    let channel: BroadcastChannel | null = null;
+    let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const handleContentUpdated = async () => {
+      if (refreshTimeout) clearTimeout(refreshTimeout);
+      refreshTimeout = setTimeout(async () => {
+        try {
+          if (!activeTab || activeTab === "all") {
+            const response = await getHomeContent(undefined, location?.latitude, location?.longitude, false, 0, true, location?.city, true);
+            if (response.success && response.data) {
+              setHomeData(response.data);
+            }
+            const allProductsRes = await getCustomerProducts({
+              page: 1,
+              limit: 24,
+              latitude: location?.latitude,
+              longitude: location?.longitude,
+              city: location?.city,
+            }, true);
+            if (allProductsRes.success && Array.isArray(allProductsRes.data)) {
+              setProducts(allProductsRes.data);
+            }
+          } else {
+            const homeRes = await getHomeContent(activeTab, location?.latitude, location?.longitude, false, 0, true, location?.city, true);
+            if (homeRes.success && homeRes.data) {
+              setHomeData((prev: any) => ({
+                ...homeRes.data,
+                shops: (homeRes.data.shops && homeRes.data.shops.length > 0) ? homeRes.data.shops : (prev?.shops || [])
+              }));
+            }
+            const res = await getCustomerProducts({
+              headerCategorySlug: activeTab,
+              page: currentPage,
+              limit: limit,
+              latitude: location?.latitude,
+              longitude: location?.longitude,
+            }, true);
+            if ((res as any).success && Array.isArray((res as any).data)) {
+              setTabProducts((res as any).data);
+              if ((res as any).pagination) {
+                setTotalPages((res as any).pagination.pages);
+              }
+            }
+          }
+        } catch (err) {
+          console.debug("Error refreshing home content:", err);
+        }
+      }, 100);
+    };
+
+    window.addEventListener("unnati_content_updated", handleContentUpdated);
+    window.addEventListener("unnati_categories_updated", handleContentUpdated);
+    window.addEventListener("unnati_banners_updated", handleContentUpdated);
+    window.addEventListener("unnati_deals_updated", handleContentUpdated);
+    window.addEventListener("unnati_promo_updated", handleContentUpdated);
+    window.addEventListener("productUpdated", handleContentUpdated);
+    window.addEventListener("unnati_cache_invalidated", handleContentUpdated);
+    window.addEventListener("focus", handleContentUpdated);
+
+    try {
+      if ("BroadcastChannel" in window) {
+        channel = new BroadcastChannel("unnati_api_cache_channel");
+        channel.onmessage = (event) => {
+          if (
+            event.data?.type === "content_updated" ||
+            event.data?.type === "categories_updated" ||
+            event.data?.type === "banners_updated" ||
+            event.data?.type === "product_updated" ||
+            event.data?.pattern
+          ) {
+            handleContentUpdated();
+          }
+        };
+      }
+    } catch {}
+
+    return () => {
+      if (refreshTimeout) clearTimeout(refreshTimeout);
+      window.removeEventListener("unnati_content_updated", handleContentUpdated);
+      window.removeEventListener("unnati_categories_updated", handleContentUpdated);
+      window.removeEventListener("unnati_banners_updated", handleContentUpdated);
+      window.removeEventListener("unnati_deals_updated", handleContentUpdated);
+      window.removeEventListener("unnati_promo_updated", handleContentUpdated);
+      window.removeEventListener("productUpdated", handleContentUpdated);
+      window.removeEventListener("unnati_cache_invalidated", handleContentUpdated);
+      window.removeEventListener("focus", handleContentUpdated);
+      if (channel) {
+        try { channel.close(); } catch {}
+      }
+    };
+  }, [activeTab, location?.latitude, location?.longitude, location?.city, currentPage, limit]);
 
   const getFilteredProducts = (tabId: string) => {
     if (tabId === "all") return products;

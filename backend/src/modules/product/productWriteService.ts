@@ -108,6 +108,9 @@ function buildMongooseDoc(
     isShopByStoreOnly: payload.isShopByStoreOnly,
   };
 
+  const firstVariantImage = payload.variations?.find((v) => v.mainImage)?.mainImage;
+  if (firstVariantImage) doc.mainImage = firstVariantImage;
+
   if (payload.video) doc.video = payload.video;
   if (payload.smallDescription) doc.smallDescription = payload.smallDescription;
   if (payload.description) doc.description = payload.description;

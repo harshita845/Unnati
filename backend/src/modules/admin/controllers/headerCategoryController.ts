@@ -8,6 +8,18 @@ import {
   parseDateRange,
   setHeaderSubscriptionRule,
 } from "../../../services/sellerSubscriptionService";
+import { invalidateCategoryCache } from "../../../utils/cache";
+import { getSocketIO } from "../../../socket/socketService";
+
+const notifyHeaderCategoryUpdated = (req: Request) => {
+  invalidateCategoryCache();
+  const io = req.app.get("io") || getSocketIO();
+  if (io) {
+    io.emit("headerCategoriesUpdated", { timestamp: Date.now() });
+    io.emit("categoriesUpdated", { timestamp: Date.now() });
+    io.emit("contentUpdated", { type: "categories", timestamp: Date.now() });
+  }
+};
 
 // @desc    Get all header categories (Admin)
 // @route   GET /api/v1/header-categories/admin
@@ -128,15 +140,13 @@ export const createHeaderCategory = async (req: Request, res: Response) => {
       offerTagColor,
     });
 
+    notifyHeaderCategoryUpdated(req);
     return res.status(201).json(category);
   } catch (error) {
     return res.status(500).json({ message: "Server Error", error });
   }
 };
 
-// @desc    Update a header category
-// @route   PUT /api/v1/header-categories/:id
-// @access  Private/Admin
 // @desc    Update a header category
 // @route   PUT /api/v1/header-categories/:id
 // @access  Private/Admin
@@ -181,6 +191,7 @@ export const updateHeaderCategory = async (req: Request, res: Response) => {
       category.offerTagColor = offerTagColor !== undefined ? offerTagColor : category.offerTagColor;
 
       const updatedCategory = await category.save();
+      notifyHeaderCategoryUpdated(req);
       return res.json(updatedCategory);
     } else {
       return res.status(404).json({ message: "Header category not found" });
@@ -207,6 +218,7 @@ export const deleteHeaderCategory = async (req: Request, res: Response) => {
 
     if (category) {
       await category.deleteOne();
+      notifyHeaderCategoryUpdated(req);
       return res.json({ message: "Header category removed" });
     } else {
       return res.status(404).json({ message: "Header category not found" });

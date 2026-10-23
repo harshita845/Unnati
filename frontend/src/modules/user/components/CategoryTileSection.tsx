@@ -207,6 +207,7 @@ export default function CategoryTileSection({
                   >
                     {hasImages ? (
                       <img
+                        key={images[0]}
                         src={images[0]}
                         alt={tile.name}
                         className="w-full h-full object-contain rounded-xl p-1"

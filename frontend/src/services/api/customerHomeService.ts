@@ -48,7 +48,8 @@ export const getHomeContent = async (
   useCache: boolean = true,
   cacheTTL: number = 5 * 60 * 1000, // 5 minutes
   skipLoader: boolean = false,
-  city?: string
+  city?: string,
+  forceRefresh: boolean = false
 ): Promise<HomeContentResponse> => {
   const cacheKey = buildHomeContentCacheKey(
     headerCategorySlug,
@@ -56,6 +57,10 @@ export const getHomeContent = async (
     longitude,
     city
   );
+
+  if (!useCache || forceRefresh) {
+    apiCache.delete(cacheKey);
+  }
 
   const fetchFn = async () => {
     const params: any = headerCategorySlug ? { headerCategorySlug } : {};
@@ -66,19 +71,24 @@ export const getHomeContent = async (
     if (city) {
       params.city = city;
     }
+    if (forceRefresh || !useCache) {
+      params._t = Date.now();
+    }
     const response = await api.get<HomeContentResponse>("/customer/home", {
       params,
-      skipLoader
+      skipLoader,
+      headers: forceRefresh || !useCache ? { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } : undefined
     } as any);
     return response.data;
   };
 
-  if (useCache) {
+  if (useCache && !forceRefresh) {
     return apiCache.getOrFetch(cacheKey, fetchFn, cacheTTL);
   }
 
   return fetchFn();
 };
+
 
 export const getLowestPricesProducts = async (
   latitude?: number,

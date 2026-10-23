@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import BestsellerCard from "../../../models/BestsellerCard";
 import mongoose from "mongoose";
+import { notifyContentUpdated } from "../../../socket/socketService";
 
 const MAX_ACTIVE_CARDS = 6;
 
@@ -110,6 +111,8 @@ export const createBestsellerCard = async (req: Request, res: Response) => {
 
         await newCard.save();
 
+        notifyContentUpdated('home');
+
         const populatedCard = await BestsellerCard.findById(newCard._id)
             .populate("category", "name slug image")
             .lean();
@@ -178,6 +181,8 @@ export const updateBestsellerCard = async (req: Request, res: Response) => {
 
         await card.save();
 
+        notifyContentUpdated('home');
+
         const updatedCard = await BestsellerCard.findById(id)
             .populate("category", "name slug image")
             .lean();
@@ -216,6 +221,8 @@ export const deleteBestsellerCard = async (req: Request, res: Response) => {
             });
         }
 
+        notifyContentUpdated('home');
+
         return res.status(200).json({
             success: true,
             message: "Bestseller card deleted successfully",
@@ -250,6 +257,8 @@ export const reorderBestsellerCards = async (req: Request, res: Response) => {
         });
 
         await Promise.all(updatePromises);
+
+        notifyContentUpdated('home');
 
         const updatedCards = await BestsellerCard.find()
             .populate("category", "name slug image")

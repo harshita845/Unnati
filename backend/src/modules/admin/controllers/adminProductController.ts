@@ -15,7 +15,55 @@ import Product from "../../../models/Product";
 import Inventory from "../../../models/Inventory";
 import Seller from "../../../models/Seller";
 import HeaderCategory from "../../../models/HeaderCategory";
-import { cache } from "../../../utils/cache";
+import { cache, invalidateCategoryCache } from "../../../utils/cache";
+
+import { getSocketIO } from "../../../socket/socketService";
+
+const notifyCategoryUpdated = (req: Request) => {
+  invalidateCategoryCache();
+  const io = req.app.get("io") || getSocketIO();
+  if (io) {
+    io.emit("categoriesUpdated", { timestamp: Date.now() });
+    io.emit("contentUpdated", { type: "categories", timestamp: Date.now() });
+  }
+};
+
+const notifyProductUpdated = async (req: Request, product: any) => {
+  try {
+    if (product && product.productName) {
+      const updatedImg = product.mainImage || (Array.isArray(product.variations) && product.variations[0]?.mainImage);
+      if (updatedImg) {
+        const otherSameProducts = await Product.find({
+          _id: { $ne: product._id },
+          productName: product.productName,
+        });
+        for (const other of otherSameProducts) {
+          other.mainImage = updatedImg;
+          if (Array.isArray(other.variations) && other.variations.length > 0) {
+            other.variations.forEach((v: any) => {
+              v.mainImage = updatedImg;
+              v.image = updatedImg;
+            });
+          }
+          await other.save();
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to propagate product images to duplicate store products:", err);
+  }
+
+  const io = req.app.get("io") || getSocketIO();
+  if (io) {
+    io.emit("productUpdated", {
+      productId: product?._id || product?.id,
+      productName: product?.productName,
+      mainImage: product?.mainImage,
+      timestamp: Date.now(),
+    });
+    io.emit("contentUpdated", { type: "products", timestamp: Date.now() });
+  }
+};
 import {
   ProductWriteService,
   ProductWriteError,
@@ -221,10 +269,8 @@ export const createCategory = asyncHandler(
       allowedPlans: subscription.allowedPlans,
     });
 
-    // Invalidate category caches
-    cache.delete("customer-categories-list");
-    cache.delete("customer-categories-tree");
-    cache.invalidatePattern(/^customer-category-/);
+    // Invalidate category caches & emit realtime update
+    notifyCategoryUpdated(req);
 
     return res.status(201).json({
       success: true,
@@ -488,10 +534,8 @@ export const updateCategory = asyncHandler(
       for (const sellerId of sellerIds) await syncSellerCategoryVisibility(sellerId, [id]);
     }
 
-    // Invalidate category caches
-    cache.delete("customer-categories-list");
-    cache.delete("customer-categories-tree");
-    cache.invalidatePattern(/^customer-category-/);
+    // Invalidate category caches & emit realtime update
+    notifyCategoryUpdated(req);
 
     return res.status(200).json({
       success: true,
@@ -546,10 +590,8 @@ export const deleteCategory = asyncHandler(
       });
     }
 
-    // Invalidate category caches
-    cache.delete("customer-categories-list");
-    cache.delete("customer-categories-tree");
-    cache.invalidatePattern(/^customer-category-/);
+    // Invalidate category caches & emit realtime update
+    notifyCategoryUpdated(req);
 
     return res.status(200).json({
       success: true,
@@ -583,10 +625,8 @@ export const updateCategoryOrder = asyncHandler(
 
     await Promise.all(updatePromises);
 
-    // Invalidate category caches
-    cache.delete("customer-categories-list");
-    cache.delete("customer-categories-tree");
-    cache.invalidatePattern(/^customer-category-/);
+    // Invalidate category caches & emit realtime update
+    notifyCategoryUpdated(req);
 
     return res.status(200).json({
       success: true,
@@ -636,10 +676,8 @@ export const toggleCategoryStatus = asyncHandler(
       // Actually, our helper already handles all descendants!
     }
 
-    // Invalidate category caches
-    cache.delete("customer-categories-list");
-    cache.delete("customer-categories-tree");
-    cache.invalidatePattern(/^customer-category-/);
+    // Invalidate category caches & emit realtime update
+    notifyCategoryUpdated(req);
 
     return res.status(200).json({
       success: true,
@@ -724,6 +762,8 @@ export const bulkDeleteCategories = asyncHandler(
       }
     }
 
+    notifyCategoryUpdated(req);
+
     return res.status(200).json({
       success: true,
       message: `Bulk delete completed: ${results.deleted.length} deleted, ${results.failed.length} failed`,
@@ -759,6 +799,8 @@ export const createSubCategory = asyncHandler(
     await Category.findByIdAndUpdate(category, {
       $inc: { totalSubcategories: 1 },
     });
+
+    notifyCategoryUpdated(req);
 
     return res.status(201).json({
       success: true,
@@ -858,6 +900,8 @@ export const updateSubCategory = asyncHandler(
       });
     }
 
+    notifyCategoryUpdated(req);
+
     return res.status(200).json({
       success: true,
       message: "Subcategory updated successfully",
@@ -895,6 +939,8 @@ export const deleteSubCategory = asyncHandler(
     await Category.findByIdAndUpdate(subcategory.category, {
       $inc: { totalSubcategories: -1 },
     });
+
+    notifyCategoryUpdated(req);
 
     return res.status(200).json({
       success: true,
@@ -1046,6 +1092,7 @@ export const createProduct = asyncHandler(
         req.body,
         adminProductPolicy
       );
+      await notifyProductUpdated(req, product);
       return res.status(201).json({
         success: true,
         message: "Product created successfully",
@@ -1325,6 +1372,7 @@ export const updateProduct = asyncHandler(
         req.body,
         adminProductPolicy
       );
+      await notifyProductUpdated(req, product);
       return res.status(200).json({
         success: true,
         message: "Product updated successfully",
@@ -1363,6 +1411,8 @@ export const deleteProduct = asyncHandler(
 
     // Delete inventory record
     await Inventory.findOneAndDelete({ product: id });
+
+    await notifyProductUpdated(req, product);
 
     return res.status(200).json({
       success: true,
@@ -1411,6 +1461,8 @@ export const approveProductRequest = asyncHandler(
         message: "Product not found",
       });
     }
+
+    await notifyProductUpdated(req, product);
 
     return res.status(200).json({
       success: true,

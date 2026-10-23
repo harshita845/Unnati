@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import HomeSection from "../../../models/HomeSection";
 import mongoose from "mongoose";
+import { notifyContentUpdated } from "../../../socket/socketService";
 
 // Get all home sections
 export const getHomeSections = async (_req: Request, res: Response) => {
@@ -109,6 +110,8 @@ export const createHomeSection = async (req: Request, res: Response) => {
             .populate("subCategory", "name")
             .lean();
 
+        notifyContentUpdated('home');
+
         return res.status(201).json({
             success: true,
             message: "Home section created successfully",
@@ -168,6 +171,8 @@ export const updateHomeSection = async (req: Request, res: Response) => {
 
         await section.save();
 
+        notifyContentUpdated('home');
+
         const updatedSection = await HomeSection.findById(id)
             .populate("category", "name slug image")
             .populate("subCategory", "name")
@@ -207,6 +212,8 @@ export const deleteHomeSection = async (req: Request, res: Response) => {
             });
         }
 
+        notifyContentUpdated('home');
+
         return res.status(200).json({
             success: true,
             message: "Home section deleted successfully",
@@ -241,6 +248,8 @@ export const reorderHomeSections = async (req: Request, res: Response) => {
         });
 
         await Promise.all(updatePromises);
+
+        notifyContentUpdated('home');
 
         const updatedSections = await HomeSection.find()
             .populate("category", "name slug image")

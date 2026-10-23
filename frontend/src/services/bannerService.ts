@@ -1,5 +1,6 @@
 import api from './api/config';
 import { Banner, BannerPosition } from '../types/banner';
+import { notifyContentSync } from '../utils/apiCache';
 
 export interface DealsConfig {
   flashDealTargetDate: string;
@@ -68,15 +69,18 @@ export const bannerService = {
 
   addBanner: async (banner: Omit<Banner, 'id' | 'image'>) => {
     const res = await api.post('/banners', banner);
+    notifyContentSync('banners');
     return res.data.data;
   },
 
   deleteBanner: async (id: string) => {
     await api.delete(`/banners/${id}`);
+    notifyContentSync('banners');
   },
 
   updateBanner: async (id: string, updates: Partial<Banner>) => {
     const res = await api.put(`/banners/${id}`, updates);
+    notifyContentSync('banners');
     return res.data.data;
   },
 
@@ -116,6 +120,7 @@ export const bannerService = {
   updateDealsConfig: async (updates: Partial<DealsConfig>) => {
     try {
         const res = await api.put<{success: boolean, data: DealsConfig}>('/flash-deals', updates);
+        notifyContentSync('deals');
         return res.data.data;
     } catch (e) {
         console.error("Failed to update flash deals config", e);

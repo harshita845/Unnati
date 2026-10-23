@@ -12,7 +12,7 @@ export default function HomeThreePromoBanners() {
 
   useEffect(() => {
     let isMounted = true;
-    const loadBanners = async () => {
+    const loadBanners = async (forceRefresh: boolean = false) => {
       try {
         // 1. Try to load banners configured for Main Section Banner
         const promoBanners = await bannerService.getBannersByPosition("Main Section Banner");
@@ -48,7 +48,7 @@ export default function HomeThreePromoBanners() {
         }
 
         // 2. Fallback: dynamically load top categories from database
-        const catRes = await getCategories(false);
+        const catRes = await getCategories(false, forceRefresh);
         if (isMounted && catRes.success && Array.isArray(catRes.data) && catRes.data.length >= 3) {
           const activeCats = catRes.data.filter((c: any) => c.status !== 'Inactive' && c.isActive !== false);
           if (activeCats.length >= 3) {
@@ -69,9 +69,16 @@ export default function HomeThreePromoBanners() {
         console.error("Failed to load promo banners:", err);
       }
     };
-    loadBanners();
+    loadBanners(false);
+
+    const handleUpdate = () => loadBanners(true);
+    window.addEventListener("unnati_categories_updated", handleUpdate);
+    window.addEventListener("focus", handleUpdate);
+
     return () => {
       isMounted = false;
+      window.removeEventListener("unnati_categories_updated", handleUpdate);
+      window.removeEventListener("focus", handleUpdate);
     };
   }, []);
 

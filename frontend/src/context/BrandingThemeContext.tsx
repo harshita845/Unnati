@@ -32,6 +32,7 @@ import {
 } from "../services/api/themeService";
 import { io as socketIO, Socket } from "socket.io-client";
 import { getSocketBaseURL, isRealtimeAvailable } from "../services/api/config";
+import { apiCache, notifyContentSync } from "../utils/apiCache";
 
 // ─── Context Type ───
 interface BrandingThemeContextType {
@@ -171,25 +172,47 @@ export const BrandingThemeProvider: React.FC<{
     applyCustomerTheme(customerTheme as CustomerTheme);
   }, [customerTheme]);
 
-  // Fetch from backend
+  // Fetch from backend (with automatic retry if backend is momentarily busy/restarting)
   const refreshTheme = useCallback(async () => {
-    try {
-      setError(null);
-      const data = await fetchTheme();
-      setGlobalTheme(normalizeGlobalTheme(data.globalTheme));
-      setCustomerTheme(normalizeCustomerTheme(data.customerTheme));
-    } catch (err: any) {
-      console.error("[BrandingTheme] Failed to fetch theme:", err);
-      setError("Failed to load theme");
-      // Keep cached/fallback values — don't break the UI
-    } finally {
-      setIsLoading(false);
+    let attempts = 0;
+    const maxAttempts = 3;
+
+    while (attempts < maxAttempts) {
+      try {
+        setError(null);
+        const data = await fetchTheme();
+        setGlobalTheme(normalizeGlobalTheme(data.globalTheme));
+        setCustomerTheme(normalizeCustomerTheme(data.customerTheme));
+        setIsLoading(false);
+        return;
+      } catch (err: any) {
+        attempts++;
+        if (attempts >= maxAttempts) {
+          console.warn("[BrandingTheme] Could not refresh theme from backend, using cached/fallback values:", err?.message || err);
+          setError("Failed to load theme");
+        } else {
+          // Wait briefly before retrying
+          await new Promise((r) => setTimeout(r, 1200));
+        }
+      } finally {
+        if (attempts >= maxAttempts) {
+          setIsLoading(false);
+        }
+      }
     }
   }, []);
 
-  // Initial fetch (behind cache if available)
+  // Initial fetch (behind cache if available) and revalidation on tab focus
   useEffect(() => {
     refreshTheme();
+
+    const handleFocus = () => {
+      refreshTheme();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+    };
   }, [refreshTheme]);
 
   // ─── Socket.IO realtime theme sync ───
@@ -202,9 +225,9 @@ export const BrandingThemeProvider: React.FC<{
       const socket = socketIO(socketUrl, {
         transports: ["polling", "websocket"],
         reconnection: true,
-        reconnectionDelay: 2000,
-        reconnectionAttempts: 3,
-        timeout: 5000, // 5 second connection timeout
+        reconnectionDelay: 1500,
+        reconnectionAttempts: 20,
+        timeout: 10000,
         // No auth needed for theme events (broadcast to all)
       });
 
@@ -226,9 +249,43 @@ export const BrandingThemeProvider: React.FC<{
         invalidateThemeCache();
       });
 
+      socket.on("contentUpdated", (data: any) => {
+        console.log("[BrandingTheme] Realtime content update received:", data);
+        notifyContentSync(data?.type || 'all', false);
+      });
+
+      socket.on("categoriesUpdated", () => {
+        console.log("[BrandingTheme] Realtime categories update received");
+        notifyContentSync('categories', false);
+      });
+
+      socket.on("productUpdated", (data: any) => {
+        console.log("[BrandingTheme] Realtime product update received:", data);
+        notifyContentSync('products', false);
+      });
+
+      socket.on("bannersUpdated", () => {
+        console.log("[BrandingTheme] Realtime banners update received");
+        notifyContentSync('banners', false);
+      });
+
+      socket.on("dealsUpdated", () => {
+        console.log("[BrandingTheme] Realtime deals update received");
+        notifyContentSync('deals', false);
+      });
+
+      socket.on("promoUpdated", () => {
+        console.log("[BrandingTheme] Realtime promo update received");
+        notifyContentSync('promo', false);
+      });
+
+      socket.on("homeUpdated", () => {
+        console.log("[BrandingTheme] Realtime home update received");
+        notifyContentSync('home', false);
+      });
+
       socket.on("connect_error", (err: any) => {
         console.warn("[BrandingTheme] Socket connection error:", err.message);
-        // Don't break the app - themes will still load from API
       });
 
       socket.on("disconnect", (reason) => {

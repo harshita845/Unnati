@@ -1,4 +1,5 @@
 import api from "../config";
+import { notifyContentSync } from "../../../utils/apiCache";
 
 export interface BestsellerCard {
     _id: string;
@@ -52,6 +53,7 @@ export const createBestsellerCard = async (
         "/admin/bestseller-cards",
         data
     );
+    notifyContentSync('home');
     return response.data;
 };
 
@@ -64,6 +66,7 @@ export const updateBestsellerCard = async (
         `/admin/bestseller-cards/${id}`,
         data
     );
+    notifyContentSync('home');
     return response.data;
 };
 
@@ -74,6 +77,7 @@ export const deleteBestsellerCard = async (
     const response = await api.delete<BestsellerCardResponse>(
         `/admin/bestseller-cards/${id}`
     );
+    notifyContentSync('home');
     return response.data;
 };
 
@@ -85,6 +89,7 @@ export const reorderBestsellerCards = async (
         "/admin/bestseller-cards/reorder",
         { cards }
     );
+    notifyContentSync('home');
     return response.data;
 };
 

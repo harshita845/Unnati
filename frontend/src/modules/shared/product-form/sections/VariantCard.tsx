@@ -752,7 +752,7 @@ export default function VariantCard({
               <p className="text-xs font-medium text-rose-500">{barcodeError}</p>
             )}
             {!inputValue.trim() && (
-              <p className="text-xs text-rose-500">At least one barcode is required</p>
+              <p className="text-xs text-slate-400">Barcode will be auto-generated on save if left empty</p>
             )}
 
             {/* Generate & Print Buttons */}

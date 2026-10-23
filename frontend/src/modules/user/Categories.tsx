@@ -105,8 +105,25 @@ export default function Categories() {
 
     fetchCategories();
 
+    const handleCategoriesUpdated = () => {
+      fetchCategories();
+    };
+    const handleContentUpdated = (e: any) => {
+      const type = e?.detail?.type;
+      if (!type || type === "categories" || type === "all") {
+        fetchCategories();
+      }
+    };
+
+    window.addEventListener("unnati_categories_updated", handleCategoriesUpdated);
+    window.addEventListener("unnati_content_updated", handleContentUpdated);
+    window.addEventListener("focus", handleCategoriesUpdated);
+
     return () => {
       isMounted = false;
+      window.removeEventListener("unnati_categories_updated", handleCategoriesUpdated);
+      window.removeEventListener("unnati_content_updated", handleContentUpdated);
+      window.removeEventListener("focus", handleCategoriesUpdated);
     };
   }, []);
 

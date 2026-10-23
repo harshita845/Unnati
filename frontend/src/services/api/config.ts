@@ -54,7 +54,7 @@ const buildApiBaseCandidates = (): string[] => {
 
 const API_BASE_CANDIDATES = buildApiBaseCandidates();
 let activeApiBaseIndex = 0;
-let activeApiBaseUrl = API_BASE_CANDIDATES[activeApiBaseIndex] || "http://localhost:5001/api/v1";
+let activeApiBaseUrl = API_BASE_CANDIDATES[activeApiBaseIndex] || "http://localhost:5002/api/v1";
 
 const advanceApiBaseCandidate = (): string | null => {
   // In DEV mode, if VITE_API_BASE_URL is explicitly set, do not permanently corrupt the global base URL for all future requests
@@ -80,7 +80,7 @@ if (import.meta.env.DEV) {
     ACTIVE_API_BASE_URL: activeApiBaseUrl,
     VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'not set (using relative path for proxy)',
     NODE_ENV: import.meta.env.MODE,
-    'Note': 'Using Vite proxy. Ensure backend is running on http://localhost:5000'
+    'Note': 'Using Vite proxy. Ensure backend is running on http://localhost:5002'
   });
 }
 
@@ -92,14 +92,12 @@ export const getSocketBaseURL = (): string => {
     return normalizeBaseUrl(import.meta.env.VITE_API_URL);
   }
 
-  const apiBaseUrl = getApiBaseURL();
-
-  // In development, connect straight to the backend from VITE_API_BASE_URL (the Vite proxy
-  // doesn't carry WebSockets), so the socket uses the same port as the API calls
-  if (import.meta.env.DEV && !/^https?:\/\//.test(apiBaseUrl)) {
-    return "http://localhost:5001";
+  // In development, connect straight to the backend
+  if (import.meta.env.DEV) {
+    return "http://localhost:5002";
   }
 
+  const apiBaseUrl = getApiBaseURL();
   const socketUrl = apiBaseUrl.replace(/\/api\/v\d+$|\/api$/, '');
 
   return normalizeBaseUrl(socketUrl || window.location.origin);

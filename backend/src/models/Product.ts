@@ -555,6 +555,12 @@ ProductSchema.pre("save", function (next) {
     this.discount = 0;
   }
 
+  // Ensure root product mainImage always reflects the active variant image
+  const firstWithImage = this.variations.find((v: any) => v.mainImage || v.image);
+  if (firstWithImage && (firstWithImage.mainImage || firstWithImage.image)) {
+    this.mainImage = (firstWithImage.mainImage || firstWithImage.image) as string;
+  }
+
   next();
 });
 

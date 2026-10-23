@@ -1,4 +1,5 @@
 import api from "../config";
+import { notifyContentSync } from "../../../utils/apiCache";
 
 export interface HomeSection {
     _id: string;
@@ -65,6 +66,7 @@ export const createHomeSection = async (
         "/admin/home-sections",
         data
     );
+    notifyContentSync('home');
     return response.data;
 };
 
@@ -77,6 +79,7 @@ export const updateHomeSection = async (
         `/admin/home-sections/${id}`,
         data
     );
+    notifyContentSync('home');
     return response.data;
 };
 
@@ -87,6 +90,7 @@ export const deleteHomeSection = async (
     const response = await api.delete<HomeSectionResponse>(
         `/admin/home-sections/${id}`
     );
+    notifyContentSync('home');
     return response.data;
 };
 
@@ -98,5 +102,6 @@ export const reorderHomeSections = async (
         "/admin/home-sections/reorder",
         { sections }
     );
+    notifyContentSync('home');
     return response.data;
 };

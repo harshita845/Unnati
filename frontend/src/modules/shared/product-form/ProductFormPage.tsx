@@ -13,6 +13,7 @@ import VariantListSection from "./sections/VariantListSection";
 import ProductPoliciesSection from "./sections/ProductPoliciesSection";
 import { findDuplicateBarcodeMessage } from "./utils/variantBarcodeUtils";
 import { getAppSettings } from "../../../services/api/admin/adminSettingsService";
+import { toast } from "react-hot-toast";
 
 export interface ProductFormConfig {
   role: "admin" | "seller";
@@ -113,41 +114,52 @@ export default function ProductFormPage({
     setError("");
     setSuccess("");
 
+    const notifyError = (msg: string) => {
+      setError(msg);
+      toast.error(msg);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
     if (!formState.mainInfo.productName.trim()) {
-      setError("Product name is required");
+      notifyError("Product name is required");
       return;
     }
     if (isFieldEnabled("basic", "header_category") && !formState.mainInfo.headerCategory) {
-      setError("Header category is required");
+      notifyError("Header category is required");
       return;
     }
     if (isFieldEnabled("basic", "category") && !formState.mainInfo.category) {
-      setError("Category is required");
+      notifyError("Category is required");
       return;
     }
     if (formState.variants.length < 1) {
-      setError("At least one variant is required");
+      notifyError("At least one variant is required");
       return;
     }
     for (let i = 0; i < formState.variants.length; i++) {
       const v = formState.variants[i];
       if (!v.variationType.trim() || !v.value.trim()) {
-        setError("Each variant needs a type and value");
+        notifyError("Each variant needs a type and value");
         return;
       }
       if (!v.price || Number(v.price) < 0) {
-        setError("Each variant needs a valid price");
+        notifyError("Each variant needs a valid price");
         return;
       }
-      if (!v.barcode?.length || !v.barcode.some((b) => b.trim())) {
-        setError(`Variant ${i + 1} needs at least one barcode`);
-        return;
+      // If barcode is missing, auto-generate a unique barcode instead of blocking save
+      if (!v.barcode?.length || !v.barcode.some((b) => b && b.trim())) {
+        const prefix = (formState.mainInfo.productName || "PROD")
+          .replace(/[^a-zA-Z0-9]/g, "")
+          .substring(0, 4)
+          .toUpperCase() || "PROD";
+        const autoBc = `${prefix}${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`;
+        v.barcode = [autoBc];
       }
     }
 
     const duplicateBarcodeMessage = findDuplicateBarcodeMessage(formState.variants);
     if (duplicateBarcodeMessage) {
-      setError(duplicateBarcodeMessage);
+      notifyError(duplicateBarcodeMessage);
       return;
     }
 
@@ -158,7 +170,9 @@ export default function ProductFormPage({
         ? await config.updateProduct(productId, payload)
         : await config.createProduct(payload);
       if (res?.success) {
-        setSuccess(productId ? "Product updated successfully!" : "Product created successfully!");
+        const msg = productId ? "Product updated successfully!" : "Product created successfully!";
+        setSuccess(msg);
+        toast.success(msg);
         onSuccess?.();
         if (!productId) {
           setFormState({
@@ -167,10 +181,10 @@ export default function ProductFormPage({
           });
         }
       } else {
-        setError(res?.message || "Failed to save product");
+        notifyError(res?.message || "Failed to save product");
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.message || "Failed to save");
+      notifyError(err?.response?.data?.message || err.message || "Failed to save");
     } finally {
       setLoading(false);
     }

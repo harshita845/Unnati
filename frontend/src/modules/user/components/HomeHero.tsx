@@ -255,11 +255,23 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
     fetchHeaderCategories(true);
 
     const handleUpdate = () => fetchHeaderCategories(true);
+    const handleContentUpdated = (e: any) => {
+      const type = e?.detail?.type;
+      if (!type || type === 'categories' || type === 'all') {
+        fetchHeaderCategories(true);
+      }
+    };
+
     window.addEventListener('focus', handleUpdate);
     window.addEventListener('header_categories_updated', handleUpdate);
+    window.addEventListener('unnati_categories_updated', handleUpdate);
+    window.addEventListener('unnati_content_updated', handleContentUpdated);
+
     return () => {
       window.removeEventListener('focus', handleUpdate);
       window.removeEventListener('header_categories_updated', handleUpdate);
+      window.removeEventListener('unnati_categories_updated', handleUpdate);
+      window.removeEventListener('unnati_content_updated', handleContentUpdated);
     };
   }, []);
 

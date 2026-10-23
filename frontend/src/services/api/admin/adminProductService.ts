@@ -1,5 +1,6 @@
 import axios from "axios";
 import api from "../config";
+import { apiCache, notifyContentSync } from "../../../utils/apiCache";
 
 import { ApiResponse } from "./types";
 
@@ -309,8 +310,13 @@ export interface BulkUpdateProductsData {
 
 // ==================== Category API Functions ====================
 
+export const invalidateAllCategoryCaches = () => {
+  notifyContentSync('categories');
+};
+
+
 /**
- * Create a new category
+ * Create category
  */
 export const createCategory = async (
   data: CreateCategoryData
@@ -319,6 +325,7 @@ export const createCategory = async (
     "/admin/categories",
     data
   );
+  invalidateAllCategoryCaches();
   return response.data;
 };
 
@@ -358,6 +365,7 @@ export const updateCategory = async (
     `/admin/categories/${id}`,
     data
   );
+  invalidateAllCategoryCaches();
   return response.data;
 };
 
@@ -370,6 +378,7 @@ export const deleteCategory = async (
   const response = await api.delete<ApiResponse<void>>(
     `/admin/categories/${id}`
   );
+  invalidateAllCategoryCaches();
   return response.data;
 };
 
@@ -383,6 +392,7 @@ export const updateCategoryOrder = async (
     "/admin/categories/reorder",
     data
   );
+  invalidateAllCategoryCaches();
   return response.data;
 };
 
@@ -398,6 +408,7 @@ export const toggleCategoryStatus = async (
     `/admin/categories/${id}/status`,
     { status, cascadeToChildren }
   );
+  invalidateAllCategoryCaches();
   return response.data;
 };
 
@@ -418,6 +429,7 @@ export const bulkDeleteCategories = async (
       failed: Array<{ id: string; reason: string }>;
     }>
   >("/admin/categories/bulk-delete", { categoryIds });
+  invalidateAllCategoryCaches();
   return response.data;
 };
 
@@ -431,6 +443,7 @@ export const updateProductOrder = async (
     "/admin/products/order",
     data
   );
+  notifyContentSync('products');
   return response.data;
 };
 
@@ -446,6 +459,7 @@ export const createSubCategory = async (
     "/admin/subcategories",
     data
   );
+  invalidateAllCategoryCaches();
   return response.data;
 };
 
@@ -476,6 +490,7 @@ export const updateSubCategory = async (
     `/admin/subcategories/${id}`,
     data
   );
+  invalidateAllCategoryCaches();
   return response.data;
 };
 
@@ -488,6 +503,7 @@ export const deleteSubCategory = async (
   const response = await api.delete<ApiResponse<void>>(
     `/admin/subcategories/${id}`
   );
+  invalidateAllCategoryCaches();
   return response.data;
 };
 
@@ -560,6 +576,7 @@ export const createProduct = async (
       "/admin/products",
       data
     );
+    notifyContentSync('products');
     return response.data;
   } catch (err) {
     if (axios.isAxiosError(err)) {
@@ -614,6 +631,7 @@ export const updateProduct = async (
     `/admin/products/${id}`,
     data
   );
+  notifyContentSync('products');
   return response.data;
 };
 
@@ -622,6 +640,7 @@ export const updateProduct = async (
  */
 export const deleteProduct = async (id: string): Promise<ApiResponse<void>> => {
   const response = await api.delete<ApiResponse<void>>(`/admin/products/${id}`);
+  notifyContentSync('products');
   return response.data;
 };
 
@@ -640,6 +659,7 @@ export const approveProductRequest = async (
       rejectionReason,
     }
   );
+  notifyContentSync('products');
   return response.data;
 };
 
@@ -652,6 +672,7 @@ export const bulkImportProducts = async (
   const response = await api.post<
     ApiResponse<{ success: number; failed: number; errors: any[] }>
   >("/admin/products/bulk-import", data);
+  notifyContentSync('products');
   return response.data;
 };
 
@@ -664,6 +685,7 @@ export const bulkUpdateProducts = async (
   const response = await api.put<
     ApiResponse<{ matched: number; modified: number }>
   >("/admin/products/bulk-update", data);
+  notifyContentSync('products');
   return response.data;
 };
 

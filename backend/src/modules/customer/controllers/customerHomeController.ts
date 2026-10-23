@@ -775,6 +775,10 @@ export const getHomeContent = async (req: Request, res: Response) => {
       }
     }
 
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
     res.status(200).json({
       success: true,
       data: {

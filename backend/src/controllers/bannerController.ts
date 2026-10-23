@@ -8,6 +8,7 @@ import AppSettings from '../models/AppSettings';
 import { asyncHandler } from '../utils/asyncHandler';
 import { uploadImage } from '../services/cloudinaryService';
 import { CLOUDINARY_FOLDERS } from '../config/cloudinary';
+import { notifyContentUpdated } from '../socket/socketService';
 
 /**
  * @desc    Get all banners
@@ -61,6 +62,8 @@ export const createBanner = asyncHandler(async (req: Request, res: Response) => 
     redirectValue,
   });
 
+  notifyContentUpdated('banners');
+
   res.status(201).json({
     success: true,
     data: banner,
@@ -85,6 +88,8 @@ export const updateBanner = asyncHandler(async (req: Request, res: Response) => 
     runValidators: true,
   });
 
+  notifyContentUpdated('banners');
+
   res.status(200).json({
     success: true,
     data: banner,
@@ -105,6 +110,8 @@ export const deleteBanner = asyncHandler(async (req: Request, res: Response) => 
   }
 
   await banner.deleteOne();
+
+  notifyContentUpdated('banners');
 
   res.status(200).json({
     success: true,
@@ -264,6 +271,8 @@ export const updateFlashDeals = asyncHandler(async (req: Request, res: Response)
   }
 
   await settings.save();
+
+  notifyContentUpdated('deals');
 
   const data = {
     flashDealTargetDate: settings.flashDeal?.targetDate?.toISOString(),

@@ -133,6 +133,20 @@ export default function BannerSlider({
       }
     };
     fetchBanners();
+
+    const handleBannerUpdate = (e?: any) => {
+      if (!e || !e.detail || e.detail.type === 'banners' || e.detail.type === 'all') {
+        fetchBanners();
+      }
+    };
+
+    window.addEventListener('unnati_banners_updated', fetchBanners);
+    window.addEventListener('unnati_content_updated', handleBannerUpdate);
+
+    return () => {
+      window.removeEventListener('unnati_banners_updated', fetchBanners);
+      window.removeEventListener('unnati_content_updated', handleBannerUpdate);
+    };
   }, [position]);
 
   // Sync with active category if selected from home header tabs

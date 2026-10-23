@@ -164,11 +164,17 @@ export default function CategoryListView({
                         </span>
                       )
                     ) : category.headerCategoryId ? (
-                      <span className="text-xs text-neutral-400">
-                        {typeof category.headerCategoryId === "string"
-                          ? category.headerCategoryId.slice(-6)
-                          : String(category.headerCategoryId).slice(-6)}
-                      </span>
+                      typeof category.headerCategoryId === "object" && (category.headerCategoryId as any).name ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]">
+                          {(category.headerCategoryId as any).name}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-neutral-400">
+                          {typeof category.headerCategoryId === "string"
+                            ? category.headerCategoryId.slice(-6)
+                            : String(category.headerCategoryId).slice(-6)}
+                        </span>
+                      )
                     ) : (
                       <span className="text-xs text-yellow-600">
                         Not Assigned

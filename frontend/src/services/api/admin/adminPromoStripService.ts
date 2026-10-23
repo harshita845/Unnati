@@ -1,4 +1,5 @@
 import api from "../config";
+import { notifyContentSync } from "../../../utils/apiCache";
 
 export interface CategoryCard {
   categoryId: string | { _id: string; name?: string; slug?: string; image?: string };
@@ -68,6 +69,7 @@ export const createPromoStrip = async (
   data: PromoStripFormData
 ): Promise<PromoStrip> => {
   const response = await api.post("/admin/promo-strips", data);
+  notifyContentSync('promo');
   return response.data.data;
 };
 
@@ -77,11 +79,13 @@ export const updatePromoStrip = async (
   data: Partial<PromoStripFormData>
 ): Promise<PromoStrip> => {
   const response = await api.put(`/admin/promo-strips/${id}`, data);
+  notifyContentSync('promo');
   return response.data.data;
 };
 
 // Delete PromoStrip
 export const deletePromoStrip = async (id: string): Promise<void> => {
   await api.delete(`/admin/promo-strips/${id}`);
+  notifyContentSync('promo');
 };
 

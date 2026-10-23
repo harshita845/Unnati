@@ -13,7 +13,7 @@ const inr = (n: number) => `₹${(Number(n) || 0).toLocaleString("en-IN", { maxi
  * Sales & Summary: "Top 15 sold products" and "Top 15 searched items" for the last month.
  * Each button opens a list; a product opens in the product editor.
  */
-export default function TopInsightsButtons() {
+export default function TopInsightsButtons({ tiles = false }: { tiles?: boolean }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState<Kind | null>(null);
   const [loading, setLoading] = useState(false);
@@ -47,12 +47,14 @@ export default function TopInsightsButtons() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const btn =
-    "flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-left text-sm font-semibold text-gray-800 shadow-sm transition-colors hover:border-[var(--primary-color)] hover:bg-[var(--primary-alpha-10)]";
+  // tiles: sized like the summary tiles, so they can sit in the same row as them
+  const btn = tiles
+    ? "flex h-full min-h-[84px] items-center gap-2.5 rounded-xl border border-gray-100 bg-white p-3 text-left text-sm font-semibold text-gray-800 shadow-sm transition-all hover:-translate-y-0.5 hover:border-[var(--primary-color)] hover:shadow-md"
+    : "flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-left text-sm font-semibold text-gray-800 shadow-sm transition-colors hover:border-[var(--primary-color)] hover:bg-[var(--primary-alpha-10)]";
 
   return (
     <>
-      <div className="flex flex-wrap gap-3">
+      <div className={tiles ? "contents" : "flex flex-wrap gap-3"}>
         <button type="button" className={btn} onClick={() => setOpen("products")}>
           <Package size={18} className="text-[var(--primary-color)]" />
           <span>
@@ -60,7 +62,8 @@ export default function TopInsightsButtons() {
             <span className="block text-[11px] font-medium text-gray-400">Last {DAYS} days</span>
           </span>
         </button>
-        <button type="button" className={btn} onClick={() => setOpen("searches")}>
+        {/* Phone: the last tile fills the row instead of leaving half of it empty */}
+        <button type="button" className={`${btn}${tiles ? " col-span-2 lg:col-span-1" : ""}`} onClick={() => setOpen("searches")}>
           <Search size={18} className="text-[var(--primary-color)]" />
           <span>
             Top 15 Searched Items

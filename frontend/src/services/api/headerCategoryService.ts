@@ -57,17 +57,22 @@ export const getHeaderCategoriesAdmin = async (): Promise<HeaderCategory[]> => {
     return response.data;
 };
 
+const invalidateAllHeaderCategoryCaches = () => {
+    apiCache.invalidate(HEADER_CATEGORIES_CACHE_KEY);
+    apiCache.invalidatePattern(/header-categor/);
+    apiCache.invalidatePattern(/home-content/);
+    apiCache.invalidatePattern(/categor/);
+};
+
 export const createHeaderCategory = async (data: Partial<HeaderCategory>): Promise<HeaderCategory> => {
-    apiCache.invalidate(HEADER_CATEGORIES_CACHE_KEY);
     const response = await api.post<HeaderCategory>('/header-categories', data);
-    apiCache.invalidate(HEADER_CATEGORIES_CACHE_KEY);
+    invalidateAllHeaderCategoryCaches();
     return response.data;
 };
 
 export const updateHeaderCategory = async (id: string, data: Partial<HeaderCategory>): Promise<HeaderCategory> => {
-    apiCache.invalidate(HEADER_CATEGORIES_CACHE_KEY);
     const response = await api.put<HeaderCategory>(`/header-categories/${id}`, data);
-    apiCache.invalidate(HEADER_CATEGORIES_CACHE_KEY);
+    invalidateAllHeaderCategoryCaches();
     return response.data;
 };
 
@@ -82,13 +87,12 @@ export const updateHeaderSubscription = async (
     }
 ): Promise<{ success: boolean; message: string; data: HeaderSubscriptionRule & { categoryCount: number } }> => {
     const response = await api.put(`/header-categories/${id}/subscription`, data);
-    apiCache.invalidate(HEADER_CATEGORIES_CACHE_KEY);
+    invalidateAllHeaderCategoryCaches();
     return response.data;
 };
 
 export const deleteHeaderCategory = async (id: string): Promise<{ message: string }> => {
-    apiCache.invalidate(HEADER_CATEGORIES_CACHE_KEY);
     const response = await api.delete<{ message: string }>(`/header-categories/${id}`);
-    apiCache.invalidate(HEADER_CATEGORIES_CACHE_KEY);
+    invalidateAllHeaderCategoryCaches();
     return response.data;
 };

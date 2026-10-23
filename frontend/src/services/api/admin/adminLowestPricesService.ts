@@ -1,4 +1,5 @@
 import api from "../config";
+import { notifyContentSync } from "../../../utils/apiCache";
 
 export type LowestPricesProductRef =
     | string
@@ -60,6 +61,7 @@ export const createLowestPricesProduct = async (
         "/admin/lowest-prices-products",
         data
     );
+    notifyContentSync('home');
     return response.data;
 };
 
@@ -72,6 +74,7 @@ export const updateLowestPricesProduct = async (
         `/admin/lowest-prices-products/${id}`,
         data
     );
+    notifyContentSync('home');
     return response.data;
 };
 
@@ -82,6 +85,7 @@ export const deleteLowestPricesProduct = async (
     const response = await api.delete<LowestPricesProductResponse>(
         `/admin/lowest-prices-products/${id}`
     );
+    notifyContentSync('home');
     return response.data;
 };
 
@@ -93,5 +97,6 @@ export const reorderLowestPricesProducts = async (
         "/admin/lowest-prices-products/reorder",
         { products }
     );
+    notifyContentSync('home');
     return response.data;
 };

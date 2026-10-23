@@ -90,6 +90,18 @@ class Cache {
 // Singleton instance
 export const cache = new Cache();
 
+/**
+ * Invalidate all customer & category caches across list and tree variants
+ */
+export const invalidateCategoryCache = (): void => {
+  cache.delete("customer-categories-tree");
+  cache.delete("customer-categories-list");
+  cache.delete("customer-categories-list-false");
+  cache.delete("customer-categories-list-true");
+  cache.invalidatePattern(/^customer-categor/);
+  cache.invalidatePattern(/^categories/);
+};
+
 // Clean expired entries every 5 minutes
 setInterval(() => {
   cache.cleanExpired();

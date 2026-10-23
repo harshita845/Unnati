@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import LowestPricesProduct from "../../../models/LowestPricesProduct";
 import Product from "../../../models/Product";
 import mongoose from "mongoose";
+import { notifyContentUpdated } from "../../../socket/socketService";
 
 // Get all lowest prices products
 export const getLowestPricesProducts = async (_req: Request, res: Response) => {
@@ -114,6 +115,8 @@ export const createLowestPricesProduct = async (req: Request, res: Response) => 
 
         await newLowestPricesProduct.save();
 
+        notifyContentUpdated('home');
+
         const populatedProduct = await LowestPricesProduct.findById(newLowestPricesProduct._id)
             .populate("product", "productName mainImage price mrp discount status publish")
             .lean();
@@ -166,6 +169,8 @@ export const updateLowestPricesProduct = async (req: Request, res: Response) => 
 
         await lowestPricesProduct.save();
 
+        notifyContentUpdated('home');
+
         const updatedProduct = await LowestPricesProduct.findById(id)
             .populate("product", "productName mainImage price mrp discount status publish")
             .lean();
@@ -204,6 +209,8 @@ export const deleteLowestPricesProduct = async (req: Request, res: Response) => 
             });
         }
 
+        notifyContentUpdated('home');
+
         return res.status(200).json({
             success: true,
             message: "Product removed from lowest prices section successfully",
@@ -238,6 +245,8 @@ export const reorderLowestPricesProducts = async (req: Request, res: Response) =
         });
 
         await Promise.all(updatePromises);
+
+        notifyContentUpdated('home');
 
         const updatedProducts = await LowestPricesProduct.find()
             .populate("product", "productName mainImage price mrp discount status publish")

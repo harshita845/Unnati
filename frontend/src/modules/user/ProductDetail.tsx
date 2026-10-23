@@ -82,21 +82,21 @@ export default function ProductDetail() {
   const [hasMoreSimilar, setHasMoreSimilar] = useState(true);
 
   useEffect(() => {
-    const fetchProduct = async () => {
+    const fetchProduct = async (forceRefresh: boolean = false) => {
       if (!id) return;
-      setLoading(true);
+      if (!forceRefresh) {
+        setLoading(true);
+        startLoading();
+      }
       setError(null);
-      startLoading();
 
       try {
-        // Check if navigation came from store page
-        const fromStore = (routerLocation.state as any)?.fromStore === true;
-
-        // Fetch product details with location
+        // Fetch product details with location and optional cache-bypass
         const response = await getProductById(
           id,
           location?.latitude,
-          location?.longitude
+          location?.longitude,
+          forceRefresh
         );
         if (response.success && response.data) {
           const productData = response.data as any;
@@ -174,6 +174,46 @@ export default function ProductDetail() {
     };
 
     fetchProduct();
+
+    const handleProductUpdated = (e: any) => {
+      const updatedId = e?.detail?.productId || e?.detail?.id;
+      const updatedName = e?.detail?.productName;
+      if (!updatedId || updatedId === id || (product && updatedName && product.name?.toLowerCase() === updatedName.toLowerCase())) {
+        fetchProduct(true);
+      }
+    };
+
+    const handleFocus = () => {
+      fetchProduct(true);
+    };
+
+    const handleContentUpdated = (e: any) => {
+      const type = e?.detail?.type;
+      if (!type || type === 'products' || type === 'all') {
+        fetchProduct(true);
+      }
+    };
+
+    window.addEventListener("productUpdated", handleProductUpdated);
+    window.addEventListener("unnati_content_updated", handleContentUpdated);
+    window.addEventListener("focus", handleFocus);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel("product_updates");
+      bc.onmessage = (ev) => {
+        if (ev?.data?.type === "PRODUCT_UPDATED") {
+          fetchProduct(true);
+        }
+      };
+    } catch {}
+
+    return () => {
+      window.removeEventListener("productUpdated", handleProductUpdated);
+      window.removeEventListener("unnati_content_updated", handleContentUpdated);
+      window.removeEventListener("focus", handleFocus);
+      if (bc) bc.close();
+    };
   }, [id, location?.latitude, location?.longitude]);
 
   const fetchReviews = async (productId: string) => {

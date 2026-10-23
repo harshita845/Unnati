@@ -3,11 +3,30 @@ import api from "../config";
 
 export type { CreateProductPayload };
 
+import { apiCache } from "../../../utils/apiCache";
+
+export const notifyProductSync = (id?: string, data?: any) => {
+  apiCache.invalidatePattern(/product/);
+  apiCache.invalidatePattern(/home-content/);
+  apiCache.invalidatePattern(/search/);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("productUpdated", { detail: { id, data } }));
+    try {
+      const bc = new BroadcastChannel("product_updates");
+      bc.postMessage({ type: "PRODUCT_UPDATED", id, data });
+      bc.close();
+    } catch {
+      // ignore
+    }
+  }
+};
+
 export const createProductAdmin = async (data: CreateProductPayload) => {
   const response = await api.post("/admin/products", {
     ...data,
     variations: data.variants,
   });
+  notifyProductSync(undefined, data);
   return response.data;
 };
 
@@ -16,6 +35,7 @@ export const updateProductAdmin = async (id: string, data: Partial<CreateProduct
     ...data,
     variations: data.variants,
   });
+  notifyProductSync(id, data);
   return response.data;
 };
 
@@ -24,6 +44,7 @@ export const createProductSeller = async (data: CreateProductPayload) => {
     ...data,
     variations: data.variants,
   });
+  notifyProductSync(undefined, data);
   return response.data;
 };
 
@@ -32,6 +53,7 @@ export const updateProductSeller = async (id: string, data: Partial<CreateProduc
     ...data,
     variations: data.variants,
   });
+  notifyProductSync(id, data);
   return response.data;
 };
 

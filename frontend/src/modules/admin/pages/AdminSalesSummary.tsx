@@ -257,8 +257,10 @@ const AdminSalesSummary = () => {
       </div>
 
       {/* Profit & Loss Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+      {/* Profit & loss tiles, plus the two Top 15 lists (last 30 days) in the same row */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         <SummaryCard
+          compact
           title="Total Profit"
           value={`₹${(data?.summary.totalProfit || 0).toLocaleString()}`}
           icon={<FiTrendingUp className="w-6 h-6" />}
@@ -266,6 +268,7 @@ const AdminSalesSummary = () => {
           trend="Est."
         />
         <SummaryCard
+          compact
           title="Total Loss"
           value={`₹${(data?.summary.totalLoss || 0).toLocaleString()}`}
           icon={<FiTrendingDown className="w-6 h-6" />}
@@ -273,20 +276,20 @@ const AdminSalesSummary = () => {
           trend="Est."
         />
         <SummaryCard
+          compact
           title="Net Profit"
           value={`₹${(data?.summary.netProfit || 0).toLocaleString()}`}
           icon={<FiDollarSign className="w-6 h-6" />}
           color="bg-[var(--primary-dark)]"
           trend="Final"
         />
+        <TopInsightsButtons tiles />
       </div>
 
       {/* Chart Section */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <h3 className="font-bold text-gray-800 text-lg">Revenue Performance</h3>
-          {/* Top 15 sold products / searched items of the last month */}
-          <TopInsightsButtons />
           <div className="text-xs text-gray-400 bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
             Real-time daily aggregation
           </div>
@@ -410,10 +413,10 @@ const getTrendStyle = (trend: string) => {
   return 'bg-gray-50 text-gray-500 border border-gray-100';
 };
 
-const SummaryCard = ({ title, value, icon, color, trend }: any) => (
-  <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden group">
-    <div className="flex justify-between items-start mb-3">
-      <div className={`p-2 rounded-lg text-white ${color} shadow-md shadow-gray-100 transition-transform group-hover:scale-105`}>
+const SummaryCard = ({ title, value, icon, color, trend, compact }: any) => (
+  <div className={`bg-white ${compact ? "p-3" : "p-4"} rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden group`}>
+    <div className={`flex justify-between items-start ${compact ? "mb-2" : "mb-3"}`}>
+      <div className={`${compact ? "p-1.5 [&>svg]:w-5 [&>svg]:h-5" : "p-2"} rounded-lg text-white ${color} shadow-md shadow-gray-100 transition-transform group-hover:scale-105`}>
         {icon}
       </div>
       <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${getTrendStyle(trend)}`}>
@@ -421,7 +424,7 @@ const SummaryCard = ({ title, value, icon, color, trend }: any) => (
       </div>
     </div>
     <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider mb-0.5">{title}</p>
-    <div className="text-xl font-extrabold text-gray-800 tracking-tight">{value}</div>
+    <div className={`${compact ? "text-lg" : "text-xl"} font-extrabold text-gray-800 tracking-tight`}>{value}</div>
     <div className="absolute right-[-10px] bottom-[-10px] opacity-[0.03] group-hover:opacity-[0.08] transition-opacity pointer-events-none">
       {icon}
     </div>

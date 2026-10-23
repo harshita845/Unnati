@@ -95,6 +95,20 @@ export default function FlashDealSection() {
         }
     };
     fetchConfig();
+
+    const handleDealsUpdate = (e?: any) => {
+      if (!e || !e.detail || e.detail.type === 'deals' || e.detail.type === 'all') {
+        fetchConfig();
+      }
+    };
+
+    window.addEventListener('unnati_deals_updated', fetchConfig);
+    window.addEventListener('unnati_content_updated', handleDealsUpdate);
+
+    return () => {
+      window.removeEventListener('unnati_deals_updated', fetchConfig);
+      window.removeEventListener('unnati_content_updated', handleDealsUpdate);
+    };
   }, [activeCategory, location?.latitude, location?.longitude, location?.city]);
 
   useEffect(() => {

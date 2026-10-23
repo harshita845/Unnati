@@ -48,13 +48,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   // Fetch categories tree for search dropdown
   useEffect(() => {
-    const fetchCategoriesTree = async () => {
+    const fetchCategoriesTree = async (forceRefresh: boolean = false) => {
       try {
-        const res = await getCategories(true);
+        const res = await getCategories(true, forceRefresh);
         if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
           setCategoriesTree(res.data);
         } else {
-          const fallbackRes = await getCategories(false);
+          const fallbackRes = await getCategories(false, forceRefresh);
           if (fallbackRes && fallbackRes.success && Array.isArray(fallbackRes.data)) {
             setCategoriesTree(fallbackRes.data);
           }
@@ -62,7 +62,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       } catch (e) {
         console.error('Failed to fetch categories tree for search dropdown:', e);
         try {
-          const hc = await getHeaderCategoriesPublic(true);
+          const hc = await getHeaderCategoriesPublic(true, forceRefresh);
           if (hc && hc.length > 0) {
             setCategoriesTree(hc);
           }
@@ -72,6 +72,20 @@ export default function AppLayout({ children }: AppLayoutProps) {
       }
     };
     fetchCategoriesTree();
+
+    const handleCategoryUpdate = (e?: any) => {
+      const type = e?.detail?.type;
+      if (!type || type === 'categories' || type === 'all') {
+        fetchCategoriesTree(true);
+      }
+    };
+
+    window.addEventListener('unnati_categories_updated', handleCategoryUpdate);
+    window.addEventListener('unnati_content_updated', handleCategoryUpdate);
+    return () => {
+      window.removeEventListener('unnati_categories_updated', handleCategoryUpdate);
+      window.removeEventListener('unnati_content_updated', handleCategoryUpdate);
+    };
   }, []);
 
   // Click outside category dropdown to close it

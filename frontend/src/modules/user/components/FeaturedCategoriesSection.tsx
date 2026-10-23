@@ -23,9 +23,14 @@ export default function FeaturedCategoriesSection() {
 
   useEffect(() => {
     let isMounted = true;
-    const fetchCategories = async () => {
+    let isFetching = false;
+    let debounceTimer: any = null;
+
+    const fetchCategories = async (forceRefresh: boolean = false) => {
+      if (isFetching || !isMounted) return;
+      isFetching = true;
       try {
-        const response = await getCategories(false);
+        const response = await getCategories(false, forceRefresh);
         if (isMounted && response.success && Array.isArray(response.data) && response.data.length > 0) {
           const valid = response.data
             .filter((cat: any) => cat.status !== "Inactive" && cat.isActive !== false)
@@ -45,12 +50,79 @@ export default function FeaturedCategoriesSection() {
         console.error("Error fetching categories for Featured Section:", error);
         if (isMounted) setCategories([]);
       } finally {
+        isFetching = false;
         if (isMounted) setLoading(false);
       }
     };
-    fetchCategories();
+
+    const debouncedFetch = (forceRefresh: boolean = false) => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        fetchCategories(forceRefresh);
+      }, 150);
+    };
+
+    fetchCategories(false);
+
+    // Re-fetch automatically when admin updates categories in another tab or over socket
+    const handleCategoriesUpdated = () => {
+      debouncedFetch(true);
+    };
+
+    const handleCacheInvalidated = (e: any) => {
+      const detail = e.detail;
+      if (
+        !detail ||
+        detail.type === "clear" ||
+        detail.key?.includes("categor") ||
+        detail.pattern?.includes("categor")
+      ) {
+        debouncedFetch(true);
+      }
+    };
+
+    const handleWindowFocus = () => {
+      debouncedFetch(true);
+    };
+
+    const handleContentUpdated = (e: any) => {
+      const type = e?.detail?.type;
+      if (!type || type === "categories" || type === "all") {
+        debouncedFetch(true);
+      }
+    };
+
+    window.addEventListener("unnati_categories_updated", handleCategoriesUpdated);
+    window.addEventListener("unnati_content_updated", handleContentUpdated);
+    window.addEventListener("unnati_cache_invalidated", handleCacheInvalidated);
+    window.addEventListener("focus", handleWindowFocus);
+
+    let channel: BroadcastChannel | null = null;
+    try {
+      if ("BroadcastChannel" in window) {
+        channel = new BroadcastChannel("unnati_api_cache_channel");
+        channel.onmessage = (event) => {
+          if (
+            event.data?.type === "categories_updated" ||
+            event.data?.type === "content_updated" ||
+            event.data?.pattern?.includes("categor")
+          ) {
+            debouncedFetch(true);
+          }
+        };
+      }
+    } catch {}
+
     return () => {
       isMounted = false;
+      clearTimeout(debounceTimer);
+      window.removeEventListener("unnati_categories_updated", handleCategoriesUpdated);
+      window.removeEventListener("unnati_content_updated", handleContentUpdated);
+      window.removeEventListener("unnati_cache_invalidated", handleCacheInvalidated);
+      window.removeEventListener("focus", handleWindowFocus);
+      if (channel) {
+        try { channel.close(); } catch {}
+      }
     };
   }, []);
 
@@ -151,8 +223,9 @@ export default function FeaturedCategoriesSection() {
                     backgroundColor: window.innerWidth < 768 ? '#ffffff' : bgColor,
                   }}
                 >
-                  {category.image ? (
+                  {category.image && !category.image.includes("placehold.co") ? (
                     <FadeImage
+                      key={category.image}
                       src={category.image}
                       alt={category.name}
                       wrapperClassName="w-full h-full rounded-xl"
@@ -161,12 +234,9 @@ export default function FeaturedCategoriesSection() {
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center rounded-xl bg-[var(--brand-cream-soft,#F6EFE2)] text-[var(--brand-ink-muted,#5B6B60)]">
-                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="3" width="7" height="7"></rect>
-                        <rect x="14" y="3" width="7" height="7"></rect>
-                        <rect x="14" y="14" width="7" height="7"></rect>
-                        <rect x="3" y="14" width="7" height="7"></rect>
-                      </svg>
+                      <span className="text-xl md:text-2xl font-bold font-display text-[var(--brand-green-deep,#14401F)]">
+                        {category.name?.charAt(0)?.toUpperCase() || "C"}
+                      </span>
                     </div>
                   )}
                 </div>

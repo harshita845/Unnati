@@ -51,6 +51,20 @@ export default function HomeFlashSaleBanner() {
       }
     };
     loadBanners();
+
+    const handleBannerUpdate = (e?: any) => {
+      if (!e || !e.detail || e.detail.type === 'banners' || e.detail.type === 'all') {
+        loadBanners();
+      }
+    };
+
+    window.addEventListener('unnati_banners_updated', loadBanners);
+    window.addEventListener('unnati_content_updated', handleBannerUpdate);
+
+    return () => {
+      window.removeEventListener('unnati_banners_updated', loadBanners);
+      window.removeEventListener('unnati_content_updated', handleBannerUpdate);
+    };
   }, []);
 
   useEffect(() => {

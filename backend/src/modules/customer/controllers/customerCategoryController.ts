@@ -12,9 +12,10 @@ export const getCategories = async (_req: Request, res: Response) => {
   try {
     const includeSubcategories = _req.query.includeSubcategories === "true";
     const cacheKey = `customer-categories-list-${includeSubcategories}`;
+    const bypassCache = !!_req.query._t || _req.headers['cache-control']?.includes('no-cache');
 
     // Try cache first
-    let categories = cache.get(cacheKey);
+    let categories = bypassCache ? null : cache.get(cacheKey);
 
     if (!categories) {
       const filter: any = { status: "Active" };
@@ -27,9 +28,13 @@ export const getCategories = async (_req: Request, res: Response) => {
         .select("name image icon description color slug _id")
         .lean(); // Use lean() for better performance
 
-      // Cache for 10 minutes
-      cache.set(cacheKey, categories, 10 * 60 * 1000);
+      // Cache for 30 seconds
+      cache.set(cacheKey, categories, 30 * 1000);
     }
+
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
 
     return res.status(200).json({
       success: true,
@@ -48,11 +53,13 @@ export const getCategories = async (_req: Request, res: Response) => {
 export const getCategoriesWithSubs = async (_req: Request, res: Response) => {
   try {
     const cacheKey = "customer-categories-tree";
+    const bypassCache = !!_req.query._t || _req.headers['cache-control']?.includes('no-cache');
 
     // Try cache first
-    let categoriesWithSubs = cache.get(cacheKey);
+    let categoriesWithSubs = bypassCache ? null : cache.get(cacheKey);
 
     if (categoriesWithSubs) {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       return res.status(200).json({
         success: true,
         data: categoriesWithSubs,
@@ -150,10 +157,12 @@ export const getCategoryById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const cacheKey = `customer-category-${id}`;
+    const bypassCache = !!req.query._t || req.headers['cache-control']?.includes('no-cache');
 
     // Try cache first
-    const cached = cache.get(cacheKey);
+    const cached = bypassCache ? null : cache.get(cacheKey);
     if (cached) {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       return res.status(200).json({
         success: true,
         data: cached,
@@ -376,8 +385,9 @@ export const getCategoryById = async (req: Request, res: Response) => {
       currentSubcategory,
     };
 
-    // Cache for 10 minutes
-    cache.set(cacheKey, responseData, 10 * 60 * 1000);
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
 
     return res.status(200).json({
       success: true,
