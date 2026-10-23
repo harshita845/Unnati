@@ -232,7 +232,7 @@ async function startServer() {
       .then((count) => count && console.log(`   Released ${count} unpaid online order(s)`))
       .catch((err) => console.error("Failed to release unpaid online orders:", err));
   releaseUnpaidOrders();
-  setInterval(releaseUnpaidOrders, 5 * 60 * 1000);
+  const unpaidOrdersTimer = setInterval(releaseUnpaidOrders, 5 * 60 * 1000);
 
   // Seller subscriptions: reminders before expiry, expiry, hiding products after the grace period
   const runSubscriptions = () =>
@@ -240,7 +240,7 @@ async function startServer() {
       .then((stats) => (stats.reminders || stats.expired || stats.hidden) && console.log("   Subscriptions:", stats))
       .catch((err) => console.error("Subscription job failed:", err));
   runSubscriptions();
-  setInterval(runSubscriptions, 60 * 60 * 1000);
+  const subscriptionsTimer = setInterval(runSubscriptions, 60 * 60 * 1000);
 
   httpServer.timeout = 300000; // 5 minutes
   httpServer.listen(PORT, () => {
@@ -251,6 +251,41 @@ async function startServer() {
     );
     console.log(`   \x1b[36mSocket.IO:\x1b[0m ✓ Ready for connections\n`);
   });
+
+  // A restart (tsx watch, a deploy, Ctrl+C) sends SIGTERM and waits for the process to exit.
+  // Open sockets, the two timers above and the database connection keep it alive, so the restart
+  // hangs and the old code goes on serving — which looks exactly like an edit having no effect.
+  let shuttingDown = false;
+  const shutdown = async (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`\n${signal} received, shutting down...`);
+
+    clearInterval(unpaidOrdersTimer);
+    clearInterval(subscriptionsTimer);
+
+    // Never hang worse than before: if something refuses to close, leave anyway
+    const forceExit = setTimeout(() => {
+      console.warn("Shutdown took too long, exiting anyway.");
+      process.exit(0);
+    }, 5000);
+    forceExit.unref();
+
+    try {
+      io.close();
+      await new Promise<void>((resolve) => httpServer.close(() => resolve()));
+      await mongoose.disconnect();
+    } catch (err) {
+      console.error("Error during shutdown:", (err as Error).message);
+    }
+    clearTimeout(forceExit);
+    process.exit(0);
+  };
+
+  // once(): a second Ctrl+C falls through to Node's default and kills it immediately
+  for (const signal of ["SIGTERM", "SIGINT"] as const) {
+    process.once(signal, () => void shutdown(signal));
+  }
 }
 
 // On a normal server (local / Render / VPS) start listening and run the background jobs.

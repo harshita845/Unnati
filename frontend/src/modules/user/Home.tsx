@@ -479,10 +479,12 @@ export default function Home() {
   useEffect(() => {
     let channel: BroadcastChannel | null = null;
     let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
+    let lastRefreshAt = 0;
 
     const handleContentUpdated = async () => {
       if (refreshTimeout) clearTimeout(refreshTimeout);
       refreshTimeout = setTimeout(async () => {
+        lastRefreshAt = Date.now();
         try {
           if (!activeTab || activeTab === "all") {
             const response = await getHomeContent(undefined, location?.latitude, location?.longitude, false, 0, true, location?.city, true);
@@ -527,6 +529,13 @@ export default function Home() {
       }, 100);
     };
 
+    // Switching back to this tab used to re-query the whole home page every time, which meant a
+    // round of uncached database work for every click between the browser, devtools and the editor.
+    // Real changes already arrive over the socket, so focus only refreshes genuinely stale content.
+    const handleWindowFocus = () => {
+      if (Date.now() - lastRefreshAt > 60_000) handleContentUpdated();
+    };
+
     window.addEventListener("unnati_content_updated", handleContentUpdated);
     window.addEventListener("unnati_categories_updated", handleContentUpdated);
     window.addEventListener("header_categories_updated", handleContentUpdated);
@@ -536,7 +545,7 @@ export default function Home() {
     window.addEventListener("unnati_home_updated", handleContentUpdated);
     window.addEventListener("productUpdated", handleContentUpdated);
     window.addEventListener("unnati_cache_invalidated", handleContentUpdated);
-    window.addEventListener("focus", handleContentUpdated);
+    window.addEventListener("focus", handleWindowFocus);
 
     try {
       if ("BroadcastChannel" in window) {
@@ -570,7 +579,7 @@ export default function Home() {
       window.removeEventListener("unnati_home_updated", handleContentUpdated);
       window.removeEventListener("productUpdated", handleContentUpdated);
       window.removeEventListener("unnati_cache_invalidated", handleContentUpdated);
-      window.removeEventListener("focus", handleContentUpdated);
+      window.removeEventListener("focus", handleWindowFocus);
       if (channel) {
         try { channel.close(); } catch {}
       }

@@ -106,8 +106,6 @@ export const getProducts = async (req: Request, res: Response) => {
       longitude, // User location longitude
     } = req.query;
 
-    console.log("DEBUG: getProducts called with query:", req.query);
-
     const settings = await AppSettings.findOne().lean();
     const inventorySection = settings?.productDisplaySettings?.find(s => s.id === 'inventory');
     const negativeStockSoldOut = inventorySection?.fields?.find(f => f.id === 'negative_stock_sold_out')?.isEnabled;
@@ -327,8 +325,6 @@ export const getProducts = async (req: Request, res: Response) => {
     if (sort === "price_desc") sortOptions = { price: -1 };
     if (sort === "discount") sortOptions = { discount: -1 };
     if (sort === "popular") sortOptions = { popular: -1, dealOfDay: -1 };
-
-    console.log("DEBUG: Final search query:", JSON.stringify(query));
 
     let products = await Product.find(query)
       .populate("category", "name icon image")
