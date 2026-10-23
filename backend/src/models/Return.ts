@@ -34,6 +34,9 @@ export interface IReturn extends Document {
   refundAmount?: number;
   refundId?: mongoose.Types.ObjectId;
 
+  /** When stock and money were actually settled. Guards against settling the same request twice. */
+  settledAt?: Date;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -122,6 +125,9 @@ const ReturnSchema = new Schema<IReturn>(
     refundId: {
       type: Schema.Types.ObjectId,
       ref: "Refund",
+    },
+    settledAt: {
+      type: Date,
     },
   },
   {

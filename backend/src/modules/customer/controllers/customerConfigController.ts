@@ -20,6 +20,7 @@ export const getPublicConfig = asyncHandler(
       freeDeliveryThreshold: 199,
       platformFee: 0,
       giftPackagingFee: 30,
+      returnWindowDays: 7,
       taxes: { gst: 18 },
       estimatedDeliveryTime: "12-15 mins",
       deliveryRadius: 10,
@@ -46,6 +47,9 @@ export const getPublicConfig = asyncHandler(
         serviceType: settings.serviceType ?? defaultConfig.serviceType,
         platformFee: getPlatformFee(settings),
         giftPackagingFee: getGiftPackagingFee(settings),
+        returnWindowDays: Number.isFinite(Number(settings.returnWindowDays)) && Number(settings.returnWindowDays) >= 0
+          ? Number(settings.returnWindowDays)
+          : defaultConfig.returnWindowDays,
         taxes: {
           gst: settings.gstEnabled ? (settings.gstRate ?? 18) : 0
         },

@@ -12,6 +12,7 @@ import FlashDealSection from "./components/banners/FlashDealSection";
 import PromoStrip from "./components/PromoStrip";
 import HomeThreePromoBanners from "./components/banners/HomeThreePromoBanners";
 import DealOfTheDay from "./components/banners/DealOfTheDay";
+import FeaturedDeal from "./components/banners/FeaturedDeal";
 import FirstOrderOfferBanner from "./components/banners/FirstOrderOfferBanner";
 import FeaturedCategoriesSection from "./components/FeaturedCategoriesSection";
 import ShopByStoreSection from "./components/ShopByStoreSection";
@@ -661,6 +662,9 @@ export default function Home() {
       >
         {/* Deal of the Day Section */}
         <DealOfTheDay />
+
+        {/* Featured Deals Section: the products picked under Promotion → Featured Deal in admin */}
+        <FeaturedDeal />
 
         {/* Three Promotional Banners Section */}
         <HomeThreePromoBanners />

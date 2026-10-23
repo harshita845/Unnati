@@ -12,6 +12,7 @@ import { OrderPlacementError } from "../../../services/orderPlacementService";
 import { ORDER_STAGE, recordAllStoresProgress, transitionOrderStatus } from "../../../services/orderFlowService";
 import { notifyDeliveryBoysOfNewOrder } from "../../../services/orderNotificationService";
 import Return from "../../../models/Return";
+import { completeReturnRequest } from "../../../services/returnCompletionService";
 import { notifySellersOfOrderUpdate } from "../../../services/sellerNotificationService";
 import Product from "../../../models/Product";
 import Customer from "../../../models/Customer";
@@ -1357,10 +1358,20 @@ export const processReturnRequest = asyncHandler(
       }
     }
 
-    const updatedReturn = await Return.findByIdAndUpdate(id, updateData, {
+    await Return.findByIdAndUpdate(id, updateData, {
       new: true,
       runValidators: true,
-    })
+    });
+
+    // Completing a return has to restore the stock and pay the customer back. Setting the status
+    // alone left the request looking finished while the customer was never refunded.
+    let completion = null;
+    if (status === "Completed") {
+      const fresh = await Return.findById(id);
+      if (fresh) completion = await completeReturnRequest(fresh);
+    }
+
+    const updatedReturn = await Return.findById(id)
       .populate("order")
       .populate("orderItem")
       .populate("customer", "name email phone");
@@ -1370,6 +1381,7 @@ export const processReturnRequest = asyncHandler(
       message: `Return request ${status ? status.toLowerCase() : "updated"
         } successfully`,
       data: updatedReturn,
+      completion,
     });
   }
 );

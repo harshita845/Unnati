@@ -79,6 +79,8 @@ export interface AppSettings {
   platformFee?: number;
   /** Charged only when the customer asks for gift packaging */
   giftPackagingFee?: number;
+  /** Days after delivery a return or replacement may still be requested */
+  returnWindowDays?: number;
   deliveryRadius?: number;
   serviceType?: string;
   gstEnabled: boolean;

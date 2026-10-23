@@ -78,6 +78,14 @@ export default function AdminDeliverySettings() {
           type: 'number',
           value: 0,
           prefix: '₹'
+        },
+        {
+          id: 'return_window_days',
+          label: 'Return Window',
+          description: 'How long after delivery a customer can ask for a return or replacement. 0 means no limit.',
+          type: 'number',
+          value: 7,
+          suffix: 'Days'
         }
       ]
     },
@@ -132,6 +140,8 @@ export default function AdminDeliverySettings() {
                     return { ...field, value: settings.platformFee ?? 0 };
                   case 'gift_packaging_fee':
                     return { ...field, value: settings.giftPackagingFee ?? 0 };
+                  case 'return_window_days':
+                    return { ...field, value: settings.returnWindowDays ?? 7 };
                   case 'service_type':
                     return { ...field, value: settings.serviceType || 'Delivery + Pickup' };
                   default:
@@ -194,6 +204,7 @@ export default function AdminDeliverySettings() {
         freeDeliveryThreshold: Number(getFieldValue('free_delivery_above')),
         platformFee: Number(getFieldValue('platform_fee')),
         giftPackagingFee: Number(getFieldValue('gift_packaging_fee')),
+        returnWindowDays: Number(getFieldValue('return_window_days')),
         serviceType: String(getFieldValue('service_type')),
         onlinePaymentDiscount: {
           enabled: getFieldValue('discount_enabled', 'payment_discount') === 'Yes',

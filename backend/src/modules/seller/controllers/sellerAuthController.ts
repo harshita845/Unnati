@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import Seller from "../../../models/Seller";
+import { offloadInlineImages, InlineImageUploadError } from "../../../services/inlineImageService";
 import SellerLoginSession from "../../../models/SellerLoginSession";
 import SubscriptionPlan from "../../../models/SubscriptionPlan";
 import { getPublicPlans, getSellerPlanAccess, getSubscriptionSettings } from "../../../services/sellerSubscriptionService";
@@ -438,6 +439,16 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
   } else if (updates.serviceRadiusKm === '' || updates.serviceRadiusKm === null) {
     // If empty string or null is sent, remove it from updates to keep existing value
     delete updates.serviceRadiusKm;
+  }
+
+  // Pictures sent as text go to Cloudinary; only the link is saved
+  try {
+    await offloadInlineImages(updates);
+  } catch (error) {
+    if (error instanceof InlineImageUploadError) {
+      return res.status(502).json({ success: false, message: error.message });
+    }
+    throw error;
   }
 
   const seller = await Seller.findByIdAndUpdate(sellerId, updates, {

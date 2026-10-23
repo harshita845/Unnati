@@ -12,7 +12,7 @@ import {
 } from '../services/api/customerCartService';
 import { getApplicableUnitPrice, getCartItemVariantSelector, getCartLineUnitPrice } from '../utils/priceUtils';
 import { getCustomerFreeGiftRules } from '../services/api/customerFreeGiftService';
-import { isCustomerDisplayPath } from '../utils/moduleAuth';
+import { detectModuleFromPath, isCustomerDisplayPath } from '../utils/moduleAuth';
 import { CartRewardRule, getGiftRules, normalizeCartRewardRule } from '../utils/freeGiftRuleUtils';
 
 const CART_STORAGE_KEY = 'saved_cart';
@@ -90,7 +90,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // product P x1 and a logged-in cart that already contained product P x2
   // ends up with P x3 after merge.
   useEffect(() => {
-    if (isCustomerDisplayPath()) {
+    // The cart and free-gift rules are shopper data. Admin, seller and delivery sign-ins used to
+    // fetch them on every page load too, which is two requests the panel never uses.
+    if (isCustomerDisplayPath() || detectModuleFromPath() !== 'user') {
       setLoading(false);
       return;
     }

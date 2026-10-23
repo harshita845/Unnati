@@ -145,6 +145,8 @@ export interface IAppSettings extends Document {
   platformFee?: number;
   /** Charged when the customer asks for gift packaging */
   giftPackagingFee?: number;
+  /** Days after delivery a customer may still ask for a return or replacement */
+  returnWindowDays?: number;
   deliveryRadius?: number;
   serviceType?: string;
 
@@ -504,6 +506,11 @@ const AppSettingsSchema = new Schema<IAppSettings>(
       type: Number,
       default: 30,
       min: [0, "Gift packaging fee cannot be negative"],
+    },
+    returnWindowDays: {
+      type: Number,
+      default: 7,
+      min: [0, "Return window cannot be negative"],
     },
     deliveryRadius: {
       type: Number,

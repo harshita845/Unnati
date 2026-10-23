@@ -1,5 +1,6 @@
 import api from './config';
 import { apiCache, notifyContentSync } from '../../utils/apiCache';
+import { coalesce } from '../../utils/coalesce';
 
 export interface HeaderCategory {
     _id: string; // MongoDB ID
@@ -38,16 +39,18 @@ export const getCachedHeaderCategoriesPublic = (): HeaderCategory[] | null =>
 
 export const getHeaderCategoriesPublic = async (skipLoader = false, forceRefresh = false): Promise<HeaderCategory[]> => {
     if (forceRefresh) {
-        apiCache.invalidate(HEADER_CATEGORIES_CACHE_KEY);
+        // Silent for the same reason as the product lists: a refresh must not broadcast an
+        // invalidation that other screens answer by refreshing again.
+        apiCache.delete(HEADER_CATEGORIES_CACHE_KEY);
     }
     return apiCache.getOrFetch(
         HEADER_CATEGORIES_CACHE_KEY,
-        async () => {
+        () => coalesce(HEADER_CATEGORIES_CACHE_KEY, async () => {
             const response = await api.get<HeaderCategory[]>('/header-categories', {
                 skipLoader
             } as any);
             return response.data;
-        },
+        }),
         5 * 60 * 1000
     );
 };

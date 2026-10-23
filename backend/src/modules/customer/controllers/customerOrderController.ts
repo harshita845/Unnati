@@ -3,6 +3,8 @@ import Order from "../../../models/Order";
 import OrderItem from "../../../models/OrderItem";
 import Return from "../../../models/Return";
 import Customer from "../../../models/Customer";
+import Product from "../../../models/Product";
+import AppSettings from "../../../models/AppSettings";
 import mongoose from "mongoose";
 import { notifySellersOfOrderUpdate } from "../../../services/sellerNotificationService";
 import { notifyAdminsOfNewOrder } from "../../../services/adminNotificationService";
@@ -600,9 +602,33 @@ export const requestReturnOrReplace = async (req: Request, res: Response) => {
             });
         }
 
+        // The return window is a setting, not a number in the code, so it can be changed from admin
+        const settings: any = await AppSettings.findOne().lean();
+        const windowDays = Number(settings?.returnWindowDays);
+        const returnWindowDays = Number.isFinite(windowDays) && windowDays >= 0 ? windowDays : 7;
+        const deliveredAt = order.deliveredAt ? new Date(order.deliveredAt) : null;
+        if (returnWindowDays > 0 && deliveredAt) {
+            const daysSince = (Date.now() - deliveredAt.getTime()) / (24 * 60 * 60 * 1000);
+            if (daysSince > returnWindowDays) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Requests can only be raised within ${returnWindowDays} days of delivery`
+                });
+            }
+        }
+
         const orderItem = await OrderItem.findOne({ _id: orderItemId, order: orderId });
         if (!orderItem) {
             return res.status(404).json({ success: false, message: "Order item not found" });
+        }
+
+        // Sellers can mark a product non-returnable; that flag was never being honoured
+        const product: any = await Product.findById(orderItem.product).select("isReturnable productName").lean();
+        if (product && product.isReturnable === false) {
+            return res.status(400).json({
+                success: false,
+                message: `${product.productName || "This item"} is not eligible for return or replacement`
+            });
         }
 
         const requestedQuantity = Number(quantity) || orderItem.quantity;

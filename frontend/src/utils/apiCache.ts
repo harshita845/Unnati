@@ -55,6 +55,24 @@ class APICache {
   private isDispatching = false;
 
   /**
+   * Drop every cached entry matching a pattern, locally and silently: no events, no broadcast.
+   *
+   * A forced refresh clears its own cache before fetching. If that announced itself with
+   * `unnati_cache_invalidated`, every screen listening for it (the home page among them) would
+   * refetch, clear the cache again, and announce it again, forever. The loud versions below are
+   * for real changes (an admin saving something); a refresh must use this one.
+   */
+  deletePattern(pattern: string | RegExp): void {
+    const regex = typeof pattern === 'string' ? new RegExp(pattern) : pattern;
+    for (const key of Array.from(this.cache.keys())) {
+      if (regex.test(key)) {
+        this.cache.delete(key);
+        this.pendingRequests.delete(key);
+      }
+    }
+  }
+
+  /**
    * Delete a key from cache locally without firing invalidation events
    */
   delete(key: string): void {

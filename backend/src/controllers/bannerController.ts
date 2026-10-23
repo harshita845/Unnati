@@ -180,6 +180,9 @@ export const getFlashDeals = asyncHandler(async (req: Request, res: Response) =>
         seller: { $in: visible.map((v: any) => v._id) },
         status: 'Active',
         publish: true,
+        // A product hidden because its seller's subscription lapsed must drop out of the deals too,
+        // otherwise the home page keeps showing it and tapping it 404s on the product page.
+        subscriptionHidden: { $ne: true },
       })
         .select('_id')
         .lean();

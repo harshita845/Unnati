@@ -28,3 +28,6 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Safety copies written by one-off migration scripts
+backups/

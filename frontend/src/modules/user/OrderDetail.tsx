@@ -559,6 +559,20 @@ const SectionItem = ({
   </motion.button>
 );
 
+/** How many days after delivery a return may still be raised, as configured in admin. */
+const returnWindowDays = (config: { returnWindowDays?: number } | null | undefined) => {
+  const days = Number(config?.returnWindowDays ?? 7);
+  return Number.isFinite(days) && days >= 0 ? days : 7;
+};
+
+/** The server enforces this too; the screen checks it so it never offers a request that will fail. */
+const isWithinReturnWindow = (order: any, windowDays: number) => {
+  if (windowDays <= 0) return true; // 0 means no limit
+  const deliveredAt = order?.deliveredAt ? new Date(order.deliveredAt) : null;
+  if (!deliveredAt || Number.isNaN(deliveredAt.getTime())) return true;
+  return (Date.now() - deliveredAt.getTime()) / 86400000 <= windowDays;
+};
+
 export default function OrderDetail() {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
@@ -1607,7 +1621,14 @@ export default function OrderDetail() {
         </motion.div>
 
         {/* Return/Replace Buttons */}
-        {order?.status === "Delivered" && (
+        {/* The server refuses requests raised after the return window, so don't offer a button
+            that is going to fail — and say when it closed instead. */}
+        {order?.status === "Delivered" && !isWithinReturnWindow(order, returnWindowDays(config)) && (
+          <p className="mt-4 text-xs text-neutral-500 text-center">
+            The {returnWindowDays(config)}-day window for returns and replacements has closed for this order.
+          </p>
+        )}
+        {order?.status === "Delivered" && isWithinReturnWindow(order, returnWindowDays(config)) && (
           <motion.div
               className="flex gap-3 mt-4"
               initial={{ opacity: 0, y: 20 }}
@@ -1639,7 +1660,7 @@ export default function OrderDetail() {
                 )}
                  {replaceRequestStatus && (
                     <div className="flex justify-between items-center">
-                        <span className="text-gray-700 font-medium">Measurement Request:</span>
+                        <span className="text-gray-700 font-medium">Replacement Request:</span>
                         <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs font-bold uppercase">{replaceRequestStatus}</span>
                     </div>
                 )}

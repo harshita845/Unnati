@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useMemo } from 'react';
 import { getTheme, Theme } from '../utils/themes';
 import { getCachedHeaderCategoriesPublic, getHeaderCategoriesPublic } from '../services/api/headerCategoryService';
+import { detectModuleFromPath } from '../utils/moduleAuth';
 
 interface ThemeContextType {
     activeCategory: string;
@@ -28,9 +29,22 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     };
 
     useEffect(() => {
+        // Header-category themes only style the customer app; the admin, seller and delivery apps
+        // never read them, so don't fetch (or re-fetch on every focus) for those.
+        if (detectModuleFromPath() !== 'user') return;
+
+        let lastFetchAt = Date.now();
         fetchHeaderCategories(true);
 
-        const handleUpdate = () => fetchHeaderCategories(true);
+        const handleUpdate = () => {
+            lastFetchAt = Date.now();
+            fetchHeaderCategories(true);
+        };
+        // Coming back to the tab only needs a refresh if the list could actually be stale; real
+        // changes arrive through the events below.
+        const handleFocus = () => {
+            if (Date.now() - lastFetchAt > 60_000) handleUpdate();
+        };
         const handleContentUpdated = (e: any) => {
             const type = e?.detail?.type;
             if (!type || type === 'categories' || type === 'all') {
@@ -38,13 +52,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             }
         };
 
-        window.addEventListener('focus', handleUpdate);
+        window.addEventListener('focus', handleFocus);
         window.addEventListener('header_categories_updated', handleUpdate);
         window.addEventListener('unnati_categories_updated', handleUpdate);
         window.addEventListener('unnati_content_updated', handleContentUpdated);
 
         return () => {
-            window.removeEventListener('focus', handleUpdate);
+            window.removeEventListener('focus', handleFocus);
             window.removeEventListener('header_categories_updated', handleUpdate);
             window.removeEventListener('unnati_categories_updated', handleUpdate);
             window.removeEventListener('unnati_content_updated', handleContentUpdated);

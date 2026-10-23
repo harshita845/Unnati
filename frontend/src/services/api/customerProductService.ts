@@ -78,7 +78,9 @@ export const getProducts = async (params?: GetProductsParams, forceRefresh: bool
     const cacheKey = buildCacheKey('customer-products', params as Record<string, unknown> | undefined);
     if (forceRefresh) {
         apiCache.delete(cacheKey);
-        apiCache.invalidatePattern(/customer-products/, false);
+        // Silent: announcing this would make every listener (the home page) refetch, which lands
+        // back here, which announces it again — an endless refetch loop.
+        apiCache.deletePattern(/customer-products/);
     }
     return apiCache.getOrFetch(
         cacheKey,
@@ -123,7 +125,7 @@ export const getProductById = async (
     const cacheKey = buildCacheKey(`customer-product:${cleanId}`, params);
     if (forceRefresh) {
         apiCache.delete(cacheKey);
-        apiCache.invalidatePattern(new RegExp(`customer-product:${cleanId}`));
+        apiCache.deletePattern(new RegExp(`customer-product:${cleanId}`));
     }
     return apiCache.getOrFetch(
         cacheKey,

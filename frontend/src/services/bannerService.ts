@@ -1,6 +1,7 @@
 import api from './api/config';
 import { Banner, BannerPosition } from '../types/banner';
 import { notifyContentSync } from '../utils/apiCache';
+import { coalesce } from '../utils/coalesce';
 
 export interface DealsConfig {
   flashDealTargetDate: string;
@@ -41,7 +42,9 @@ export const bannerService = {
 
   getBannersByPosition: async (position: BannerPosition): Promise<Banner[]> => {
     try {
-      const res = await api.get<BannerResponse>(`/banners?position=${encodeURIComponent(position)}`);
+      const res = await coalesce(`banners:${position}`, () =>
+        api.get<BannerResponse>(`/banners?position=${encodeURIComponent(position)}`)
+      );
       if (res.data.success && Array.isArray(res.data.data)) {
          return res.data.data.map((b: any) => ({
             ...b,
@@ -106,7 +109,9 @@ export const bannerService = {
           /* no saved location: the server returns no deal products */
         }
       }
-      const res = await api.get<{success: boolean, data: DealsConfig}>('/flash-deals', { params });
+      const res = await coalesce(`deals-config:${JSON.stringify(params || {})}`, () =>
+        api.get<{success: boolean, data: DealsConfig}>('/flash-deals', { params })
+      );
       if (res.data.success && res.data.data) {
           return res.data.data;
       }

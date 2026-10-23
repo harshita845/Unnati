@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { getSellerPlanAccess } from "../../../services/sellerSubscriptionService";
 import Seller from "../../../models/Seller";
+import { offloadInlineImages, InlineImageUploadError } from "../../../services/inlineImageService";
 import { asyncHandler } from "../../../utils/asyncHandler";
 
 /**
@@ -121,6 +122,16 @@ export const updateSeller = asyncHandler(
     // Managed by the subscription system only
     delete updateData.subscriptionLocked;
     delete updateData.selectedPlan;
+
+    // Pictures sent as text go to Cloudinary; only the link is saved
+    try {
+      await offloadInlineImages(updateData);
+    } catch (error) {
+      if (error instanceof InlineImageUploadError) {
+        return res.status(502).json({ success: false, message: error.message });
+      }
+      throw error;
+    }
 
     if (updateData.status === "Approved") {
       const access = await getSellerPlanAccess(id, { fresh: true });

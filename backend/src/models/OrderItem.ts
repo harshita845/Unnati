@@ -29,7 +29,7 @@ export interface IOrderItem extends Document {
   isFreeGift?: boolean;
 
   // Status
-  status: "Pending" | "Shipped" | "Delivered" | "Cancelled" | "Returned";
+  status: "Pending" | "Shipped" | "Delivered" | "Cancelled" | "Returned" | "Replaced";
 
   // Warranty (snapshot at time of order)
   warrantyType?: "None" | "Warranty" | "Guarantee";
@@ -127,7 +127,7 @@ const OrderItemSchema = new Schema<IOrderItem>(
     // Status
     status: {
       type: String,
-      enum: ["Pending", "Shipped", "Delivered", "Cancelled", "Returned"],
+      enum: ["Pending", "Shipped", "Delivered", "Cancelled", "Returned", "Replaced"],
       default: "Pending",
     },
     // Warranty

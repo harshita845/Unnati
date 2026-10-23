@@ -1,8 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '../services/api/config';
+import { coalesce } from '../utils/coalesce';
 
 export interface PublicConfig {
     appName: string;
+    /** Days after delivery a return or replacement may still be requested */
+    returnWindowDays?: number;
     appLogo?: string;
     appFavicon?: string;
     contactPhone?: string;
@@ -67,7 +70,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const fetchConfig = useCallback(async () => {
         try {
             setLoading(true);
-            const response = await api.get(`/customer/config/public?t=${Date.now()}`);
+            const response = await coalesce('public-config', () => api.get(`/customer/config/public?t=${Date.now()}`));
             if (response.data.success) {
                 const newConfig = response.data.data;
                 setConfig(newConfig);

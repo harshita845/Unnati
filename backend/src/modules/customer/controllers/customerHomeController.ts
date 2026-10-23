@@ -568,33 +568,37 @@ export const getHomeContent = async (req: Request, res: Response) => {
       .sort({ order: 1 })
       .lean();
 
-    const promoCards = await Promise.all(
-      categoriesWithHeaderCategory.map(async (category: any) => {
-        // Get child categories (subcategories) for this category
-        const childCategories = await Category.find({
-          parentId: category._id,
-          status: "Active",
-        })
-          .select("name image _id")
-          .sort({ order: 1 })
-          .lean();
-
-        // Extract subcategory images
-        const subcategoryImages = childCategories
-          .map((child: any) => child.image)
-          .filter((img: string) => img && img.trim() !== "");
-
-        return {
-          id: category._id.toString(),
-          badge: "Up to 55% OFF", // Default badge, can be customized later
-          title: category.name,
-          categoryId: category._id.toString(),
-          slug: category.slug || category._id.toString(),
-          bgColor: "bg-yellow-50",
-          subcategoryImages: subcategoryImages, // All images included
-        };
+    // One query for every category's children, grouped here. This used to run a separate query
+    // per category (32 of them on your data, one more for each category you add), which was the
+    // biggest single cost of loading the home page.
+    const childImagesByParent = new Map<string, string[]>();
+    if (categoriesWithHeaderCategory.length > 0) {
+      const children = await Category.find({
+        parentId: { $in: categoriesWithHeaderCategory.map((c: any) => c._id) },
+        status: "Active",
       })
-    );
+        .select("image parentId")
+        .sort({ order: 1 })
+        .lean();
+      for (const child of children as any[]) {
+        const image = typeof child.image === "string" ? child.image.trim() : "";
+        if (!image) continue;
+        const key = String(child.parentId);
+        const list = childImagesByParent.get(key);
+        if (list) list.push(child.image);
+        else childImagesByParent.set(key, [child.image]);
+      }
+    }
+
+    const promoCards = categoriesWithHeaderCategory.map((category: any) => ({
+      id: category._id.toString(),
+      badge: "Up to 55% OFF", // Default badge, can be customized later
+      title: category.name,
+      categoryId: category._id.toString(),
+      slug: category.slug || category._id.toString(),
+      bgColor: "bg-yellow-50",
+      subcategoryImages: childImagesByParent.get(String(category._id)) || [], // All images included
+    }));
 
     // Fallback to hardcoded cards if no categories with headerCategoryId exist
     const finalPromoCards =

@@ -26,6 +26,7 @@ import { restoreOrderItemStock } from "../../../services/orderStockService";
 import Refund from "../../../models/Refund";
 import Customer from "../../../models/Customer";
 import { sendNotification } from "../../../services/notificationService";
+import { completeReturnRequest } from "../../../services/returnCompletionService";
 
 // Statuses a delivery partner may set directly; "Delivered" requires the customer's OTP
 // ("Ready for pickup" is set by the store once it has packed the order)
@@ -762,58 +763,15 @@ export const updateReturnTaskStatus = asyncHandler(async (req: Request, res: Res
     if (assignment.returnRequest) {
         const rReq = await Return.findById(assignment.returnRequest);
         if (rReq) {
-            const alreadyCompleted = rReq.status === "Completed";
             if (status === "Picked Up") {
                 rReq.status = "Picked Up";
                 rReq.pickupCompleted = new Date();
+                await rReq.save();
             } else if (status === "Delivered") {
-                rReq.status = "Completed";
-
-                if (!alreadyCompleted) {
-                    const orderItem: any = await OrderItem.findById(rReq.orderItem);
-                    if (orderItem) {
-                        // The item is physically back at the store either way — put it back into stock
-                        await restoreOrderItemStock({
-                            product: orderItem.product,
-                            variantId: orderItem.variantId,
-                            variation: orderItem.variation,
-                            quantity: rReq.quantity,
-                        });
-
-                        if (rReq.requestType === "Return") {
-                            orderItem.status = "Returned";
-                            await orderItem.save();
-
-                            // Refund the customer: the amount set at approval, or the item's own price
-                            const amount = rReq.refundAmount || Math.round((orderItem.unitPrice || 0) * rReq.quantity * 100) / 100;
-                            if (amount > 0) {
-                                const refund = await Refund.create({
-                                    order: rReq.order,
-                                    customer: rReq.customer,
-                                    amount,
-                                    reason: `Return: ${rReq.reason || "Item returned"}`,
-                                    status: "Completed",
-                                    processedAt: new Date(),
-                                });
-                                // walletAmount is a read-only virtual alias for creditBalance — update the real field
-                                await Customer.updateOne({ _id: rReq.customer }, { $inc: { creditBalance: amount } });
-                                rReq.refundAmount = amount;
-                                rReq.refundId = refund._id as any;
-                                refundIssued = amount;
-                                sendNotification(
-                                    "Customer",
-                                    String(rReq.customer),
-                                    "Refund credited",
-                                    `₹${amount} for your return has been credited to your Unnati wallet.`,
-                                    { type: "Payment", priority: "High" }
-                                ).catch((err) => console.error("Return refund notification failed:", err));
-                            }
-                        }
-                        // Replacement: the old item is restocked above; no refund (a new item is owed instead).
-                    }
-                }
+                // Stock and money are settled in one place, shared with the seller and admin screens
+                const outcome = await completeReturnRequest(rReq);
+                refundIssued = outcome.refundIssued;
             }
-            await rReq.save();
         }
     }
 

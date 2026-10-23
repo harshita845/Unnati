@@ -112,6 +112,38 @@ export const restoreOrderItemStock = async (orderItem: any, session?: Session) =
 };
 
 /**
+ * Take stock for one order line again — the unit sent out to replace a returned item.
+ * Mirrors restoreOrderItemStock, including the fallback for orders saved before variantId existed.
+ * Returns false when there is not enough stock, so the caller can refund instead of shipping.
+ */
+export const takeOrderItemStock = async (orderItem: any, quantity: number, session?: Session) => {
+  if (!orderItem?.product || !quantity) return false;
+
+  let variantId = orderItem.variantId ? String(orderItem.variantId) : undefined;
+  if (!variantId) {
+    const product = await Product.findById(orderItem.product)
+      .select("variations")
+      .session(session || null)
+      .lean();
+    const variation = resolveOrderVariation(product, undefined, orderItem.variation);
+    variantId = variation?._id ? String(variation._id) : undefined;
+  }
+
+  if (variantId) {
+    const updated = await reserveVariantStock(orderItem.product, variantId, quantity, session);
+    return Boolean(updated);
+  }
+
+  // No variation to target: only take it if the product-level stock covers it
+  const updated = await Product.findOneAndUpdate(
+    { _id: orderItem.product, stock: { $gte: quantity } },
+    { $inc: { stock: -quantity } },
+    { new: true, session: session || undefined }
+  );
+  return Boolean(updated);
+};
+
+/**
  * Restore stock for every still-active line of an order and mark the lines Cancelled.
  */
 export const restoreOrderStock = async (orderId: string | mongoose.Types.ObjectId, session?: Session) => {

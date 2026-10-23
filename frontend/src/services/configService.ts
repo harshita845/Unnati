@@ -6,6 +6,8 @@ export interface AppConfig {
     freeDeliveryThreshold: number;
     platformFee: number;
     giftPackagingFee: number;
+    /** Days after delivery a return or replacement may still be requested */
+    returnWindowDays: number;
     taxes: {
         gst: number;
     };
@@ -38,6 +40,7 @@ export const defaultConfig: AppConfig = {
     freeDeliveryThreshold: 199,
     platformFee: 0,
     giftPackagingFee: 30,
+    returnWindowDays: 7,
     taxes: {
         gst: 18
     },

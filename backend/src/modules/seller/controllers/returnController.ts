@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import mongoose from "mongoose";
 import Return from "../../../models/Return";
+import { completeReturnRequest } from "../../../services/returnCompletionService";
 import Order from "../../../models/Order";
 import OrderItem from "../../../models/OrderItem";
 import Seller from "../../../models/Seller";
@@ -237,7 +238,15 @@ export const updateReturnStatus = asyncHandler(
       }
     }
 
-    const updatedReturn = await Return.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+    let updatedReturn = await Return.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+
+    // Marking a return Completed has to settle it: restore the stock and pay the customer back.
+    // This screen used to only change the status, so the refund never reached anyone.
+    let completion = null;
+    if (status === "Completed" && updatedReturn) {
+      completion = await completeReturnRequest(updatedReturn);
+      updatedReturn = await Return.findById(id);
+    }
 
     if (assignedDeliveryBoy) {
       const io = req.app.get("io");
@@ -255,6 +264,7 @@ export const updateReturnStatus = asyncHandler(
         ? { warning: "Approved, but no delivery partner is available for pickup yet. Admin can assign one." }
         : {}),
       data: { ...updatedReturn!.toObject(), deliveryBoy: assignedDeliveryBoy },
+      completion,
     });
   }
 );

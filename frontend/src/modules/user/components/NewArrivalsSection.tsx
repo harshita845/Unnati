@@ -17,7 +17,8 @@ export default function NewArrivalsSection() {
       try {
         const response = await getProducts({
           limit: 12,
-          sort: 'price_asc', // or newest
+          // No sort: the server's default is newest first. This used to ask for price_asc, which
+          // (prices live on the variations) returned the oldest seeded products, not new ones.
           latitude: location?.latitude,
           longitude: location?.longitude,
           city: location?.city,

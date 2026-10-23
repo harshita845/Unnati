@@ -1,5 +1,6 @@
 import api from "./config";
 import { apiCache } from "../../utils/apiCache";
+import { coalesce } from "../../utils/coalesce";
 
 export interface HomeContentResponse {
   success: boolean;
@@ -82,11 +83,15 @@ export const getHomeContent = async (
     return response.data;
   };
 
+  // The home payload is large and several effects ask for it as the page opens; identical calls
+  // made together share one request (the cache-busting _t is added inside, so it can't split them)
+  const shared = () => coalesce(`${cacheKey}|fresh=${forceRefresh || !useCache}`, fetchFn);
+
   if (useCache && !forceRefresh) {
-    return apiCache.getOrFetch(cacheKey, fetchFn, cacheTTL);
+    return apiCache.getOrFetch(cacheKey, shared, cacheTTL);
   }
 
-  return fetchFn();
+  return shared();
 };
 
 
