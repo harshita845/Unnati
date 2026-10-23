@@ -100,6 +100,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     useEffect(() => {
         fetchConfig();
+
+        const handleUpdate = () => {
+            fetchConfig();
+        };
+
+        window.addEventListener('unnati_content_updated', handleUpdate);
+        window.addEventListener('focus', handleUpdate);
+
+        return () => {
+            window.removeEventListener('unnati_content_updated', handleUpdate);
+            window.removeEventListener('focus', handleUpdate);
+        };
     }, [fetchConfig]);
 
     return (

@@ -62,6 +62,22 @@ export default function AdminDeliverySettings() {
           type: 'number',
           value: 0,
           prefix: '₹'
+        },
+        {
+          id: 'platform_fee',
+          label: 'Handling Charge',
+          description: 'Added to every order and shown as "Handling charge" at checkout.',
+          type: 'number',
+          value: 0,
+          prefix: '₹'
+        },
+        {
+          id: 'gift_packaging_fee',
+          label: 'Gift Packaging Fee',
+          description: 'Charged only when the customer asks for gift packaging.',
+          type: 'number',
+          value: 0,
+          prefix: '₹'
         }
       ]
     },
@@ -112,6 +128,10 @@ export default function AdminDeliverySettings() {
                     return { ...field, value: settings.deliveryCharges ?? 0 };
                   case 'free_delivery_above':
                     return { ...field, value: settings.freeDeliveryThreshold ?? 0 };
+                  case 'platform_fee':
+                    return { ...field, value: settings.platformFee ?? 0 };
+                  case 'gift_packaging_fee':
+                    return { ...field, value: settings.giftPackagingFee ?? 0 };
                   case 'service_type':
                     return { ...field, value: settings.serviceType || 'Delivery + Pickup' };
                   default:
@@ -172,6 +192,8 @@ export default function AdminDeliverySettings() {
         deliveryRadius: Number(getFieldValue('delivery_radius')),
         deliveryCharges: Number(getFieldValue('delivery_fee')),
         freeDeliveryThreshold: Number(getFieldValue('free_delivery_above')),
+        platformFee: Number(getFieldValue('platform_fee')),
+        giftPackagingFee: Number(getFieldValue('gift_packaging_fee')),
         serviceType: String(getFieldValue('service_type')),
         onlinePaymentDiscount: {
           enabled: getFieldValue('discount_enabled', 'payment_discount') === 'Yes',

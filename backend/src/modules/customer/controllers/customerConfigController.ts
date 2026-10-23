@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import AppSettings from "../../../models/AppSettings";
+import { getGiftPackagingFee, getPlatformFee } from "../../../services/orderPricingService";
 
 /**
  * Get public application configuration
@@ -17,7 +18,8 @@ export const getPublicConfig = asyncHandler(
     const defaultConfig = {
       deliveryFee: 40,
       freeDeliveryThreshold: 199,
-      platformFee: 2,
+      platformFee: 0,
+      giftPackagingFee: 30,
       taxes: { gst: 18 },
       estimatedDeliveryTime: "12-15 mins",
       deliveryRadius: 10,
@@ -42,7 +44,8 @@ export const getPublicConfig = asyncHandler(
         freeDeliveryThreshold: settings.freeDeliveryThreshold ?? defaultConfig.freeDeliveryThreshold,
         deliveryRadius: settings.deliveryRadius ?? defaultConfig.deliveryRadius,
         serviceType: settings.serviceType ?? defaultConfig.serviceType,
-        platformFee: defaultConfig.platformFee,
+        platformFee: getPlatformFee(settings),
+        giftPackagingFee: getGiftPackagingFee(settings),
         taxes: {
           gst: settings.gstEnabled ? (settings.gstRate ?? 18) : 0
         },

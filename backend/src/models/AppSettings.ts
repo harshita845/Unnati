@@ -141,6 +141,10 @@ export interface IAppSettings extends Document {
   // Delivery Settings
   deliveryCharges: number;
   freeDeliveryThreshold?: number;
+  /** Handling fee added to every order (shown as "Handling charge" at checkout) */
+  platformFee?: number;
+  /** Charged when the customer asks for gift packaging */
+  giftPackagingFee?: number;
   deliveryRadius?: number;
   serviceType?: string;
 
@@ -490,6 +494,16 @@ const AppSettingsSchema = new Schema<IAppSettings>(
     freeDeliveryThreshold: {
       type: Number,
       min: [0, "Free delivery threshold cannot be negative"],
+    },
+    platformFee: {
+      type: Number,
+      default: 0,
+      min: [0, "Handling fee cannot be negative"],
+    },
+    giftPackagingFee: {
+      type: Number,
+      default: 30,
+      min: [0, "Gift packaging fee cannot be negative"],
     },
     deliveryRadius: {
       type: Number,

@@ -75,6 +75,10 @@ export interface AppSettings {
   defaultCommission: number;
   deliveryCharges: number;
   freeDeliveryThreshold?: number;
+  /** Handling charge added to every order */
+  platformFee?: number;
+  /** Charged only when the customer asks for gift packaging */
+  giftPackagingFee?: number;
   deliveryRadius?: number;
   serviceType?: string;
   gstEnabled: boolean;

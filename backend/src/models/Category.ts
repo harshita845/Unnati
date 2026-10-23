@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema, Model } from "mongoose";
+import { announceChangesOn } from "../socket/contentBroadcast";
 
 /** Subscription frequencies an admin can enable per category. */
 export const SUBSCRIPTION_PLANS = ["daily", "weekly", "monthly", "yearly"] as const;
@@ -177,6 +178,9 @@ CategorySchema.methods.getAllDescendants = async function () {
 
   return descendants;
 };
+
+// Changes here reach the customer app live (see contentBroadcast)
+announceChangesOn(CategorySchema, "categories");
 
 const Category = mongoose.model<ICategory, ICategoryModel>(
   "Category",

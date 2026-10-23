@@ -186,10 +186,13 @@ export const notifyContentSync = (
     apiCache.delete('customer-categories-list-true');
     apiCache.delete('header-categories-public');
     apiCache.invalidatePattern(/categor/, false);
+    apiCache.invalidatePattern(/header-categor/, false);
+    apiCache.invalidatePattern(/home-content/, false);
   }
   if (type === 'products' || type === 'all') {
     apiCache.invalidatePattern(/product/, false);
     apiCache.invalidatePattern(/search/, false);
+    apiCache.invalidatePattern(/home-content/, false);
   }
   if (type === 'banners' || type === 'promo' || type === 'deals' || type === 'home' || type === 'all') {
     apiCache.invalidatePattern(/home-content/, false);
@@ -201,6 +204,7 @@ export const notifyContentSync = (
   window.dispatchEvent(new CustomEvent('unnati_content_updated', { detail }));
   if (type === 'categories' || type === 'all') {
     window.dispatchEvent(new CustomEvent('unnati_categories_updated', { detail }));
+    window.dispatchEvent(new CustomEvent('header_categories_updated', { detail }));
     window.dispatchEvent(new CustomEvent('unnati_cache_invalidated', { detail: { type: 'clear', pattern: 'categor' } }));
   }
   if (type === 'products' || type === 'all') {
@@ -214,6 +218,9 @@ export const notifyContentSync = (
   }
   if (type === 'promo' || type === 'all') {
     window.dispatchEvent(new CustomEvent('unnati_promo_updated', { detail }));
+  }
+  if (type === 'home' || type === 'all') {
+    window.dispatchEvent(new CustomEvent('unnati_home_updated', { detail }));
   }
 
   // 3. Post to BroadcastChannel and localStorage for other tabs
@@ -240,12 +247,18 @@ if (typeof window !== 'undefined') {
         apiCache.clear(false);
       } else if (data?.type === 'content_updated') {
         notifyContentSync(data.contentType || 'all', false);
-      } else if (data?.type === 'categories_updated') {
+      } else if (data?.type === 'categories_updated' || data?.type === 'header_categories_updated') {
         notifyContentSync('categories', false);
       } else if (data?.type === 'banners_updated') {
         notifyContentSync('banners', false);
       } else if (data?.type === 'product_updated') {
         notifyContentSync('products', false);
+      } else if (data?.type === 'deals_updated') {
+        notifyContentSync('deals', false);
+      } else if (data?.type === 'promo_updated') {
+        notifyContentSync('promo', false);
+      } else if (data?.type === 'home_updated') {
+        notifyContentSync('home', false);
       }
     };
   }

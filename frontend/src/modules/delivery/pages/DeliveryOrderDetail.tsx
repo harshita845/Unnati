@@ -138,6 +138,9 @@ export default function DeliveryOrderDetail() {
             if (!silent) setLoading(true);
             const data = await getOrderDetails(id);
             setOrder(data);
+            if (['Delivered', 'Cancelled', 'Returned', 'Rejected'].includes(data?.status)) {
+                setPickupNotice(null);
+            }
         } catch (err: any) {
             if (!silent) setError(err.message || 'Failed to load order details');
         } finally {
@@ -231,6 +234,7 @@ export default function DeliveryOrderDetail() {
         try {
             setOtpVerifying(true);
             const result = await verifyDeliveryOtp(id, otpValue);
+            setPickupNotice(null);
             alert(result.message || 'OTP verified successfully. Order marked as delivered.');
             await fetchOrder(); // Refresh order data
             setShowOtpInput(false);
@@ -486,7 +490,7 @@ export default function DeliveryOrderDetail() {
     const isMapVisible = !terminal && (mapStores.length > 0 || (headingToCustomer && hasCustomerCoords));
 
     return (
-        <div className="min-h-screen bg-neutral-50 pb-32 relative">
+        <div className="min-h-screen bg-neutral-50 pb-44 relative">
 
             {/* Top Bar with Back Button */}
             <div className="sticky top-0 z-20 bg-white border-b border-neutral-100 px-4 py-3 flex items-center shadow-sm">
@@ -537,11 +541,11 @@ export default function DeliveryOrderDetail() {
                 />
             )}
 
-            {pickupNotice && (
-                <div className="mx-4 mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-800 flex items-start gap-2">
+            {pickupNotice && !terminal && (
+                <div className="mx-4 mt-4 max-w-lg sm:mx-auto rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-800 flex items-start gap-2">
                     <Icons.CheckCircle size={18} className="shrink-0 mt-0.5" />
                     <span className="flex-1">{pickupNotice}</span>
-                    <button onClick={() => setPickupNotice(null)} className="text-emerald-700 text-xs font-semibold">OK</button>
+                    <button onClick={() => setPickupNotice(null)} className="text-emerald-700 text-xs font-semibold hover:underline">OK</button>
                 </div>
             )}
 
@@ -801,65 +805,67 @@ export default function DeliveryOrderDetail() {
                 </div>
             )}
 
-            {/* Action dock: one clear next step at a time */}
+            {/* Action dock: one clear next step at a time, pinned right above bottom navigation */}
             {!showOtpInput && !terminal && (
-                <div className="fixed bottom-20 sm:bottom-24 left-3 right-3 sm:left-4 sm:right-4 max-w-lg mx-auto z-30 box-border">
-                    {isOffer ? (
-                        waitingForStores ? (
-                            <div className="w-full py-3.5 px-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs sm:text-sm font-semibold text-center shadow-lg whitespace-normal break-words box-border">
-                                Waiting for every store to accept this order
+                <div className="fixed bottom-16 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-neutral-200/80 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 py-3">
+                    <div className="max-w-lg mx-auto w-full">
+                        {isOffer ? (
+                            waitingForStores ? (
+                                <div className="w-full py-3.5 px-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs sm:text-sm font-semibold text-center whitespace-normal break-words">
+                                    Waiting for every store to accept this order
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={handleAcceptOffer}
+                                    disabled={actionBusy}
+                                    className="w-full py-3.5 px-4 rounded-xl bg-[var(--primary-dark)] hover:bg-[var(--primary-darker)] text-white font-bold text-sm sm:text-base shadow-md active:scale-[0.98] disabled:opacity-60 whitespace-normal break-words transition-all text-center"
+                                >
+                                    {actionBusy ? 'Accepting…' : 'Accept order'}
+                                </button>
+                            )
+                        ) : collecting ? (
+                            <div className="flex items-center gap-2 sm:gap-3 w-full">
+                                <button
+                                    onClick={() => openBarcodeScanner(() => setShowScanner(true))}
+                                    className="w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded-xl bg-neutral-900 text-white flex items-center justify-center shadow-md active:scale-95 transition-all"
+                                    title="Scan the store's pickup code"
+                                    aria-label="Scan the store's pickup code"
+                                >
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><rect x="7" y="7" width="10" height="10" rx="1"></rect>
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={() => setShowScanner(true)}
+                                    disabled={actionBusy || !remainingStores.some((st) => st.ready)}
+                                    className="flex-1 min-w-0 py-3.5 px-3 sm:px-4 rounded-xl bg-neutral-900 text-white font-bold text-xs sm:text-sm shadow-md active:scale-[0.98] disabled:opacity-60 text-center leading-tight whitespace-normal break-words transition-all"
+                                >
+                                    <span className="line-clamp-2">
+                                        {actionBusy
+                                            ? 'Verifying…'
+                                            : remainingStores.some((st) => st.ready)
+                                                ? `Verify pickup${nextStop?.type === 'store' ? ` at ${nextStop.storeName}` : ''}`
+                                                : `Waiting for ${remainingStores.map((st) => st.storeName).join(', ')} to pack`}
+                                    </span>
+                                </button>
                             </div>
-                        ) : (
+                        ) : readyToStart ? (
                             <button
-                                onClick={handleAcceptOffer}
+                                onClick={handleStartDelivery}
                                 disabled={actionBusy}
-                                className="w-full py-3.5 px-4 rounded-2xl bg-[var(--primary-dark)] text-white font-bold text-sm sm:text-base shadow-xl active:scale-[0.98] disabled:opacity-60 whitespace-normal break-words box-border"
+                                className="w-full py-3.5 px-4 rounded-xl bg-[var(--primary-dark)] hover:bg-[var(--primary-darker)] text-white font-bold text-sm sm:text-base shadow-md active:scale-[0.98] disabled:opacity-60 text-center leading-snug whitespace-normal break-words transition-all"
                             >
-                                {actionBusy ? 'Accepting…' : 'Accept order'}
+                                {actionBusy ? 'Starting…' : 'All stores collected: start delivery'}
                             </button>
-                        )
-                    ) : collecting ? (
-                        <div className="flex items-center gap-2 sm:gap-3 w-full box-border">
+                        ) : outForDelivery ? (
                             <button
-                                onClick={() => openBarcodeScanner(() => setShowScanner(true))}
-                                className="w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded-2xl bg-neutral-900 text-white flex items-center justify-center shadow-lg active:scale-95"
-                                title="Scan the store's pickup code"
-                                aria-label="Scan the store's pickup code"
+                                onClick={() => setShowOtpInput(true)}
+                                className="w-full py-3.5 px-4 rounded-xl bg-[var(--primary-dark)] hover:bg-[var(--primary-darker)] text-white font-bold text-sm sm:text-base shadow-md active:scale-[0.98] text-center whitespace-normal break-words transition-all"
                             >
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><rect x="7" y="7" width="10" height="10" rx="1"></rect>
-                                </svg>
+                                Enter delivery OTP
                             </button>
-                            <button
-                                onClick={() => setShowScanner(true)}
-                                disabled={actionBusy || !remainingStores.some((st) => st.ready)}
-                                className="flex-1 min-w-0 py-3 px-3 sm:px-4 rounded-2xl bg-neutral-900 text-white font-bold text-xs sm:text-sm shadow-xl active:scale-[0.98] disabled:opacity-60 text-center leading-tight whitespace-normal break-words box-border"
-                            >
-                                <span className="line-clamp-2">
-                                    {actionBusy
-                                        ? 'Verifying…'
-                                        : remainingStores.some((st) => st.ready)
-                                            ? `Verify pickup${nextStop?.type === 'store' ? ` at ${nextStop.storeName}` : ''}`
-                                            : `Waiting for ${remainingStores.map((st) => st.storeName).join(', ')} to pack`}
-                                </span>
-                            </button>
-                        </div>
-                    ) : readyToStart ? (
-                        <button
-                            onClick={handleStartDelivery}
-                            disabled={actionBusy}
-                            className="w-full py-3.5 px-4 rounded-2xl bg-[var(--primary-dark)] text-white font-bold text-sm sm:text-base shadow-xl active:scale-[0.98] disabled:opacity-60 text-center leading-snug whitespace-normal break-words box-border"
-                        >
-                            {actionBusy ? 'Starting…' : 'All stores collected: start delivery'}
-                        </button>
-                    ) : outForDelivery ? (
-                        <button
-                            onClick={() => setShowOtpInput(true)}
-                            className="w-full py-3.5 px-4 rounded-2xl bg-[var(--primary-dark)] text-white font-bold text-sm sm:text-base shadow-xl active:scale-[0.98] text-center whitespace-normal break-words box-border"
-                        >
-                            Enter delivery OTP
-                        </button>
-                    ) : null}
+                        ) : null}
+                    </div>
                 </div>
             )}
 

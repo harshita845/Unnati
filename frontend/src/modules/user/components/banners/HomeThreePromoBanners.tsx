@@ -72,12 +72,22 @@ export default function HomeThreePromoBanners() {
     loadBanners(false);
 
     const handleUpdate = () => loadBanners(true);
+    const handleContentUpdate = (e: any) => {
+      const type = e?.detail?.type;
+      if (!type || type === 'banners' || type === 'categories' || type === 'all') {
+        loadBanners(true);
+      }
+    };
+    window.addEventListener("unnati_banners_updated", handleUpdate);
     window.addEventListener("unnati_categories_updated", handleUpdate);
+    window.addEventListener("unnati_content_updated", handleContentUpdate);
     window.addEventListener("focus", handleUpdate);
 
     return () => {
       isMounted = false;
+      window.removeEventListener("unnati_banners_updated", handleUpdate);
       window.removeEventListener("unnati_categories_updated", handleUpdate);
+      window.removeEventListener("unnati_content_updated", handleContentUpdate);
       window.removeEventListener("focus", handleUpdate);
     };
   }, []);

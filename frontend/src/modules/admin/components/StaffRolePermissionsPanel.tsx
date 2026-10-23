@@ -191,7 +191,6 @@ const ADMIN_SIDEBAR_SECTIONS: Array<{
       { label: 'Brand', path: '/admin/brand' },
       { label: 'Product', path: '/admin/product' },
       { label: 'Product List', path: '/admin/product/list' },
-      { label: 'Product Photos', path: '/admin/product/photos' },
       { label: 'Stock Transfer', path: '/admin/product/stock-transfer' },
       { label: 'Taxes', path: '/admin/product/taxes' },
       { label: 'Attribute Setup', path: '/admin/product/attribute-setup' },

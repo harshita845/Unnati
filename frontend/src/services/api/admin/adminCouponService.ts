@@ -1,6 +1,5 @@
 import api from "../config";
-
-
+import { notifyContentSync } from "../../../utils/apiCache";
 import { ApiResponse } from "./types";
 
 export interface Coupon {
@@ -77,6 +76,7 @@ export const createCoupon = async (
   data: CreateCouponData
 ): Promise<ApiResponse<Coupon>> => {
   const response = await api.post<ApiResponse<Coupon>>("/admin/coupons", data);
+  notifyContentSync("deals");
   return response.data;
 };
 
@@ -113,6 +113,7 @@ export const updateCoupon = async (
     `/admin/coupons/${id}`,
     data
   );
+  notifyContentSync("deals");
   return response.data;
 };
 
@@ -121,6 +122,7 @@ export const updateCoupon = async (
  */
 export const deleteCoupon = async (id: string): Promise<ApiResponse<void>> => {
   const response = await api.delete<ApiResponse<void>>(`/admin/coupons/${id}`);
+  notifyContentSync("deals");
   return response.data;
 };
 

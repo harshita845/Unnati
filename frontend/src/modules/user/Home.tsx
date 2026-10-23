@@ -103,6 +103,42 @@ function LazyProductGrid({
   );
 }
 
+function injectSellerCategories(data: any) {
+  if (!data) return data;
+  const finalData = { ...data };
+  const sellerCatsStorage = typeof window !== 'undefined' ? localStorage.getItem('seller_own_categories') : null;
+  if (sellerCatsStorage) {
+    try {
+      const sellerCats = JSON.parse(sellerCatsStorage);
+      const activeSellerCats = (sellerCats as any[]).filter(
+        (c) => c && (c.status === undefined || c.status === 'Active')
+      );
+      if (activeSellerCats.length > 0) {
+        const sellerSection = {
+          id: 'seller-categories-section-home',
+          title: 'Seller Categories',
+          type: 'category',
+          displayType: 'category',
+          columns: 4,
+          data: activeSellerCats.map((c: any) => ({
+            id: c._id,
+            name: c.name,
+            image: c.image,
+            categoryId: c._id,
+            type: 'category',
+            productImages: [c.image],
+            itemCount: c.totalSubcategory || 0
+          }))
+        };
+        const existingSections = finalData.homeSections || [];
+        finalData.homeSections = [...existingSections, sellerSection];
+      }
+    } catch (e) {
+      console.error("Error parsing seller categories in Home", e);
+    }
+  }
+  return finalData;
+}
 
 export default function Home() {
   const navigate = useNavigate();
@@ -184,47 +220,7 @@ export default function Home() {
         const response = await getHomeContent(undefined, location?.latitude, location?.longitude, true, 5 * 60 * 1000, true, location?.city);
         if (stale) return;
         if (response.success && response.data) {
-          const finalData = { ...response.data };
-
-          // Inject Seller Categories into homeSections. Customers must only
-          // see Active seller-own categories — when a seller marks one as
-          // Inactive on their portal it should disappear from the storefront.
-          // Missing `status` is treated as Active for back-compat with legacy
-          // localStorage payloads.
-          const sellerCatsStorage = localStorage.getItem('seller_own_categories');
-          if (sellerCatsStorage) {
-            try {
-              const sellerCats = JSON.parse(sellerCatsStorage);
-              const activeSellerCats = (sellerCats as any[]).filter(
-                (c) => c && (c.status === undefined || c.status === 'Active')
-              );
-              if (activeSellerCats.length > 0) {
-                 const sellerSection = {
-                      id: 'seller-categories-section-home',
-                      title: 'Seller Categories',
-                      type: 'category',
-                      displayType: 'category',
-                      columns: 4,
-                      data: activeSellerCats.map((c: any) => ({
-                          id: c._id,
-                          name: c.name,
-                          image: c.image,
-                          categoryId: c._id,
-                          type: 'category',
-                          productImages: [c.image],
-                          itemCount: c.totalSubcategory || 0
-                      }))
-                  };
-
-                  // Append to homeSections if it exists, or create it
-                  const existingSections = finalData.homeSections || [];
-                  finalData.homeSections = [...existingSections, sellerSection];
-              }
-            } catch (e) {
-              console.error("Error parsing seller categories in Home", e);
-            }
-          }
-
+          const finalData = injectSellerCategories(response.data);
           setHomeData(finalData);
 
           try {
@@ -491,7 +487,7 @@ export default function Home() {
           if (!activeTab || activeTab === "all") {
             const response = await getHomeContent(undefined, location?.latitude, location?.longitude, false, 0, true, location?.city, true);
             if (response.success && response.data) {
-              setHomeData(response.data);
+              setHomeData(injectSellerCategories(response.data));
             }
             const allProductsRes = await getCustomerProducts({
               page: 1,
@@ -533,9 +529,11 @@ export default function Home() {
 
     window.addEventListener("unnati_content_updated", handleContentUpdated);
     window.addEventListener("unnati_categories_updated", handleContentUpdated);
+    window.addEventListener("header_categories_updated", handleContentUpdated);
     window.addEventListener("unnati_banners_updated", handleContentUpdated);
     window.addEventListener("unnati_deals_updated", handleContentUpdated);
     window.addEventListener("unnati_promo_updated", handleContentUpdated);
+    window.addEventListener("unnati_home_updated", handleContentUpdated);
     window.addEventListener("productUpdated", handleContentUpdated);
     window.addEventListener("unnati_cache_invalidated", handleContentUpdated);
     window.addEventListener("focus", handleContentUpdated);
@@ -547,8 +545,12 @@ export default function Home() {
           if (
             event.data?.type === "content_updated" ||
             event.data?.type === "categories_updated" ||
+            event.data?.type === "header_categories_updated" ||
             event.data?.type === "banners_updated" ||
             event.data?.type === "product_updated" ||
+            event.data?.type === "deals_updated" ||
+            event.data?.type === "promo_updated" ||
+            event.data?.type === "home_updated" ||
             event.data?.pattern
           ) {
             handleContentUpdated();
@@ -561,9 +563,11 @@ export default function Home() {
       if (refreshTimeout) clearTimeout(refreshTimeout);
       window.removeEventListener("unnati_content_updated", handleContentUpdated);
       window.removeEventListener("unnati_categories_updated", handleContentUpdated);
+      window.removeEventListener("header_categories_updated", handleContentUpdated);
       window.removeEventListener("unnati_banners_updated", handleContentUpdated);
       window.removeEventListener("unnati_deals_updated", handleContentUpdated);
       window.removeEventListener("unnati_promo_updated", handleContentUpdated);
+      window.removeEventListener("unnati_home_updated", handleContentUpdated);
       window.removeEventListener("productUpdated", handleContentUpdated);
       window.removeEventListener("unnati_cache_invalidated", handleContentUpdated);
       window.removeEventListener("focus", handleContentUpdated);

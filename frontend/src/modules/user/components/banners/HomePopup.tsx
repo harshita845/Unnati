@@ -27,6 +27,22 @@ export default function HomePopup() {
       }
     };
     fetchBanners();
+
+    const handleUpdate = () => fetchBanners();
+    const handleContentUpdate = (e: any) => {
+      const type = e?.detail?.type;
+      if (!type || type === 'banners' || type === 'all') {
+        fetchBanners();
+      }
+    };
+
+    window.addEventListener('unnati_banners_updated', handleUpdate);
+    window.addEventListener('unnati_content_updated', handleContentUpdate);
+
+    return () => {
+      window.removeEventListener('unnati_banners_updated', handleUpdate);
+      window.removeEventListener('unnati_content_updated', handleContentUpdate);
+    };
   }, []);
 
   const handleClose = () => {

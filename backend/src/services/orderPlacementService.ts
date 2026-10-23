@@ -9,24 +9,22 @@ import { resolveCartLinePricing } from "../modules/product/cartProductHelper";
 import { resolveOrderVariation, reserveVariantStock } from "./orderStockService";
 import {
   FIRST_ORDER_OFFER_CODE,
-  resolveFirstOrderOfferDiscount,
 } from "./firstOrderOfferService";
-import { calculateCartRuleDiscount, getActiveCartRules } from "./cartRuleService";
+import { getActiveCartRules } from "./cartRuleService";
 import {
   CouponError,
-  GIFT_PACKAGING_FEE,
+  computeOrderTotals,
   calculateDeliveryFee,
+  getPlatformFee,
   consumeCoupon,
   getAppSettings,
   resolveCoupon,
   round2,
-  sanitizeTip,
 } from "./orderPricingService";
 
 /** Unpaid online orders hold their stock for this long before it is released. */
 export const ONLINE_PAYMENT_WINDOW_MINUTES = 30;
 // Checkout shows no handling charge (Checkout.tsx handlingCharge = 0).
-const PLATFORM_FEE = 0;
 
 const ONLINE_GATEWAYS = ["Razorpay", "Cashfree"];
 
@@ -255,21 +253,13 @@ export const placeOrder = async (
     }
   }
 
-  // 4. Totals — same formula as the checkout page
-  const deliveryFee = calculateDeliveryFee(settings, paidSubtotal);
-  const subtotalBeforeCoupon = paidSubtotal + PLATFORM_FEE + deliveryFee;
-  const firstOrderDiscount = resolveFirstOrderOfferDiscount(settings?.firstOrderOffer, customer, subtotalBeforeCoupon);
-  const cartRuleDiscount = calculateCartRuleDiscount(
-    cartRules,
-    paidSubtotal,
-    Math.max(0, subtotalBeforeCoupon - firstOrderDiscount)
-  );
-
+  // 4. Totals — the same function the checkout quote uses, so the amount shown is the amount charged
+  const subtotalForCoupon = paidSubtotal + getPlatformFee(settings) + calculateDeliveryFee(settings, paidSubtotal);
   let couponDiscount = 0;
   let couponCode: string | undefined;
   if (body?.couponCode) {
     try {
-      const { coupon, discount } = await resolveCoupon(body.couponCode, subtotalBeforeCoupon, userId, session);
+      const { coupon, discount } = await resolveCoupon(body.couponCode, subtotalForCoupon, userId, session);
       await consumeCoupon(coupon._id as mongoose.Types.ObjectId, session);
       couponDiscount = discount;
       couponCode = coupon.code;
@@ -279,28 +269,26 @@ export const placeOrder = async (
     }
   }
 
-  const tipAmount = sanitizeTip(body?.tipAmount);
-  const giftPackagingFee = body?.giftPackaging ? GIFT_PACKAGING_FEE : 0;
+  const totals = computeOrderTotals({
+    paidSubtotal,
+    settings,
+    customer,
+    cartRules,
+    couponDiscount,
+    tipAmount: body?.tipAmount,
+    giftPackaging: body?.giftPackaging,
+    online,
+  });
 
-  const totalBeforeOnlineDiscount = Math.max(
-    0,
-    subtotalBeforeCoupon + tipAmount + giftPackagingFee - firstOrderDiscount - cartRuleDiscount - couponDiscount
-  );
-  const onlineConfig = settings?.onlinePaymentDiscount;
-  const onlineDiscount =
-    online && onlineConfig?.enabled && onlineConfig?.percentage > 0
-      ? (totalBeforeOnlineDiscount * onlineConfig.percentage) / 100
-      : 0;
-
-  order.subtotal = paidSubtotal;
-  order.shipping = deliveryFee;
-  order.platformFee = PLATFORM_FEE;
-  order.tipAmount = tipAmount;
-  order.giftPackagingFee = giftPackagingFee;
-  order.couponDiscount = round2(couponDiscount);
-  order.discount = round2(firstOrderDiscount + cartRuleDiscount + couponDiscount + onlineDiscount);
-  order.couponCode = couponCode || (firstOrderDiscount > 0 ? FIRST_ORDER_OFFER_CODE : undefined);
-  order.total = round2(Math.max(0, totalBeforeOnlineDiscount - onlineDiscount));
+  order.subtotal = totals.subtotal;
+  order.shipping = totals.deliveryFee;
+  order.platformFee = totals.platformFee;
+  order.tipAmount = totals.tipAmount;
+  order.giftPackagingFee = totals.giftPackagingFee;
+  order.couponDiscount = totals.couponDiscount;
+  order.discount = totals.totalDiscount;
+  order.couponCode = couponCode || (totals.firstOrderDiscount > 0 ? FIRST_ORDER_OFFER_CODE : undefined);
+  order.total = totals.total;
   order.items = orderItemIds;
 
   if (online) {
@@ -320,4 +308,115 @@ export const placeOrder = async (
   }
 
   return { order, customer };
+};
+
+
+/**
+ * What the checkout screen shows: the cart priced exactly as placeOrder would charge it.
+ * Reads only — no stock is reserved, no coupon is consumed, nothing is saved. The checkout page
+ * displays these numbers, so the amount shown is always the amount that will be taken.
+ */
+export const quoteOrder = async (userId: string, body: any) => {
+  const items = Array.isArray(body?.items) ? body.items : [];
+  const online = isOnlineGateway(normalizePaymentMethod(body?.paymentMethod));
+  const customer = await Customer.findById(userId).lean();
+  if (!customer) throw new OrderPlacementError(404, "Customer not found");
+  const settings: any = await getAppSettings();
+
+  const lines: Array<{
+    productId: string;
+    variantId?: string;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+    mrp: number;
+    isFreeGift: boolean;
+    unavailable?: string;
+  }> = [];
+  let paidSubtotal = 0;
+
+  for (const item of items.filter((i: any) => !i?.isFreeGift)) {
+    const qty = Number(item?.quantity) || 0;
+    const productId = String(item?.product?.id || item?.product?._id || "");
+    const name = item?.product?.productName || item?.product?.name || "Item";
+    if (!mongoose.isValidObjectId(productId) || !Number.isInteger(qty) || qty <= 0) {
+      lines.push({ productId, name, quantity: qty, unitPrice: 0, lineTotal: 0, mrp: 0, isFreeGift: false, unavailable: "This item can't be ordered" });
+      continue;
+    }
+    const product: any = await Product.findById(productId).lean();
+    if (!product || product.status !== "Active" || product.publish === false) {
+      lines.push({ productId, name, quantity: qty, unitPrice: 0, lineTotal: 0, mrp: 0, isFreeGift: false, unavailable: "No longer available" });
+      continue;
+    }
+    const variation = resolveOrderVariation(product, item.variantId, item.variant ?? item.variation);
+    if (!variation) {
+      lines.push({ productId, name: product.productName, quantity: qty, unitPrice: 0, lineTotal: 0, mrp: 0, isFreeGift: false, unavailable: "This option is no longer sold" });
+      continue;
+    }
+    const pricing = resolveCartLinePricing(product, { variantId: String(variation._id) });
+    const lineTotal = round2(pricing.unitPrice * qty);
+    lines.push({
+      productId,
+      variantId: String(variation._id),
+      name: product.productName,
+      quantity: qty,
+      unitPrice: pricing.unitPrice,
+      lineTotal,
+      mrp: Number(variation.compareAtPrice) || Number(variation.price) || pricing.unitPrice,
+      isFreeGift: false,
+      ...(Number(variation.stock) < qty ? { unavailable: `Only ${Number(variation.stock) || 0} left in stock` } : {}),
+    });
+    paidSubtotal += pricing.unitPrice * qty;
+  }
+  paidSubtotal = round2(paidSubtotal);
+
+  const cartRules = await getActiveCartRules();
+  for (const item of items.filter((i: any) => i?.isFreeGift)) {
+    const productId = String(item?.product?.id || item?.product?._id || "");
+    const granted = cartRules.some(
+      (rule: any) =>
+        (rule.ruleType || "free_gift") === "free_gift" &&
+        String(rule.giftProductId) === productId &&
+        paidSubtotal >= Number(rule.minCartValue || 0)
+    );
+    if (!granted) continue;
+    const product: any = await Product.findById(productId).lean();
+    if (!product) continue;
+    lines.push({ productId, name: product.productName, quantity: 1, unitPrice: 0, lineTotal: 0, mrp: 0, isFreeGift: true });
+  }
+
+  // A coupon is only checked here, never used up: that happens when the order is placed
+  let couponDiscount = 0;
+  let couponError: string | undefined;
+  if (body?.couponCode) {
+    const subtotalForCoupon = paidSubtotal + getPlatformFee(settings) + calculateDeliveryFee(settings, paidSubtotal);
+    try {
+      const { discount } = await resolveCoupon(body.couponCode, subtotalForCoupon, userId, null);
+      couponDiscount = discount;
+    } catch (error) {
+      couponError = error instanceof CouponError ? error.message : "Coupon could not be applied";
+    }
+  }
+
+  const totals = computeOrderTotals({
+    paidSubtotal,
+    settings,
+    customer,
+    cartRules,
+    couponDiscount,
+    tipAmount: body?.tipAmount,
+    giftPackaging: body?.giftPackaging,
+    online,
+  });
+
+  return {
+    items: lines,
+    /** Total of the items at MRP, for showing how much the customer saves */
+    mrpTotal: round2(lines.reduce((sum, l) => sum + (l.isFreeGift ? 0 : l.mrp * l.quantity), 0)),
+    ...totals,
+    couponError,
+    /** Lines that cannot be ordered right now; placing the order would fail */
+    blocking: lines.filter((l) => l.unavailable).map((l) => `${l.name}: ${l.unavailable}`),
+  };
 };

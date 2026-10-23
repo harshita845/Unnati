@@ -1,4 +1,4 @@
-import { useParams, Link, useSearchParams } from "react-router-dom";
+import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Button from "../../components/ui/button";
@@ -11,8 +11,23 @@ import { cancelOrder, updateOrderNotes, getSellerLocationsForOrder, refreshDeliv
 import { uploadImage } from "../../services/api/uploadService";
 import { useAppContext } from "../../context/AppContext";
 import { useToast } from "../../context/ToastContext";
+import { getCoupons, Coupon as ApiCoupon } from "../../services/api/customerCouponService";
 
 // Icon Components
+const CheckIcon = ({ className }: { className?: string }) => (
+  <svg
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}>
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
 const ArrowLeftIcon = ({ className }: { className?: string }) => (
   <svg
     width="24"
@@ -254,42 +269,98 @@ const AnimatedCheckmark = ({ delay = 0 }) => (
   </motion.svg>
 );
 
-// Promotional banner carousel
+// Promotional banner carousel (dynamic from backend coupons)
 const PromoCarousel = () => {
+  const navigate = useNavigate();
+  const [coupons, setCoupons] = useState<ApiCoupon[]>([]);
+  const [loading, setLoading] = useState(true);
   const [currentSlide, setCurrentSlide] = useState(0);
-  const promos = [
-    {
-      bank: "HDFC BANK",
-      offer: "10% cashback on all orders",
-      subtext: "Extraordinary Rewards | Zero Joining Fee | T&C apply",
-      color: "from-blue-50 to-indigo-50",
-    },
-    {
-      bank: "ICICI BANK",
-      offer: "15% instant discount",
-      subtext: "Valid on orders above ₹299 | Use code ICICI15",
-      color: "from-orange-50 to-red-50",
-    },
-    {
-      bank: "SBI CARD",
-      offer: "Flat ₹75 off",
-      subtext: "On all orders | No minimum order value",
-      color: "from-purple-50 to-pink-50",
-    },
-    {
-      bank: "AXIS BANK",
-      offer: "20% cashback up to ₹100",
-      subtext: "Valid on first order | T&C apply",
-      color: "from-teal-50 to-cyan-50",
-    },
-  ];
+  const [appliedCode, setAppliedCode] = useState<string | null>(() => {
+    return localStorage.getItem("unnati_preselected_coupon") || null;
+  });
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const fetchPromoCoupons = async () => {
+    try {
+      const response = await getCoupons();
+      if (response?.success && Array.isArray(response.data)) {
+        setCoupons(response.data);
+      }
+    } catch (err) {
+      console.error("Error loading promo coupons in OrderDetail:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % promos.length);
-    }, 4000);
-    return () => clearInterval(timer);
+    fetchPromoCoupons();
+
+    const handleUpdate = () => fetchPromoCoupons();
+    window.addEventListener("unnati_deals_updated", handleUpdate);
+    window.addEventListener("unnati_content_updated", handleUpdate);
+    return () => {
+      window.removeEventListener("unnati_deals_updated", handleUpdate);
+      window.removeEventListener("unnati_content_updated", handleUpdate);
+    };
   }, []);
+
+  useEffect(() => {
+    if (coupons.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % coupons.length);
+    }, 4500);
+    return () => clearInterval(timer);
+  }, [coupons.length]);
+
+  if (loading || coupons.length === 0) {
+    return null;
+  }
+
+  const activeIndex = currentSlide % coupons.length;
+  const currentPromo = coupons[activeIndex];
+  if (!currentPromo) return null;
+
+  const colorGradients = [
+    "from-purple-50 to-pink-50",
+    "from-blue-50 to-indigo-50",
+    "from-orange-50 to-red-50",
+    "from-teal-50 to-cyan-50",
+    "from-emerald-50 to-teal-50",
+  ];
+  const colorClass = colorGradients[activeIndex % colorGradients.length];
+
+  const handleApply = (coupon: ApiCoupon) => {
+    try {
+      const code = coupon.code.toUpperCase();
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(code).catch(() => {});
+      }
+      localStorage.setItem("unnati_preselected_coupon", code);
+      setAppliedCode(code);
+      setToastMessage(`Coupon "${code}" applied for your next order!`);
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err) {
+      console.error("Failed to apply coupon:", err);
+    }
+  };
+
+  const isApplied =
+    appliedCode?.toUpperCase() === currentPromo.code.toUpperCase() ||
+    localStorage.getItem("unnati_preselected_coupon")?.toUpperCase() === currentPromo.code.toUpperCase();
+
+  const minOrder = currentPromo.minimumPurchase ?? currentPromo.minOrderValue;
+  const subtext =
+    currentPromo.description ||
+    (minOrder && minOrder > 0
+      ? `Valid on orders above ₹${minOrder}`
+      : "On all orders | No minimum order value");
+
+  const offerTitle =
+    currentPromo.title ||
+    (String(currentPromo.discountType).toLowerCase() === "percentage"
+      ? `${currentPromo.discountValue}% OFF`
+      : `Flat ₹${currentPromo.discountValue} off`);
 
   return (
     <motion.div
@@ -300,47 +371,90 @@ const PromoCarousel = () => {
       <div className="overflow-hidden relative">
         <AnimatePresence mode="wait">
           <motion.div
-            key={currentSlide}
+            key={currentPromo._id || currentPromo.code}
             initial={{ opacity: 0, x: 50 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -50 }}
             transition={{ duration: 0.3 }}
-            className={`flex items-center gap-4 p-3 rounded-lg bg-gradient-to-r ${promos[currentSlide].color}`}>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-bold bg-blue-900 text-white px-2 py-0.5 rounded">
-                  {promos[currentSlide].bank}
+            className={`flex items-center gap-4 p-3.5 rounded-xl bg-gradient-to-r ${colorClass} border border-neutral-100`}>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                <span className="text-xs font-bold bg-blue-900 text-white px-2.5 py-0.5 rounded-md uppercase tracking-wider shadow-xs">
+                  {currentPromo.code}
                 </span>
+                {minOrder && minOrder > 0 ? (
+                  <span className="text-[10px] font-semibold text-neutral-500 bg-white/80 px-2 py-0.5 rounded">
+                    Min ₹{minOrder}
+                  </span>
+                ) : null}
               </div>
-              <p className="font-semibold text-gray-900">
-                {promos[currentSlide].offer}
+              <p className="font-bold text-gray-900 text-base leading-snug">
+                {offerTitle}
               </p>
-              <p className="text-xs text-gray-600 mt-1">
-                {promos[currentSlide].subtext}
+              <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                {subtext}
               </p>
-              <button className="text-[var(--customer-primary-dark)] font-medium text-sm mt-2 flex items-center gap-1">
-                Apply now <ChevronRightIcon className="w-4 h-4" />
+              <button
+                type="button"
+                onClick={() => handleApply(currentPromo)}
+                className={`font-semibold text-sm mt-2.5 inline-flex items-center gap-1.5 transition-all duration-200 cursor-pointer active:scale-95 ${
+                  isApplied
+                    ? "text-emerald-700 bg-emerald-100/90 border border-emerald-300 px-3 py-1 rounded-full shadow-xs"
+                    : "text-[var(--customer-primary-dark)] hover:underline"
+                }`}
+              >
+                {isApplied ? (
+                  <>
+                    <CheckIcon className="w-4 h-4 text-emerald-600" />
+                    Applied
+                  </>
+                ) : (
+                  <>
+                    Apply now <ChevronRightIcon className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </div>
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-2xl">💳</span>
+            <div className="w-16 h-16 shrink-0 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-md">
+              <span className="text-2xl select-none">💳</span>
             </div>
           </motion.div>
         </AnimatePresence>
       </div>
 
-      {/* Dots indicator */}
-      <div className="flex justify-center gap-2 mt-3">
-        {promos.map((_, index) => (
+      {toastMessage && (
+        <div className="mt-2.5 px-3 py-2 text-xs font-semibold text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between animate-in fade-in duration-200 shadow-xs">
+          <span className="flex items-center gap-1.5">
+            <CheckIcon className="w-4 h-4 text-emerald-600 shrink-0" />
+            {toastMessage}
+          </span>
           <button
-            key={index}
-            onClick={() => setCurrentSlide(index)}
-            className={`w-2 h-2 rounded-full transition-all duration-300 ${
-              index === currentSlide ? "bg-[var(--customer-primary-dark)] w-4" : "bg-gray-300"
-            }`}
-          />
-        ))}
-      </div>
+            type="button"
+            onClick={() => navigate('/cart')}
+            className="text-emerald-700 font-bold underline hover:text-emerald-800 ml-2 shrink-0 cursor-pointer"
+          >
+            Go to Cart
+          </button>
+        </div>
+      )}
+
+      {/* Dots indicator */}
+      {coupons.length > 1 && (
+        <div className="flex justify-center gap-2 mt-3">
+          {coupons.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => setCurrentSlide(index)}
+              className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                index === activeIndex
+                  ? "bg-[var(--customer-primary-dark)] w-5"
+                  : "bg-gray-300 w-2 hover:bg-gray-400"
+              }`}
+              aria-label={`Slide ${index + 1}`}
+            />
+          ))}
+        </div>
+      )}
     </motion.div>
   );
 };
@@ -1871,6 +1985,62 @@ export default function OrderDetail() {
                    );
                 })}
               </div>
+              {/* The line prices add up to more than the amount charged whenever a discount
+                  applied, which reads as a mistake unless the difference is shown here. Every
+                  figure comes from the order record, so this always reconciles with what was paid. */}
+              {(() => {
+                const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+                const o: any = order;
+                const lineSum = (o?.items || []).reduce(
+                  (sum: number, it: any) => sum + (num(it.total) || num(it.unitPrice) * num(it.quantity)),
+                  0
+                );
+                const itemTotal = num(o?.subtotal) || lineSum;
+                const charges = [
+                  { label: "Delivery fee", value: num(o?.shipping ?? o?.fees?.deliveryFee) },
+                  { label: "Handling charge", value: num(o?.platformFee ?? o?.fees?.platformFee) },
+                  { label: "Delivery tip", value: num(o?.tipAmount) },
+                  { label: "Gift packaging", value: num(o?.giftPackagingFee) },
+                ].filter((r) => r.value > 0);
+
+                const named = [
+                  { label: o?.couponCode ? `Coupon (${o.couponCode})` : "Coupon discount", value: num(o?.couponDiscount) },
+                  { label: "First order discount", value: num(o?.firstOrderDiscount) },
+                  { label: "Offer discount", value: num(o?.cartRuleDiscount) },
+                  { label: "Online payment discount", value: num(o?.onlineDiscount) },
+                ].filter((r) => r.value > 0);
+                // anything the order recorded as a discount but did not itemise
+                const unnamed = Number((num(o?.discount) - named.reduce((s, r) => s + r.value, 0)).toFixed(2));
+                const discounts = unnamed > 0 ? [...named, { label: "Discount", value: unnamed }] : named;
+
+                const paid = num(o?.totalAmount ?? o?.total);
+                const isPaid = String(o?.paymentStatus || "").toLowerCase() === "paid";
+
+                return (
+                  <div className="mt-5 pt-4 border-t border-gray-200 space-y-2">
+                    <div className="flex justify-between text-sm text-gray-700">
+                      <span>Item total</span>
+                      <span className="font-price">₹{itemTotal.toFixed(2)}</span>
+                    </div>
+                    {charges.map((row) => (
+                      <div key={row.label} className="flex justify-between text-sm text-gray-700">
+                        <span>{row.label}</span>
+                        <span className="font-price">₹{row.value.toFixed(2)}</span>
+                      </div>
+                    ))}
+                    {discounts.map((row) => (
+                      <div key={row.label} className="flex justify-between text-sm text-[var(--customer-primary-dark)]">
+                        <span>{row.label}</span>
+                        <span className="font-price">-₹{row.value.toFixed(2)}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between pt-2 mt-1 border-t border-gray-200 text-base font-bold text-gray-900">
+                      <span>{isPaid ? "Amount paid" : "Amount to pay"}</span>
+                      <span className="font-price">₹{paid.toFixed(2)}</span>
+                    </div>
+                  </div>
+                );
+              })()}
               <Button
                 className="w-full mt-4 bg-[var(--customer-primary-dark)] hover:bg-[var(--customer-primary-darker)] text-white"
                 onClick={() => setShowItemsModal(false)}>

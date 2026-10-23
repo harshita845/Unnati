@@ -171,3 +171,44 @@ export const requestReturnOrReplace = async (data: {
     const response = await api.post<OrderResponse>('/customer/orders/return-replace', data);
     return response.data;
 };
+
+/** Every charge on the cart, worked out by the server (the same code that charges the order) */
+export interface OrderQuote {
+  items: Array<{
+    productId: string;
+    variantId?: string;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+    mrp: number;
+    isFreeGift: boolean;
+    unavailable?: string;
+  }>;
+  mrpTotal: number;
+  subtotal: number;
+  deliveryFee: number;
+  platformFee: number;
+  tipAmount: number;
+  giftPackagingFee: number;
+  firstOrderDiscount: number;
+  cartRuleDiscount: number;
+  couponDiscount: number;
+  onlineDiscount: number;
+  totalDiscount: number;
+  total: number;
+  couponError?: string;
+  blocking: string[];
+}
+
+/**
+ * What the checkout screen must show. The server prices the cart with the same code that charges
+ * the order, so the amount shown is always the amount taken.
+ */
+export const getOrderQuote = async (data: {
+  items: Array<{ product: { id: string }; variantId?: string; variation?: string; quantity: number; isFreeGift?: boolean }>;
+  paymentMethod?: string;
+  couponCode?: string;
+  tipAmount?: number;
+  giftPackaging?: boolean;
+}): Promise<OrderQuote> => (await api.post('/customer/orders/quote', data)).data.data;

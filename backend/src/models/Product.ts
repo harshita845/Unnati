@@ -5,6 +5,7 @@ import "./SubCategory";
 import "./HeaderCategory";
 import "./Brand";
 import "./Seller";
+import { announceChangesOn } from "../socket/contentBroadcast";
 
 export interface IProduct extends Document {
   // Basic Info
@@ -654,6 +655,9 @@ ProductSchema.index({
   tags: "text",
   pack: "text",
 });
+
+// Changes here reach the customer app live (see contentBroadcast)
+announceChangesOn(ProductSchema, "products");
 
 const Product = mongoose.model<IProduct>("Product", ProductSchema);
 

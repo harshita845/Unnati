@@ -105,20 +105,9 @@ export default function CategoryTileSection({
     console.log("Clicked tile", tile.id);
   };
 
-  // Fallback tiles if we have too few bestseller tiles
-  const displayTiles = [...tiles];
-  if (showProductCount && displayTiles.length < 3) {
-    const mockBestsellers: CategoryTile[] = [
-      { id: "mock-best-grocery", name: "Groceries", productCount: 15, slug: "grocery", productImages: ["/dairy.jpg"], categoryId: "grocery", type: "category" },
-      { id: "mock-best-fashion", name: "Fashion", productCount: 22, slug: "fashion", productImages: ["/shirt1.jpg"], categoryId: "fashion", type: "category" },
-      { id: "mock-best-electronics", name: "Electronics", productCount: 18, slug: "electronics", productImages: ["/electronics.jpg"], categoryId: "electronics", type: "category" }
-    ];
-    mockBestsellers.forEach(mock => {
-      if (!displayTiles.some(t => t.name.toLowerCase().includes(mock.slug || ''))) {
-        displayTiles.push(mock);
-      }
-    });
-  }
+  // Only what the store actually has. Invented tiles used to be padded in here, which showed
+  // customers categories and product counts that did not exist and led nowhere when tapped.
+  const displayTiles = tiles;
 
   return (
     <div className="mb-6 md:mb-8 mt-0 overflow-visible relative font-sans">
@@ -135,17 +124,6 @@ export default function CategoryTileSection({
       >
         <div className="flex gap-3 md:gap-4 pb-3 pt-1">
           {displayTiles.map((tile) => {
-            const slug = (tile.slug || tile.id || tile.name || '').toLowerCase();
-            let fallbackImage = '/dairy.jpg';
-            if (slug.includes('women') || slug.includes('lady') || slug.includes('ladies') || slug.includes('female')) fallbackImage = "/women.jpg";
-            else if (slug.includes('shirt') || slug.includes('cloth') || slug.includes('fashion') || slug.includes('men')) fallbackImage = "/shirt1.jpg";
-            else if (slug.includes('cold') || slug.includes('bev') || slug.includes('drink') || slug.includes('winter')) fallbackImage = "/cold.jpg";
-            else if (slug.includes('dairy') || slug.includes('grocer') || slug.includes('food') || slug.includes('milk') || slug.includes('egg')) fallbackImage = "/dairy.jpg";
-            else if (slug.includes('person') || slug.includes('beaut') || slug.includes('hygiene') || slug.includes('care')) fallbackImage = "/personal.jpg";
-            else if (slug.includes('bucket') || slug.includes('home') || slug.includes('clean') || slug.includes('house')) fallbackImage = "/bucket.jpg";
-            else if (slug.includes('electron') || slug.includes('gadget') || slug.includes('tech')) fallbackImage = "/electronics.jpg";
-            else if (slug.includes('sport') || slug.includes('fit') || slug.includes('gym')) fallbackImage = "/sports.jpg";
-
             const images =
               tile.productImages || (tile.image ? [tile.image] : []);
             const hasImages = images.filter(Boolean).length > 0;
@@ -212,20 +190,17 @@ export default function CategoryTileSection({
                         alt={tile.name}
                         className="w-full h-full object-contain rounded-xl p-1"
                         onError={(e) => {
+                          // Show the plain placeholder rather than an unrelated stock photo
                           const target = e.target as HTMLImageElement;
-                          target.style.display = 'none';
-                          const parent = target.parentElement;
-                          if (parent) {
-                            parent.innerHTML = `<img src="${fallbackImage}" class="w-full h-full object-cover rounded-xl" />`;
-                          }
+                          target.style.display = "none";
+                          target.parentElement?.classList.add("tile-image-missing");
                         }}
                       />
-                    ) : (
-                      <img
-                        src={fallbackImage}
-                        alt={tile.name}
-                        className="w-full h-full object-cover rounded-xl"
-                      />
+                    ) : null}
+                    {!hasImages && (
+                      <span className="text-2xl md:text-3xl font-display font-bold text-[var(--brand-green-deep,#14401F)]/35 select-none">
+                        {(tile.name || "?").charAt(0).toUpperCase()}
+                      </span>
                     )}
                   </div>
 

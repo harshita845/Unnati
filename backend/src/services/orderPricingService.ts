@@ -2,13 +2,26 @@ import mongoose from "mongoose";
 import AppSettings from "../models/AppSettings";
 import Coupon from "../models/Coupon";
 import Order from "../models/Order";
+import { resolveFirstOrderOfferDiscount } from "./firstOrderOfferService";
+import { calculateCartRuleDiscount } from "./cartRuleService";
 
-// Defaults mirror customerConfigController.getPublicConfig, which the checkout page uses.
+// Used only when the store has no settings saved yet.
 const DEFAULT_DELIVERY_FEE = 40;
 const DEFAULT_FREE_DELIVERY_THRESHOLD = 199;
+const DEFAULT_PLATFORM_FEE = 0;
+const DEFAULT_GIFT_PACKAGING_FEE = 30;
 
-/** Gift packaging fee charged when the customer opts in at checkout (matches Checkout.tsx). */
-export const GIFT_PACKAGING_FEE = 30;
+const feeFrom = (value: unknown, fallback: number) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+};
+
+/**
+ * The fees every screen must agree on. Read from the store's settings so the checkout quote,
+ * the placed order and the public config can never charge different amounts.
+ */
+export const getPlatformFee = (settings: any): number => feeFrom(settings?.platformFee, DEFAULT_PLATFORM_FEE);
+export const getGiftPackagingFee = (settings: any): number => feeFrom(settings?.giftPackagingFee, DEFAULT_GIFT_PACKAGING_FEE);
 const MAX_TIP_AMOUNT = 1000;
 
 export class CouponError extends Error {}
@@ -104,3 +117,81 @@ export const consumeCoupon = async (couponId: mongoose.Types.ObjectId, session?:
 export const getAppSettings = async () => AppSettings.findOne().lean();
 
 export { round2 };
+
+/**
+ * Every charge on an order, worked out in one place.
+ *
+ * The checkout quote and the order that is actually charged both call this, so the amount the
+ * customer is shown can never differ from the amount taken. Inputs are the priced items subtotal
+ * and the customer's choices; everything else (fees, offers) comes from the store's settings.
+ */
+export interface OrderTotalsInput {
+  paidSubtotal: number;
+  settings: any;
+  /** Decides whether the first-order offer applies */
+  customer: any;
+  cartRules: any[];
+  couponDiscount?: number;
+  tipAmount?: number;
+  giftPackaging?: boolean;
+  /** Online payments may carry their own discount */
+  online?: boolean;
+}
+
+export interface OrderTotals {
+  subtotal: number;
+  deliveryFee: number;
+  platformFee: number;
+  tipAmount: number;
+  giftPackagingFee: number;
+  firstOrderDiscount: number;
+  cartRuleDiscount: number;
+  couponDiscount: number;
+  onlineDiscount: number;
+  /** Every discount added up (what order.discount stores) */
+  totalDiscount: number;
+  /** What the customer pays */
+  total: number;
+}
+
+export const computeOrderTotals = (input: OrderTotalsInput): OrderTotals => {
+  const { settings, customer, cartRules } = input;
+  const paidSubtotal = round2(Number(input.paidSubtotal) || 0);
+  const deliveryFee = calculateDeliveryFee(settings, paidSubtotal);
+  const platformFee = getPlatformFee(settings);
+  const subtotalBeforeCoupon = paidSubtotal + platformFee + deliveryFee;
+
+  const firstOrderDiscount = resolveFirstOrderOfferDiscount(settings?.firstOrderOffer, customer, subtotalBeforeCoupon);
+  const cartRuleDiscount = calculateCartRuleDiscount(
+    cartRules || [],
+    paidSubtotal,
+    Math.max(0, subtotalBeforeCoupon - firstOrderDiscount)
+  );
+  const couponDiscount = round2(Number(input.couponDiscount) || 0);
+  const tipAmount = sanitizeTip(input.tipAmount);
+  const giftPackagingFee = input.giftPackaging ? getGiftPackagingFee(settings) : 0;
+
+  const totalBeforeOnlineDiscount = Math.max(
+    0,
+    subtotalBeforeCoupon + tipAmount + giftPackagingFee - firstOrderDiscount - cartRuleDiscount - couponDiscount
+  );
+  const onlineConfig = settings?.onlinePaymentDiscount;
+  const onlineDiscount =
+    input.online && onlineConfig?.enabled && Number(onlineConfig?.percentage) > 0
+      ? round2((totalBeforeOnlineDiscount * Number(onlineConfig.percentage)) / 100)
+      : 0;
+
+  return {
+    subtotal: paidSubtotal,
+    deliveryFee,
+    platformFee,
+    tipAmount,
+    giftPackagingFee,
+    firstOrderDiscount: round2(firstOrderDiscount),
+    cartRuleDiscount: round2(cartRuleDiscount),
+    couponDiscount,
+    onlineDiscount,
+    totalDiscount: round2(firstOrderDiscount + cartRuleDiscount + couponDiscount + onlineDiscount),
+    total: round2(Math.max(0, totalBeforeOnlineDiscount - onlineDiscount)),
+  };
+};

@@ -1,5 +1,5 @@
 import api from './config';
-import { apiCache } from '../../utils/apiCache';
+import { apiCache, notifyContentSync } from '../../utils/apiCache';
 
 export interface HeaderCategory {
     _id: string; // MongoDB ID
@@ -62,6 +62,7 @@ const invalidateAllHeaderCategoryCaches = () => {
     apiCache.invalidatePattern(/header-categor/);
     apiCache.invalidatePattern(/home-content/);
     apiCache.invalidatePattern(/categor/);
+    notifyContentSync('categories');
 };
 
 export const createHeaderCategory = async (data: Partial<HeaderCategory>): Promise<HeaderCategory> => {

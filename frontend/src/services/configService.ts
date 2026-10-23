@@ -5,6 +5,7 @@ export interface AppConfig {
     deliveryFee: number;
     freeDeliveryThreshold: number;
     platformFee: number;
+    giftPackagingFee: number;
     taxes: {
         gst: number;
     };
@@ -29,11 +30,14 @@ export interface AppConfig {
     };
 }
 
-// Default configuration (fallback)
+// Only used when /customer/config cannot be reached. These numbers mirror the
+// server's own fallbacks (see getPublicConfig), because a figure shown here that
+// the server does not charge is exactly how a checkout total starts to drift.
 export const defaultConfig: AppConfig = {
     deliveryFee: 40,
     freeDeliveryThreshold: 199,
-    platformFee: 2,
+    platformFee: 0,
+    giftPackagingFee: 30,
     taxes: {
         gst: 18
     },

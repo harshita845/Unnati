@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { announceChangesOn } from '../socket/contentBroadcast';
 
 export interface IHeaderCategory extends Document {
     name: string;
@@ -32,5 +33,8 @@ const HeaderCategorySchema: Schema = new Schema(
     },
     { timestamps: true }
 );
+
+// Changes here reach the customer app live (see contentBroadcast)
+announceChangesOn(HeaderCategorySchema, 'categories');
 
 export default mongoose.model<IHeaderCategory>('HeaderCategory', HeaderCategorySchema);

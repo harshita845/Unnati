@@ -270,20 +270,21 @@ export default function PromoStrip({ activeTab = "all" }: PromoStripProps) {
     };
     fetchData();
 
+    const handlePromoSpecific = () => fetchData(true);
     const handlePromoUpdate = (e?: any) => {
       if (!e || !e.detail || e.detail.type === 'promo' || e.detail.type === 'home' || e.detail.type === 'all') {
         fetchData(true);
       }
     };
 
-    window.addEventListener('unnati_promo_updated', () => fetchData(true));
+    window.addEventListener('unnati_promo_updated', handlePromoSpecific);
     window.addEventListener('unnati_content_updated', handlePromoUpdate);
 
     return () => {
-      window.removeEventListener('unnati_promo_updated', () => fetchData(true));
+      window.removeEventListener('unnati_promo_updated', handlePromoSpecific);
       window.removeEventListener('unnati_content_updated', handlePromoUpdate);
     };
-  }, [activeTab]);
+  }, [activeTab, location?.latitude, location?.longitude]);
 
   // Countdown chip: refresh every minute
   useEffect(() => {

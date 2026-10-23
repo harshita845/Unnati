@@ -16,6 +16,7 @@ import { sellerProductPolicy } from "../../product/productPolicies";
 import { resolveReferenceNames } from "../../product/referenceResolver";
 import { attachListNames, attachSubcategories } from "../../product/listNames";
 import { toDetail, toListItems } from "../../product/productReadMapper";
+import { notifyContentUpdated } from "../../../socket/socketService";
 
 /** Excel / bulk import often sends category or brand *names*; only valid 24-char hex IDs may be cast to ObjectId. */
 function isValidObjectIdString(id: unknown): boolean {
@@ -61,6 +62,7 @@ export const createProduct = asyncHandler(
         req.body,
         sellerProductPolicy(sellerId)
       );
+      notifyContentUpdated('products');
       return res.status(201).json({
         success: true,
         message: "Product created successfully",
@@ -317,6 +319,7 @@ export const updateProduct = asyncHandler(
         req.body,
         sellerProductPolicy(sellerId)
       );
+      notifyContentUpdated('products');
       return res.status(200).json({
         success: true,
         message: "Product updated successfully",
@@ -360,6 +363,7 @@ export const deleteProduct = asyncHandler(
       });
     }
 
+    notifyContentUpdated('products');
     return res.status(200).json({
       success: true,
       message: "Product deleted successfully",
@@ -410,6 +414,7 @@ export const updateStock = asyncHandler(async (req: Request, res: Response) => {
   // Mark variations as modified since we updated a sub-document field
   product.markModified("variations");
   await product.save();
+  notifyContentUpdated('products');
 
   return res.status(200).json({
     success: true,
@@ -445,6 +450,7 @@ export const updateProductStatus = asyncHandler(
       });
     }
 
+    notifyContentUpdated('products');
     return res.status(200).json({
       success: true,
       message: "Product status updated successfully",
@@ -506,6 +512,7 @@ export const bulkUpdateStock = asyncHandler(
       }
     }
 
+    notifyContentUpdated('products');
     return res.status(200).json({
       success: true,
       message: "Bulk stock update processed",

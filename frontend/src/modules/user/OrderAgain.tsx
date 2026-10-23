@@ -180,6 +180,21 @@ export default function OrderAgain() {
       }
     };
     fetchBestsellers();
+
+    const handleUpdate = (e?: any) => {
+      const type = e?.detail?.type;
+      if (!type || type === 'products' || type === 'home' || type === 'all') {
+        fetchBestsellers();
+      }
+    };
+
+    window.addEventListener('unnati_content_updated', handleUpdate);
+    window.addEventListener('productUpdated', handleUpdate);
+
+    return () => {
+      window.removeEventListener('unnati_content_updated', handleUpdate);
+      window.removeEventListener('productUpdated', handleUpdate);
+    };
   }, []);
 
   const hasOrders = orders && orders.length > 0;

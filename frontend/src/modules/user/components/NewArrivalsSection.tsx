@@ -12,8 +12,8 @@ export default function NewArrivalsSection() {
 
   useEffect(() => {
     let isMounted = true;
-    const fetchNewArrivals = async () => {
-      setLoading(true);
+    const fetchNewArrivals = async (forceRefresh: boolean = false) => {
+      if (!forceRefresh) setLoading(true);
       try {
         const response = await getProducts({
           limit: 12,
@@ -21,7 +21,7 @@ export default function NewArrivalsSection() {
           latitude: location?.latitude,
           longitude: location?.longitude,
           city: location?.city,
-        });
+        }, forceRefresh);
         if (isMounted && response.success && Array.isArray(response.data) && response.data.length > 0) {
           const mapped = response.data
             .filter((p: any) => p.mainImage || p.imageUrl)
@@ -42,9 +42,25 @@ export default function NewArrivalsSection() {
         if (isMounted) setLoading(false);
       }
     };
-    fetchNewArrivals();
+    fetchNewArrivals(false);
+
+    const handleUpdate = () => fetchNewArrivals(true);
+    const handleContentUpdate = (e: any) => {
+      const type = e?.detail?.type;
+      if (!type || type === 'products' || type === 'all') {
+        fetchNewArrivals(true);
+      }
+    };
+
+    window.addEventListener("productUpdated", handleUpdate);
+    window.addEventListener("unnati_content_updated", handleContentUpdate);
+    window.addEventListener("focus", handleUpdate);
+
     return () => {
       isMounted = false;
+      window.removeEventListener("productUpdated", handleUpdate);
+      window.removeEventListener("unnati_content_updated", handleContentUpdate);
+      window.removeEventListener("focus", handleUpdate);
     };
   }, [location?.latitude, location?.longitude, location?.city]);
 

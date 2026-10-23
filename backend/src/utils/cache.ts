@@ -102,7 +102,9 @@ export const invalidateCategoryCache = (): void => {
   cache.invalidatePattern(/^categories/);
 };
 
-// Clean expired entries every 5 minutes
-setInterval(() => {
+// Clean expired entries every 5 minutes. Unref'd so this housekeeping timer alone never keeps a
+// process alive — a script or test that imports the cache should still be able to exit.
+const cleanupTimer = setInterval(() => {
   cache.cleanExpired();
 }, 5 * 60 * 1000);
+cleanupTimer.unref?.();

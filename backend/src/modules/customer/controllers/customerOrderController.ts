@@ -8,7 +8,7 @@ import { notifySellersOfOrderUpdate } from "../../../services/sellerNotification
 import { notifyAdminsOfNewOrder } from "../../../services/adminNotificationService";
 import { generateDeliveryOtp } from "../../../services/deliveryOtpService";
 import { Server as SocketIOServer } from "socket.io";
-import { OrderPlacementError, placeOrder, runInTransaction } from "../../../services/orderPlacementService";
+import { OrderPlacementError, placeOrder, quoteOrder, runInTransaction } from "../../../services/orderPlacementService";
 import { cancelOrderAndRestoreStock, confirmOnlinePayment } from "../../../services/orderLifecycleService";
 import {
   createCashfreeOrder,
@@ -650,3 +650,19 @@ export const requestReturnOrReplace = async (req: Request, res: Response) => {
     }
 };
 
+
+/**
+ * POST /customer/orders/quote — what the checkout screen must show.
+ * The cart priced by the same code that charges the order, so the total shown is the total taken.
+ */
+export const getOrderQuote = async (req: Request, res: Response) => {
+  try {
+    return res.status(200).json({ success: true, data: await quoteOrder(req.user!.userId, req.body) });
+  } catch (error: any) {
+    if (error instanceof OrderPlacementError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    console.error("Order quote failed:", error);
+    return res.status(500).json({ success: false, message: "Could not work out the total" });
+  }
+};

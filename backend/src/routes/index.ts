@@ -47,7 +47,8 @@ import {
   retryOrderPayment,
   switchToCod,
   refreshDeliveryOtp,
-  requestReturnOrReplace
+  requestReturnOrReplace,
+  getOrderQuote
 } from "../modules/customer/controllers/customerOrderController";
 
 const router = Router();
@@ -106,6 +107,8 @@ router.post(
   requireUserType("Customer"),
   createOrder
 );
+// The totals the checkout screen shows, priced by the same code that charges the order
+router.post("/customer/orders/quote", authenticate, requireUserType("Customer"), getOrderQuote);
 router.post("/customer/orders/initiate", authenticate, requireUserType("Customer"), initiateOnlineOrder);
 router.post("/customer/orders/verify-payment", authenticate, requireUserType("Customer"), verifyOnlinePayment);
 router.post("/customer/orders/:id/abandon-payment", authenticate, requireUserType("Customer"), abandonOnlinePayment);

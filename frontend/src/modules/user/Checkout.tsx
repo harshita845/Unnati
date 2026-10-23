@@ -20,7 +20,7 @@ import { getCart as fetchCartForLocation } from '../../services/api/customerCart
 import { getProducts } from '../../services/api/customerProductService';
 import { addToWishlist } from '../../services/api/customerWishlistService';
 import { calculateProductPrice, getCartItemVariantSelector, getCartLineUnitPrice } from '../../utils/priceUtils';
-import { abandonOnlinePayment, initiateOnlineOrder, verifyOnlinePayment } from '../../services/api/customerOrderService';
+import { abandonOnlinePayment, getOrderQuote, initiateOnlineOrder, OrderQuote, verifyOnlinePayment } from '../../services/api/customerOrderService';
 import { resolveFirstOrderOfferDiscount } from '../../utils/firstOrderOfferUtils';
 import {
   calculateCartRuleDiscount,
@@ -78,6 +78,9 @@ export default function Checkout() {
   const [gstin, setGstin] = useState<string>('');
   const [showCancellationPolicy, setShowCancellationPolicy] = useState(false);
   const [giftPackaging, setGiftPackaging] = useState<boolean>(false);
+  // The server prices the cart with the same code that charges the order, so the amount shown on
+  // this page is always the amount that will be taken.
+  const [quote, setQuote] = useState<OrderQuote | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('Razorpay');
   const [isPaymentDropdownOpen, setIsPaymentDropdownOpen] = useState(false);
 
@@ -182,7 +185,17 @@ export default function Checkout() {
         }
 
         if (couponResponse.success) {
-          setAvailableCoupons(couponResponse.data);
+          const couponList = Array.isArray(couponResponse.data) ? couponResponse.data : [];
+          setAvailableCoupons(couponList);
+          const preselected = localStorage.getItem('unnati_preselected_coupon');
+          if (preselected && couponList.length > 0) {
+            const matched = couponList.find(
+              (c: ApiCoupon) => c.code.toUpperCase() === preselected.toUpperCase()
+            );
+            if (matched) {
+              setSelectedCoupon(matched);
+            }
+          }
         }
       } catch (error) {
         console.error('Error loading checkout data:', error);
@@ -280,6 +293,58 @@ export default function Checkout() {
     };
   }, [selectedAddress?.latitude, selectedAddress?.longitude, userLocation?.latitude, userLocation?.longitude, cartProductKey]);
 
+  /** Only the parts of a cart line the server needs to price it */
+  type QuoteLine = {
+    product?: { id?: string; _id?: string };
+    variantId?: string;
+    variant?: string;
+    variation?: string;
+    quantity?: number;
+    isFreeGift?: boolean;
+  };
+
+  // Re-price with the server whenever anything that changes the amount changes
+  const tipForQuote = showCustomTipInput ? customTipAmount : (tipAmount || 0);
+  const quoteKey = JSON.stringify({
+    items: ((cart?.items || []) as QuoteLine[])
+      .filter((i) => i?.product)
+      .map((i) => [i.product?.id || i.product?._id, i.variantId || i.variant || i.variation, i.quantity, !!i.isFreeGift]),
+    coupon: selectedCoupon?.code || '',
+    tip: tipForQuote,
+    gift: giftPackaging,
+    online: selectedPaymentMethod !== 'Cash',
+  });
+  useEffect(() => {
+    const lines = ((cart?.items || []) as QuoteLine[])
+      .filter((i) => i?.product)
+      .map((i) => ({
+        product: { id: String(i.product?.id || i.product?._id || '') },
+        variantId: i.variantId,
+        variation: i.variant || i.variation,
+        quantity: i.quantity || 0,
+        isFreeGift: !!i.isFreeGift,
+      }));
+    if (!isAuthenticated || lines.length === 0) {
+      setQuote(null);
+      return;
+    }
+    let stale = false;
+    getOrderQuote({
+      items: lines,
+      paymentMethod: selectedPaymentMethod === 'Cash' ? 'COD' : 'Razorpay',
+      couponCode: selectedCoupon?.code,
+      tipAmount: tipForQuote,
+      giftPackaging,
+    })
+      .then((q) => !stale && setQuote(q))
+      // Fall back to the on-page estimate; the server still decides the real charge
+      .catch(() => !stale && setQuote(null));
+    return () => {
+      stale = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quoteKey, isAuthenticated]);
+
   if (cartLoading || ((cart?.items?.length || 0) === 0 && !showOrderSuccess)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
@@ -310,7 +375,6 @@ export default function Checkout() {
   };
 
   const amountNeededForFreeDelivery = Math.max(0, config.freeDeliveryThreshold - (displayCart.total || 0));
-  const cartItem = displayItems[0];
 
   const itemsTotal = displayItems.reduce((sum: number, item: any) => {
     const p = item?.product;
@@ -330,7 +394,6 @@ export default function Checkout() {
   }, 0);
 
   const discountedTotal = displayCart.total;
-  const savedAmount = itemsTotal - discountedTotal;
   const handlingCharge = config.platformFee || 0;
   const deliveryCharge = displayCart.total >= config.freeDeliveryThreshold ? 0 : config.deliveryFee;
 
@@ -377,7 +440,8 @@ export default function Checkout() {
 
   // Calculate tip amount (use custom tip if custom tip input is shown, otherwise use selected tip)
   const finalTipAmount = showCustomTipInput ? customTipAmount : (tipAmount || 0);
-  const giftPackagingFee = giftPackaging ? 30 : 0;
+  const giftPackagingRate = config.giftPackagingFee ?? 0;
+  const giftPackagingFee = giftPackaging ? giftPackagingRate : 0;
 
   const onlineDiscountConfig = config.onlinePaymentDiscount;
   const onlineDiscountPercentage = onlineDiscountConfig?.enabled ? onlineDiscountConfig.percentage : 0;
@@ -394,9 +458,23 @@ export default function Checkout() {
       cartRuleDiscount -
       currentCouponDiscount
   );
-  const onlineDiscountAmount = (baseTotalForDiscount * onlineDiscountPercentage) / 100;
 
-  const grandTotal = baseTotalForDiscount;
+  // Every amount on this page comes from the server's quote once it has loaded
+  const amounts = {
+    subtotal: quote ? quote.subtotal : discountedTotal,
+    mrpTotal: quote ? quote.mrpTotal : itemsTotal,
+    handling: quote ? quote.platformFee : handlingCharge,
+    delivery: quote ? quote.deliveryFee : deliveryCharge,
+    tip: quote ? quote.tipAmount : finalTipAmount,
+    gift: quote ? quote.giftPackagingFee : giftPackagingFee,
+    firstOrder: quote ? quote.firstOrderDiscount : firstOrderDiscount,
+    cartRule: quote ? quote.cartRuleDiscount : cartRuleDiscount,
+    coupon: quote ? quote.couponDiscount : currentCouponDiscount,
+    online: quote ? quote.onlineDiscount : 0,
+    /** What the customer actually pays */
+    total: quote ? quote.total : baseTotalForDiscount,
+  };
+  const grandTotal = amounts.total;
 
   const getAvailableStockForCartItem = (item: any): number => {
     const product = item?.product;
@@ -490,6 +568,7 @@ export default function Checkout() {
     setSelectedCoupon(null);
     setValidatedDiscount(0);
     setCouponError(null);
+    localStorage.removeItem('unnati_preselected_coupon');
   };
 
   const handleMoveToWishlist = async (product: any) => {
@@ -610,8 +689,8 @@ export default function Checkout() {
             }).filter((item): item is NonNullable<typeof item> => item !== null),
             address: addressWithLocation,
             fees: {
-                platformFee: handlingCharge,
-                deliveryFee: deliveryCharge,
+                platformFee: amounts.handling,
+                deliveryFee: amounts.delivery,
             },
             paymentMethod: method,
             couponCode: selectedCoupon?.code,
@@ -751,10 +830,10 @@ export default function Checkout() {
           };
       }).filter((item): item is NonNullable<typeof item> => item !== null),
       totalItems: cart.itemCount,
-      subtotal: discountedTotal,
+      subtotal: amounts.subtotal,
       fees: {
-        platformFee: handlingCharge,
-        deliveryFee: deliveryCharge,
+        platformFee: amounts.handling,
+        deliveryFee: amounts.delivery,
       },
       totalAmount: grandTotal,
       address: addressWithLocation,
@@ -1342,7 +1421,7 @@ export default function Checkout() {
             </div>
 
             {/* Get FREE delivery banner */}
-            {deliveryCharge > 0 && (
+            {amounts.delivery > 0 && (
               <div className="p-3 md:p-4 bg-[var(--customer-primary-alpha-10)] rounded-xl border border-blue-100 shadow-sm">
                 <div className="flex items-center gap-2 mb-2">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-blue-600">
@@ -1488,12 +1567,12 @@ export default function Checkout() {
                       Gift Packaging
                     </p>
                     <p className="text-[10px] md:text-xs text-neutral-600">
-                      {giftPackaging ? 'Add ₹30 for gift packaging' : 'Add ₹30 for elegant gift packaging'}
+                      {giftPackaging ? `Add ₹${giftPackagingRate} for gift packaging` : `Add ₹${giftPackagingRate} for elegant gift packaging`}
                     </p>
                   </div>
                 </div>
                 {giftPackaging && (
-                  <span className="text-xs md:text-sm font-semibold text-[var(--customer-primary-dark)]">₹30</span>
+                  <span className="text-xs md:text-sm font-semibold text-[var(--customer-primary-dark)]">₹{amounts.gift}</span>
                 )}
               </button>
             </div>
@@ -1504,7 +1583,7 @@ export default function Checkout() {
           <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-24">
             
             {/* First order offer — auto-applied for eligible customers */}
-            {firstOrderDiscount > 0 && (
+            {amounts.firstOrder > 0 && (
               <div className="bg-white rounded-xl border border-neutral-200 p-1.5 shadow-sm">
                 <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white p-2 md:p-2.5 shadow-sm">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -1518,7 +1597,7 @@ export default function Checkout() {
                         {config.firstOrderOffer?.title || 'First order offer'}
                       </p>
                       <p className="text-[10px] md:text-xs text-emerald-800 truncate">
-                        Automatically applied · ₹{firstOrderDiscount} {config.firstOrderOffer?.subtitle || 'OFFER'}
+                        Automatically applied · ₹{amounts.firstOrder} {config.firstOrderOffer?.subtitle || 'OFFER'}
                       </p>
                     </div>
                   </div>
@@ -1574,17 +1653,17 @@ export default function Checkout() {
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className="text-xs md:text-sm text-neutral-700 font-normal">Items total</span>
-                    {savedAmount > 0 && (
+                    {amounts.mrpTotal - amounts.subtotal > 0 && (
                       <span className="text-[10px] md:text-xs bg-[var(--customer-primary-alpha-20)] text-blue-700 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
-                        Saved ₹{savedAmount}
+                        Saved ₹{(amounts.mrpTotal - amounts.subtotal).toLocaleString("en-IN")}
                       </span>
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {itemsTotal > discountedTotal && (
-                      <span className="text-xs md:text-sm text-neutral-500 line-through">₹{itemsTotal}</span>
+                    {amounts.mrpTotal > amounts.subtotal && (
+                      <span className="text-xs md:text-sm text-neutral-500 line-through">₹{amounts.mrpTotal.toLocaleString("en-IN")}</span>
                     )}
-                    <span className="text-xs md:text-sm font-medium text-neutral-900">₹{discountedTotal}</span>
+                    <span className="text-xs md:text-sm font-medium text-neutral-900">₹{amounts.subtotal.toLocaleString("en-IN")}</span>
                   </div>
                 </div>
 
@@ -1599,10 +1678,10 @@ export default function Checkout() {
                     <span className="text-xs md:text-sm text-neutral-700 font-normal whitespace-nowrap">Delivery charge</span>
                   </div>
                   <div className="flex flex-col items-end flex-shrink-0 text-right">
-                    <span className={`text-xs md:text-sm font-medium ${deliveryCharge === 0 ? 'text-[var(--customer-primary-dark)]' : 'text-neutral-900'}`}>
-                      {deliveryCharge === 0 ? 'FREE' : `₹${deliveryCharge}`}
+                    <span className={`text-xs md:text-sm font-medium ${amounts.delivery === 0 ? 'text-[var(--customer-primary-dark)]' : 'text-neutral-900'}`}>
+                      {amounts.delivery === 0 ? 'FREE' : `₹${amounts.delivery}`}
                     </span>
-                    {deliveryCharge > 0 && (
+                    {amounts.delivery > 0 && (
                       <span className="text-[10px] md:text-xs text-[var(--customer-primary-dark)] mt-0.5">
                         Free delivery above ₹{config.freeDeliveryThreshold}
                       </span>
@@ -1611,15 +1690,15 @@ export default function Checkout() {
                 </div>
 
                 {/* Platform Fee */}
-                {handlingCharge > 0 && (
+                {amounts.handling > 0 && (
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs md:text-sm text-neutral-700 font-normal">Platform Fee</span>
-                    <span className="text-xs md:text-sm font-medium text-neutral-900">₹{handlingCharge}</span>
+                    <span className="text-xs md:text-sm font-medium text-neutral-900">₹{amounts.handling}</span>
                   </div>
                 )}
 
                 {/* First order offer */}
-                {firstOrderDiscount > 0 && (
+                {amounts.firstOrder > 0 && (
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-emerald-600 flex-shrink-0">
@@ -1628,13 +1707,13 @@ export default function Checkout() {
                       <span className="text-xs md:text-sm text-neutral-700 truncate">First order offer</span>
                     </div>
                     <span className="text-xs md:text-sm font-medium text-[var(--customer-primary-dark)] flex-shrink-0">
-                      -₹{firstOrderDiscount.toLocaleString('en-IN')}
+                      -₹{amounts.firstOrder.toLocaleString('en-IN')}
                     </span>
                   </div>
                 )}
 
                 {/* Cart reward discount */}
-                {cartRuleDiscount > 0 && (
+                {amounts.cartRule > 0 && (
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-green-600 flex-shrink-0">
@@ -1643,13 +1722,13 @@ export default function Checkout() {
                       <span className="text-xs md:text-sm text-neutral-700 truncate">Cart reward discount</span>
                     </div>
                     <span className="text-xs md:text-sm font-medium text-[var(--customer-primary-dark)] flex-shrink-0">
-                      -₹{cartRuleDiscount.toLocaleString('en-IN')}
+                      -₹{amounts.cartRule.toLocaleString('en-IN')}
                     </span>
                   </div>
                 )}
 
                 {/* Coupon discount */}
-                {selectedCoupon && currentCouponDiscount > 0 && (
+                {amounts.coupon > 0 && (
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 min-w-0 flex-wrap sm:flex-nowrap">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-blue-600 flex-shrink-0">
@@ -1657,15 +1736,15 @@ export default function Checkout() {
                       </svg>
                       <span className="text-xs md:text-sm text-neutral-700">Coupon discount</span>
                       <span className="text-[10px] md:text-xs bg-[var(--customer-primary-alpha-20)] text-[var(--customer-primary-dark)] px-1.5 py-0.5 rounded-full font-medium">
-                        {selectedCoupon.code}
+                        {selectedCoupon?.code}
                       </span>
                     </div>
-                    <span className="text-xs md:text-sm font-medium text-[var(--customer-primary-dark)] flex-shrink-0">-₹{currentCouponDiscount.toLocaleString('en-IN')}</span>
+                    <span className="text-xs md:text-sm font-medium text-[var(--customer-primary-dark)] flex-shrink-0">-₹{amounts.coupon.toLocaleString('en-IN')}</span>
                   </div>
                 )}
 
                 {/* Tip amount */}
-                {finalTipAmount > 0 && (
+                {amounts.tip > 0 && (
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-yellow-600 flex-shrink-0">
@@ -1673,12 +1752,12 @@ export default function Checkout() {
                       </svg>
                       <span className="text-xs md:text-sm text-neutral-700 truncate">Tip to delivery partner</span>
                     </div>
-                    <span className="text-xs md:text-sm font-medium text-neutral-900 flex-shrink-0">₹{finalTipAmount}</span>
+                    <span className="text-xs md:text-sm font-medium text-neutral-900 flex-shrink-0">₹{amounts.tip}</span>
                   </div>
                 )}
 
                 {/* Online Payment Discount Row */}
-                {onlineDiscountAmount > 0 && selectedPaymentMethod !== 'Cash' && (
+                {amounts.online > 0 && (
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1 md:gap-1.5 min-w-0">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-emerald-600 flex-shrink-0">
@@ -1689,7 +1768,7 @@ export default function Checkout() {
                         {onlineDiscountPercentage}% OFFER
                       </span>
                     </div>
-                    <span className="text-xs md:text-sm font-medium text-[var(--customer-primary-dark)] flex-shrink-0">-₹{onlineDiscountAmount.toFixed(2)}</span>
+                    <span className="text-xs md:text-sm font-medium text-[var(--customer-primary-dark)] flex-shrink-0">-₹{amounts.online.toFixed(2)}</span>
                   </div>
                 )}
 
@@ -1702,7 +1781,7 @@ export default function Checkout() {
                       </svg>
                       <span className="text-xs md:text-sm text-neutral-700 truncate">Gift Packaging</span>
                     </div>
-                    <span className="text-xs md:text-sm font-medium text-neutral-900 flex-shrink-0">₹{giftPackagingFee}</span>
+                    <span className="text-xs md:text-sm font-medium text-neutral-900 flex-shrink-0">₹{amounts.gift}</span>
                   </div>
                 )}
 
@@ -1710,12 +1789,12 @@ export default function Checkout() {
                 <div className="pt-2 md:pt-3 border-t border-neutral-200 flex items-center justify-between">
                   <span className="text-sm md:text-base font-bold text-neutral-900">Grand total</span>
                   <span className="text-sm md:text-base font-bold text-neutral-900">
-                    ₹{(selectedPaymentMethod !== 'Cash' ? (grandTotal - onlineDiscountAmount) : grandTotal).toFixed(2)}
+                    ₹{grandTotal.toFixed(2)}
                   </span>
                 </div>
 
                 {/* Online Payment Discount Incentive */}
-                {onlineDiscountAmount > 0 && (
+                {onlineDiscountPercentage > 0 && selectedPaymentMethod === 'Cash' && (
                   <div className="mt-2 bg-[var(--customer-primary-alpha-10)] rounded-lg p-2 md:p-2.5 border border-dashed border-green-300">
                     <div className="flex items-center gap-2">
                       <div className="w-4 h-4 md:w-5 md:h-5 bg-[var(--customer-primary-alpha-20)] rounded-full flex items-center justify-center flex-shrink-0">
@@ -1724,7 +1803,7 @@ export default function Checkout() {
                         </svg>
                       </div>
                       <p className="text-xs md:text-sm font-semibold text-[var(--customer-primary-dark)]">
-                        Save ₹{onlineDiscountAmount.toFixed(2)} extra by paying online!
+                        Save {onlineDiscountPercentage}% extra by paying online!
                       </p>
                     </div>
                   </div>
@@ -2068,8 +2147,8 @@ export default function Checkout() {
                                    <div className="w-7 h-7 rounded-full bg-[var(--customer-primary-alpha-20)] flex items-center justify-center text-[var(--customer-primary-dark)] font-bold text-xs">R</div>
                                    <div>
                                        <span className="block font-semibold text-sm text-gray-700 group-hover:text-blue-700">Online Payment</span>
-                                       {onlineDiscountAmount > 0 && (
-                                           <span className="text-[10px] bg-[var(--customer-primary-alpha-20)] text-[var(--customer-primary-dark)] px-1.5 py-0.5 rounded font-bold">₹{(grandTotal - onlineDiscountAmount).toFixed(2)} (-₹{onlineDiscountAmount.toFixed(2)})</span>
+                                       {amounts.online > 0 && (
+                                           <span className="text-[10px] bg-[var(--customer-primary-alpha-20)] text-[var(--customer-primary-dark)] px-1.5 py-0.5 rounded font-bold">₹{grandTotal.toFixed(2)} (-₹{amounts.online.toFixed(2)})</span>
                                        )}
                                    </div>
                                 </div>
@@ -2084,8 +2163,8 @@ export default function Checkout() {
                                    <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-xs">C</div>
                                    <div>
                                        <span className="block font-semibold text-sm text-gray-700 group-hover:text-purple-700">Cashfree</span>
-                                       {onlineDiscountAmount > 0 && (
-                                           <span className="text-[10px] bg-[var(--customer-primary-alpha-20)] text-[var(--customer-primary-dark)] px-1.5 py-0.5 rounded font-bold">₹{(grandTotal - onlineDiscountAmount).toFixed(2)} (-₹{onlineDiscountAmount.toFixed(2)})</span>
+                                       {amounts.online > 0 && (
+                                           <span className="text-[10px] bg-[var(--customer-primary-alpha-20)] text-[var(--customer-primary-dark)] px-1.5 py-0.5 rounded font-bold">₹{grandTotal.toFixed(2)} (-₹{amounts.online.toFixed(2)})</span>
                                        )}
                                    </div>
                                 </div>

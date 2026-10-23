@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import Coupon from "../../../models/Coupon";
+import { notifyContentUpdated } from "../../../socket/socketService";
 
 /**
  * Create a new coupon
@@ -70,6 +71,8 @@ export const createCoupon = asyncHandler(
       userType: userType || 'All Users',
       isActive,
     });
+
+    notifyContentUpdated("deals");
 
     return res.status(201).json({
       success: true,
@@ -194,6 +197,8 @@ export const updateCoupon = asyncHandler(
       });
     }
 
+    notifyContentUpdated("deals");
+
     return res.status(200).json({
       success: true,
       message: "Coupon updated successfully",
@@ -217,6 +222,8 @@ export const deleteCoupon = asyncHandler(
         message: "Coupon not found",
       });
     }
+
+    notifyContentUpdated("deals");
 
     return res.status(200).json({
       success: true,

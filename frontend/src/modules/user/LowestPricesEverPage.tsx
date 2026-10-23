@@ -42,6 +42,23 @@ export default function LowestPricesEverPage() {
     };
 
     fetchProducts();
+
+    const handleUpdate = (e?: any) => {
+      const type = e?.detail?.type;
+      if (!type || type === "home" || type === "products" || type === "all") {
+        fetchProducts();
+      }
+    };
+
+    window.addEventListener("unnati_content_updated", handleUpdate);
+    window.addEventListener("productUpdated", handleUpdate);
+    window.addEventListener("focus", handleUpdate);
+
+    return () => {
+      window.removeEventListener("unnati_content_updated", handleUpdate);
+      window.removeEventListener("productUpdated", handleUpdate);
+      window.removeEventListener("focus", handleUpdate);
+    };
   }, [location?.latitude, location?.longitude]);
 
   return (
