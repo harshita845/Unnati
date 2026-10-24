@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authenticate, requireUserType } from "../middleware/auth";
 import {
+  createPackSizeAsSeller,
   createRepackAsSeller,
   getRepackById,
   getRepackProducts,
@@ -17,6 +18,7 @@ router.use(requireUserType("Seller"));
 router.get("/products", getRepackProducts);
 router.get("/rules", getRepackRules);
 router.post("/preview", previewRepackAsSeller);
+router.post("/pack-size", createPackSizeAsSeller);
 router.get("/", getRepacks);
 router.post("/", createRepackAsSeller);
 router.get("/:id", getRepackById);

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useToast } from "../../context/ToastContext";
 import {
+  createPackSize,
   createRepack,
   getRepackById,
   getRepackProducts,
@@ -74,6 +75,20 @@ const equivalent = (source: RepackVariant, sourcePerPack: number) => {
   return `= ${qty(c.amount * sourcePerPack)} ${c.unit}`;
 };
 
+const UNIT_BASE: Record<string, [PackContentDim, number]> = {
+  mg: ["mass", 0.001], g: ["mass", 1], gm: ["mass", 1], gms: ["mass", 1], gram: ["mass", 1], grams: ["mass", 1],
+  kg: ["mass", 1000], kgs: ["mass", 1000], quintal: ["mass", 100000], qtl: ["mass", 100000], ton: ["mass", 1000000], tonne: ["mass", 1000000],
+  ml: ["volume", 1], l: ["volume", 1000], ltr: ["volume", 1000], litre: ["volume", 1000], liter: ["volume", 1000],
+  mm: ["length", 1], cm: ["length", 10], m: ["length", 1000], mtr: ["length", 1000], metre: ["length", 1000], meter: ["length", 1000],
+  pc: ["count", 1], pcs: ["count", 1], piece: ["count", 1], pieces: ["count", 1], nos: ["count", 1], dozen: ["count", 12],
+};
+type PackContentDim = "mass" | "volume" | "length" | "count";
+const readSize = (text: string) => {
+  const m = /(\d+(?:\.\d+)?)\s*([a-zA-Z]+)/.exec(text || "");
+  const def = m && UNIT_BASE[m[2].toLowerCase()];
+  return m && def ? { amount: Number(m[1]), unit: m[2].toLowerCase(), dimension: def[0], base: Number(m[1]) * def[1] } : null;
+};
+
 const suggestRatio = (source: RepackVariant, target: RepackVariant) => {
   const s = source.content;
   const t = target.content;
@@ -106,6 +121,13 @@ export default function RepackingWorkspace({ scope }: { scope: RepackScope }) {
   const [wastage, setWastage] = useState(0);
   const [note, setNote] = useState("");
   const [updateCost, setUpdateCost] = useState(true);
+
+  // making a size that doesn't exist yet (e.g. a 500 g pack of a dal sold in 1 kg)
+  const [newSize, setNewSize] = useState("");
+  const [newPrice, setNewPrice] = useState("");
+  const [newMrp, setNewMrp] = useState("");
+  const [creatingSize, setCreatingSize] = useState(false);
+  const [itemsVersion, setItemsVersion] = useState(0); // bumped when a size is created, so the item list reloads
 
   // server results
   const [preview, setPreview] = useState<RepackPreview | null>(null);
@@ -148,7 +170,7 @@ export default function RepackingWorkspace({ scope }: { scope: RepackScope }) {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [scope, sellerId, search, storeReady, showToast]);
+  }, [scope, sellerId, search, storeReady, showToast, itemsVersion]);
 
   const loadHistory = useCallback(() => {
     setHistoryLoading(true);
@@ -175,6 +197,9 @@ export default function RepackingWorkspace({ scope }: { scope: RepackScope }) {
     setPosted(null);
     setSearch("");
     setPickerFor("source");
+    setNewSize("");
+    setNewPrice("");
+    setNewMrp("");
   };
 
   const changeStore = (id: string) => {
@@ -227,6 +252,47 @@ export default function RepackingWorkspace({ scope }: { scope: RepackScope }) {
       { productId: p.productId, productName: p.productName, variant: v, sourcePerPack: suggestRatio(source.variant, v), packs: 0, packagingCostPerPack: 0 },
     ]);
     setPreview(null);
+  };
+
+  /** Price suggestion for a new size: the bulk size's selling price scaled by the size, e.g. ₹120/kg → ₹60 for 500 g. */
+  const suggestedNewPrice = (() => {
+    if (!source) return 0;
+    const s = source.variant.content;
+    const t = readSize(newSize);
+    const unitPrice = Number(source.variant.discPrice || source.variant.price) || 0;
+    if (!s || !t || s.dimension !== t.dimension || !unitPrice) return 0;
+    return Math.round(unitPrice * (t.base / s.base) * 100) / 100;
+  })();
+
+  const makeNewSize = async () => {
+    if (!source) return;
+    const price = Number(newPrice) || suggestedNewPrice;
+    setCreatingSize(true);
+    try {
+      const res = await createPackSize(scope, {
+        ...(scope === "admin" ? { sellerId } : {}),
+        productId: source.productId,
+        value: newSize.trim(),
+        price,
+        compareAtPrice: newMrp ? Number(newMrp) : undefined,
+        likeVariationId: source.variant.variationId,
+      });
+      const v = res.data.variant;
+      setOutputs((ls) => [
+        ...ls,
+        { productId: res.data.productId, productName: res.data.productName, variant: v, sourcePerPack: suggestRatio(source.variant, v), packs: 0, packagingCostPerPack: 0 },
+      ]);
+      setPreview(null);
+      setNewSize("");
+      setNewPrice("");
+      setNewMrp("");
+      setItemsVersion((n) => n + 1);
+      showToast(`${res.message} — now enter how many packs to make`, "success");
+    } catch (e) {
+      showToast(apiMessage(e, "Couldn't add the size"), "error");
+    } finally {
+      setCreatingSize(false);
+    }
   };
 
   const patchOutput = (i: number, patch: Partial<OutputLine>) => {
@@ -346,7 +412,7 @@ export default function RepackingWorkspace({ scope }: { scope: RepackScope }) {
           <p className="px-3 py-6 text-center text-sm text-gray-400">No items{search ? ` matching "${search}"` : ""}.</p>
         ) : (
           <ul className="divide-y divide-gray-100">
-            {results.flatMap((p) =>
+            {(mode === "output" && source ? [...results].sort((a, b) => Number(b.productId === source.productId) - Number(a.productId === source.productId)) : results).flatMap((p) =>
               p.variants
                 .filter((v) => (mode === "source" ? v.stock > 0 : v.variationId !== source?.variant.variationId))
                 .map((v) => {
@@ -478,8 +544,48 @@ export default function RepackingWorkspace({ scope }: { scope: RepackScope }) {
       <div className={`${card} space-y-3`} style={cardStyle}>
         {sourceSummary}
         <h2 className="text-sm font-bold text-gray-900">Pack sizes to make</h2>
+
+        <div className="rounded-lg border border-dashed border-[var(--primary-dark)]/40 bg-emerald-50/40 p-3">
+          <div className="text-sm font-semibold text-gray-900">Make a new size of {source.productName}</div>
+          <p className="text-xs text-gray-500">
+            For a size you don't sell yet, e.g. 500 g packs from the {source.variant.label} stock. It's added to this product with 0 stock; the repack fills it.
+          </p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
+            <label className="text-xs font-semibold text-gray-600">
+              Pack size
+              <input className={field} value={newSize} maxLength={40} placeholder='e.g. "500 g"' onChange={(e) => setNewSize(e.target.value)} />
+            </label>
+            <label className="text-xs font-semibold text-gray-600">
+              Selling price (₹)
+              <input
+                type="number"
+                min={0}
+                step="any"
+                className={field}
+                value={newPrice}
+                placeholder={suggestedNewPrice ? `${suggestedNewPrice} suggested` : "e.g. 60"}
+                onChange={(e) => setNewPrice(e.target.value)}
+              />
+            </label>
+            <label className="text-xs font-semibold text-gray-600">
+              MRP (₹, optional)
+              <input type="number" min={0} step="any" className={field} value={newMrp} onChange={(e) => setNewMrp(e.target.value)} />
+            </label>
+            <button
+              type="button"
+              disabled={creatingSize || !newSize.trim() || !(Number(newPrice) > 0 || suggestedNewPrice > 0)}
+              onClick={makeNewSize}
+              className="flex items-center justify-center gap-1 rounded-lg bg-[var(--primary-dark)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {creatingSize ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Create & add
+            </button>
+          </div>
+        </div>
+
         {outputs.length === 0 ? (
-          <p className="py-6 text-center text-sm text-gray-400">Add the pack sizes to make from the list on the right.</p>
+          <p className="py-4 text-center text-sm text-gray-400">
+            No pack sizes added yet. Create a new size above, or pick an existing item from the list on the right.
+          </p>
         ) : (
           <div className="space-y-3">
             {outputs.map((o, i) => {
@@ -585,8 +691,8 @@ export default function RepackingWorkspace({ scope }: { scope: RepackScope }) {
         {conversionProblems.length > 0 && activeOutputs.length > 0 && <p className="text-xs text-red-600">{conversionProblems[0]}</p>}
       </div>
       <div className={`${card} space-y-2`} style={cardStyle}>
-        <h2 className="text-sm font-bold text-gray-900">Add a pack size</h2>
-        <p className="text-xs text-gray-500">Any item or size in this store, e.g. "Rice — 1 kg Packet". Create the pack product first if it doesn't exist yet.</p>
+        <h2 className="text-sm font-bold text-gray-900">Or use a size that already exists</h2>
+        <p className="text-xs text-gray-500">Any item or size in this store, e.g. "Rice — 1 kg Packet". Sizes of {source.productName} are listed first.</p>
         {pickerFor === "output" && itemPicker("output")}
       </div>
     </div>
@@ -752,7 +858,7 @@ export default function RepackingWorkspace({ scope }: { scope: RepackScope }) {
                         {o.productName} — {o.variantLabel}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {rupees(o.costPerPack)} per pack{updateCost && o.newCost !== undefined ? ` · purchase price → ${rupees(o.newCost)}` : ""}
+                        {rupees(o.costPerPack)} per pack{updateCost && preview.source.unitCost > 0 && o.newCost !== undefined ? ` · purchase price → ${rupees(o.newCost)}` : ""}
                       </div>
                     </td>
                     <td className="py-2 text-right tabular-nums">{qty(o.stockBefore)}</td>

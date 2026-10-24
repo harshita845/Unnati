@@ -19,6 +19,9 @@ export interface RepackVariant {
   stock: number;
   sku: string;
   purchasePrice: number;
+  price?: number;
+  discPrice?: number;
+  compareAtPrice?: number;
   content: PackContent | null;
 }
 
@@ -150,3 +153,19 @@ export const listRepacks = async (scope: RepackScope, sellerId?: string): Promis
 
 export const getRepackById = async (scope: RepackScope, id: string): Promise<RepackRecord> =>
   (await api.get(`${base(scope)}/${id}`)).data.data;
+
+export interface NewPackSizeRequest {
+  sellerId?: string;
+  productId: string;
+  value: string;
+  price: number;
+  compareAtPrice?: number;
+  likeVariationId?: string;
+}
+
+/** Adds a new size (e.g. "500 g") to a product so bulk can be repacked into it. */
+export const createPackSize = async (
+  scope: RepackScope,
+  body: NewPackSizeRequest
+): Promise<{ message: string; data: { productId: string; productName: string; image: string; variant: RepackVariant } }> =>
+  (await api.post(`${base(scope)}/pack-size`, body)).data;

@@ -3,6 +3,7 @@ import { asyncHandler } from "../../../utils/asyncHandler";
 import Seller from "../../../models/Seller";
 import {
   RepackError,
+  createPackSize,
   createRepack,
   getRepack,
   listRepacks,
@@ -63,6 +64,15 @@ export const getRepacks = asyncHandler(async (req: Request, res: Response) => {
 export const getRepackById = asyncHandler(async (req: Request, res: Response) => {
   try {
     return res.json({ success: true, data: await getRepack(req.params.id, storeOf(req)) });
+  } catch (error) {
+    return handle(res, error);
+  }
+});
+
+export const createPackSizeAsSeller = asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const data = await createPackSize({ ...req.body, sellerId: storeOf(req) });
+    return res.status(201).json({ success: true, message: `Added the ${data.variant.label} size`, data });
   } catch (error) {
     return handle(res, error);
   }

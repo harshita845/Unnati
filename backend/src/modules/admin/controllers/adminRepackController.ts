@@ -3,6 +3,7 @@ import { asyncHandler } from "../../../utils/asyncHandler";
 import { gstReturnStores } from "../../../services/gstReturnService";
 import {
   RepackError,
+  createPackSize,
   createRepack,
   getRepack,
   listRepacks,
@@ -67,6 +68,16 @@ export const getRepacks = asyncHandler(async (req: Request, res: Response) => {
 export const getRepackById = asyncHandler(async (req: Request, res: Response) => {
   try {
     return res.json({ success: true, data: await getRepack(req.params.id) });
+  } catch (error) {
+    return handle(res, error);
+  }
+});
+
+// POST /admin/repacks/pack-size  { sellerId, productId, value, price, compareAtPrice?, likeVariationId? }
+export const createPackSizeAsAdmin = asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const data = await createPackSize(req.body);
+    return res.status(201).json({ success: true, message: `Added the ${data.variant.label} size`, data });
   } catch (error) {
     return handle(res, error);
   }

@@ -6,7 +6,7 @@ import Product from "../../src/models/Product";
 import Repack from "../../src/models/Repack";
 import RepackRule from "../../src/models/RepackRule";
 import StockLedger from "../../src/models/StockLedger";
-import { createRepack, previewRepack, RepackError } from "../../src/services/repackService";
+import { createPackSize, createRepack, previewRepack, RepackError } from "../../src/services/repackService";
 import { parsePackQuantity, suggestSourcePerPack } from "../../src/utils/packQuantity";
 
 /**
@@ -243,4 +243,66 @@ test("pack labels are read in any common unit", () => {
   assert.equal(suggestSourcePerPack("Box", "1 piece"), null, "a box's count isn't in its label: entered by hand");
   assert.equal(suggestSourcePerPack("1 kg", "1 Ltr"), null, "weight and volume can't be compared");
   assert.deepEqual(parsePackQuantity("Pack of 2 dozen")?.base, 24);
+});
+
+test("the client's case: a 500 g size of a dal sold in 1 kg can be created and filled", async () => {
+  const dal: any = await Product.create({
+    productName: "Chana Dal Split",
+    seller: store,
+    category: new mongoose.Types.ObjectId(),
+    status: "Active",
+    publish: true,
+    variations: [{ ...variation("1 kg", "Standard", 50), price: 140, discPrice: 120 }], // no purchase price, like the client's
+  } as any);
+  const oneKg = String(dal.variations[0]._id);
+
+  const made = await createPackSize({ sellerId: String(store), productId: String(dal._id), value: "500 g", price: 60, likeVariationId: oneKg });
+  assert.equal(made.variant.stock, 0, "a new size starts empty; the repack fills it");
+  assert.deepEqual(made.variant.content?.base, 500);
+
+  const preview = await previewRepack({
+    sellerId: String(store),
+    source: { productId: String(dal._id), variationId: oneKg },
+    outputs: [{ productId: String(dal._id), variationId: made.variant.variationId, packs: 20, sourcePerPack: 0.5 }],
+  });
+  assert.equal(preview.source.totalUsed, 10, "20 half-kilo packs use 10 kg");
+  assert.ok(preview.warnings.some((w) => /no purchase price/.test(w)), "the missing purchase price is pointed out");
+
+  await createRepack(
+    { sellerId: String(store), source: { productId: String(dal._id), variationId: oneKg }, outputs: [{ productId: String(dal._id), variationId: made.variant.variationId, packs: 20, sourcePerPack: 0.5 }] },
+    actor
+  );
+  assert.equal(await stockOf(String(dal._id), oneKg), 40);
+  assert.equal(await stockOf(String(dal._id), made.variant.variationId), 20);
+  const after: any = await Product.findById(dal._id).lean();
+  const half = after.variations.find((v: any) => String(v._id) === made.variant.variationId);
+  assert.equal(half.discPrice, 60, "sells at the price entered");
+  assert.notEqual(half.status, "Sold out", "freshly made packs are sellable");
+});
+
+test("a size can't be created twice, and it needs a price", async () => {
+  await assert.rejects(
+    createPackSize({ sellerId: String(store), productId: ids.product, value: "5 KG", price: 200 }),
+    /already has a "5 KG" size/
+  );
+  await assert.rejects(createPackSize({ sellerId: String(store), productId: ids.product, value: "2 kg", price: 0 }), /selling price/);
+  await assert.rejects(createPackSize({ sellerId: String(otherStore), productId: ids.product, value: "2 kg", price: 80 }), /isn't in this store/);
+});
+
+test("stock status follows the repack: emptied bulk is sold out, refilled packs are available", async () => {
+  await Product.updateOne({ _id: rice._id, "variations._id": ids.one }, { $set: { "variations.$.status": "Sold out" } });
+  await createRepack(clientExample({ outputs: [{ productId: ids.product, variationId: ids.one, packs: 50, sourcePerPack: 1 }] }), actor);
+  const after: any = await Product.findById(rice._id).lean();
+  const statusOf = (id: string) => after.variations.find((v: any) => String(v._id) === id).status;
+  assert.equal(statusOf(ids.loose), "Sold out", "all 50 kg used");
+  assert.equal(statusOf(ids.one), "Available", "the packets were sold out and now have stock");
+});
+
+test("with no purchase price on the bulk, existing pack costs are left alone", async () => {
+  await Product.updateOne({ _id: rice._id, "variations._id": ids.loose }, { $unset: { "variations.$.purchasePrice": "" } });
+  await Product.updateOne({ _id: rice._id, "variations._id": ids.one }, { $set: { "variations.$.stock": 10, "variations.$.purchasePrice": 30 } });
+  const record: any = await createRepack(clientExample({ outputs: [{ productId: ids.product, variationId: ids.one, packs: 20, sourcePerPack: 1 }] }), actor);
+  assert.equal(await costOf(ids.product, ids.one), 30, "averaging in an unknown ₹0 cost would have made it ₹10");
+  assert.equal(record.costUpdated, false);
+  assert.equal(await stockOf(ids.product, ids.one), 30, "the stock still moves");
 });

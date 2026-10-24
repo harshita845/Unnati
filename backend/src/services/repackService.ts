@@ -129,7 +129,9 @@ export async function previewRepack(input: RepackInput, session?: Session) {
     );
   }
   if (unitCost === 0) {
-    warnings.push("This bulk item has no purchase price, so packet costs only include packaging and wastage. Set its purchase price for accurate costs.");
+    warnings.push(
+      "This bulk item has no purchase price, so packet costs only include packaging and wastage, and the packs' purchase prices will be left unchanged. Set its purchase price for accurate costs."
+    );
   }
 
   const wastageCost = wastage * unitCost;
@@ -142,11 +144,15 @@ export async function previewRepack(input: RepackInput, session?: Session) {
     const costPerPack = money(sourceCostPerPack + l.packagingCostPerPack + wastageCostPerPack);
     const stockBefore = qty(Number(l.variant.stock) || 0);
     const previousCost = Number(l.variant.purchasePrice) || 0;
-    // weighted average with the packs already on the shelf, so profit reports stay right
+    // weighted average with the packs already on the shelf, so profit reports stay right. With no
+    // purchase price on the bulk the real cost is unknown: averaging in ₹0 would drag existing costs
+    // down, so the pack keeps the cost it had
     const newCost =
-      previousCost > 0 && stockBefore > 0
-        ? money((stockBefore * previousCost + l.packs * costPerPack) / (stockBefore + l.packs))
-        : costPerPack;
+      unitCost === 0
+        ? previousCost
+        : previousCost > 0 && stockBefore > 0
+          ? money((stockBefore * previousCost + l.packs * costPerPack) / (stockBefore + l.packs))
+          : costPerPack;
     return {
       product: String(l.product._id),
       variationId: String(l.variant._id),
@@ -213,12 +219,14 @@ async function nextRepackNumber(session: mongoose.ClientSession) {
 
 /** Posts the repack: moves the stock, writes the ledger, keeps the record. */
 export async function createRepack(input: RepackInput, actor: RepackActor) {
-  const updateCost = input.updateCost !== false;
+  let updateCost = input.updateCost !== false;
   const session = await mongoose.startSession();
   let created: any;
   try {
     await session.withTransaction(async () => {
       const p = await previewRepack(input, session);
+      // nothing to update packs with when the bulk's cost is unknown
+      if (p.source.unitCost === 0) updateCost = false;
 
       // Take the bulk only if it is all still there: a sale or another repack may have used some
       // since the preview, and stock must never go negative
@@ -234,6 +242,16 @@ export async function createRepack(input: RepackInput, actor: RepackActor) {
         throw new RepackError(409, "The bulk stock changed while you were repacking. Review the numbers and try again.");
       }
 
+      // Same rule as a manual stock edit: a size that hits 0 is "Sold out", and one that gets stock back
+      // is available again (otherwise freshly made packs could stay marked as sold out)
+      if (p.source.stockAfter <= 0) {
+        await Product.updateOne(
+          { _id: oid(p.source.product), "variations._id": oid(p.source.variationId) },
+          { $set: { "variations.$.status": "Sold out" } },
+          { session }
+        );
+      }
+
       for (const out of p.outputs) {
         await Product.updateOne(
           { _id: oid(out.product), "variations._id": oid(out.variationId) },
@@ -242,6 +260,11 @@ export async function createRepack(input: RepackInput, actor: RepackActor) {
             ...(updateCost ? { $set: { "variations.$.purchasePrice": out.newCost } } : {}),
           },
           { session }
+        );
+        await Product.updateOne(
+          { _id: oid(out.product) },
+          { $set: { "variations.$[v].status": "Available" } },
+          { session, arrayFilters: [{ "v._id": oid(out.variationId), "v.status": "Sold out" }] }
         );
       }
 
@@ -358,7 +381,7 @@ export async function repackableProducts(sellerId: string, search = "") {
     ];
   }
   const products: any[] = await Product.find(filter)
-    .select("productName mainImage variations._id variations.name variations.variationType variations.value variations.stock variations.sku variations.purchasePrice")
+    .select("productName mainImage variations._id variations.name variations.variationType variations.value variations.stock variations.sku variations.purchasePrice variations.price variations.discPrice variations.compareAtPrice")
     .sort({ productName: 1 })
     .limit(40)
     .lean();
@@ -373,9 +396,79 @@ export async function repackableProducts(sellerId: string, search = "") {
       stock: Number(v.stock) || 0,
       sku: v.sku || "",
       purchasePrice: Number(v.purchasePrice) || 0,
+      price: Number(v.price) || 0,
+      discPrice: Number(v.discPrice) || 0,
+      compareAtPrice: Number(v.compareAtPrice) || 0,
       content: parsePackQuantity(v.value || variantLabel(v)),
     })),
   }));
+}
+
+export interface NewPackSizeInput {
+  sellerId: string;
+  productId: string;
+  /** the size written on the pack, e.g. "500 g" */
+  value: string;
+  /** selling price (what the customer pays) */
+  price: number;
+  /** MRP, optional */
+  compareAtPrice?: number;
+  /** copy the size type (Weight, Volume…) from this size of the product */
+  likeVariationId?: string;
+}
+
+/**
+ * Adds a new size to a product so bulk can be repacked into it: "Chana Dal Split — 1 kg" gets a
+ * "500 g" size. Repacking only fills sizes that exist, and making the user leave the screen to
+ * create one first was where it got confusing. Starts at 0 stock; the repack puts the packs in.
+ */
+export async function createPackSize(input: NewPackSizeInput) {
+  if (!mongoose.isValidObjectId(input.sellerId)) throw new RepackError(400, "Choose the store");
+  if (!mongoose.isValidObjectId(input.productId)) throw new RepackError(400, "Choose the product");
+  const value = String(input.value || "").trim().replace(/\s+/g, " ");
+  if (!value) throw new RepackError(400, 'Enter the pack size, e.g. "500 g"');
+  if (value.length > 40) throw new RepackError(400, "Keep the pack size short, e.g. \"500 g\"");
+  const price = money(Number(input.price));
+  if (!(price > 0)) throw new RepackError(400, "Enter the selling price of the new pack");
+  const mrp = input.compareAtPrice !== undefined && input.compareAtPrice !== null && String(input.compareAtPrice) !== "" ? money(Number(input.compareAtPrice)) : undefined;
+  if (mrp !== undefined && (!(mrp > 0) || mrp < price)) throw new RepackError(400, "MRP must be at least the selling price");
+
+  const product: any = await Product.findOne({ _id: oid(input.productId), seller: oid(input.sellerId) });
+  if (!product) throw new RepackError(404, "That item isn't in this store");
+  const clash = (product.variations || []).find((v: any) => String(v.value || "").trim().toLowerCase() === value.toLowerCase());
+  if (clash) throw new RepackError(409, `${product.productName} already has a "${value}" size — pick it from the list instead`);
+
+  const like = input.likeVariationId ? (product.variations || []).find((v: any) => String(v._id) === String(input.likeVariationId)) : null;
+  const variationType = like?.variationType || like?.name || "Standard";
+  product.variations.push({
+    variationType,
+    name: like?.name || variationType,
+    value,
+    price: mrp ?? price,
+    discPrice: price,
+    compareAtPrice: mrp ?? price,
+    stock: 0,
+  });
+  await product.save();
+
+  const created: any = product.variations[product.variations.length - 1];
+  return {
+    productId: String(product._id),
+    productName: product.productName,
+    image: product.mainImage || "",
+    variant: {
+      variationId: String(created._id),
+      label: variantLabel(created) || "Standard",
+      value: created.value || "",
+      stock: 0,
+      sku: created.sku || "",
+      purchasePrice: 0,
+      price: Number(created.price) || 0,
+      discPrice: Number(created.discPrice) || 0,
+      compareAtPrice: Number(created.compareAtPrice) || 0,
+      content: parsePackQuantity(created.value),
+    },
+  };
 }
 
 /** The conversions this store has used before for one bulk item. */

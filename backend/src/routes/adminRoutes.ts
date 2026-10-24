@@ -176,6 +176,7 @@ router.get("/repacks/stores", repackController.getRepackStores);
 router.get("/repacks/products", repackController.getRepackProducts);
 router.get("/repacks/rules", repackController.getRepackRules);
 router.post("/repacks/preview", repackController.previewRepackAsAdmin);
+router.post("/repacks/pack-size", repackController.createPackSizeAsAdmin);
 router.get("/repacks", repackController.getRepacks);
 router.post("/repacks", repackController.createRepackAsAdmin);
 router.get("/repacks/:id", repackController.getRepackById);
