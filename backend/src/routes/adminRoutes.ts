@@ -7,6 +7,7 @@ import * as dashboardController from "../modules/admin/controllers/adminDashboar
 import * as backupController from "../modules/admin/controllers/adminBackupController";
 import * as gstReturnController from "../modules/admin/controllers/adminGstReturnController";
 import * as stockTransferController from "../modules/admin/controllers/adminStockTransferController";
+import * as repackController from "../modules/admin/controllers/adminRepackController";
 import * as productPhotoController from "../modules/admin/controllers/adminProductPhotoController";
 
 // Product Controllers
@@ -169,6 +170,15 @@ router.post("/stock-transfers", stockTransferController.createTransfer);
 router.post("/stock-transfers/:id/accept", stockTransferController.acceptTransferAsAdmin);
 router.post("/stock-transfers/:id/reject", stockTransferController.rejectTransferAsAdmin);
 router.post("/stock-transfers/:id/cancel", stockTransferController.cancelTransfer);
+
+// ==================== Repacking: bulk stock into smaller packs ====================
+router.get("/repacks/stores", repackController.getRepackStores);
+router.get("/repacks/products", repackController.getRepackProducts);
+router.get("/repacks/rules", repackController.getRepackRules);
+router.post("/repacks/preview", repackController.previewRepackAsAdmin);
+router.get("/repacks", repackController.getRepacks);
+router.post("/repacks", repackController.createRepackAsAdmin);
+router.get("/repacks/:id", repackController.getRepackById);
 
 // ==================== GST returns (GSTR-1, GSTR-3B) ====================
 router.get("/reports/gst-returns/stores", gstReturnController.getGstReturnStores);

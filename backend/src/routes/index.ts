@@ -192,7 +192,9 @@ router.use("/seller/subscriptions", authenticate, requireUserType("Seller"), sel
 
 // Stock transfers sent to a store: it accepts (stock arrives) or rejects (stock goes back)
 import sellerStockTransferRoutes from "./sellerStockTransferRoutes";
+import sellerRepackRoutes from "./sellerRepackRoutes";
 router.use("/seller/stock-transfers", requireSellerModule({ modules: ["product"] }), sellerStockTransferRoutes);
+router.use("/seller/repacks", requireSellerModule({ modules: ["product"] }), sellerRepackRoutes);
 
 // POS Customer Display: admin management + the customer-facing screen (terminal display key)
 import { adminCustomerDisplayRoutes, publicCustomerDisplayRoutes } from "./customerDisplayRoutes";

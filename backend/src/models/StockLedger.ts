@@ -6,7 +6,7 @@ export interface IStockLedger extends Document {
   sku: string;
   quantity: number;
   type: "IN" | "OUT";
-  source: "POS" | "RETURN" | "EXCHANGE" | "MANUAL" | "RESTOCK" | "POS_CANCEL" | "ORDER_EDIT_RESTORE" | "ORDER_EDIT_DEDUCT" | "ORDER_DELETE" | "POS_DELETE" | "LOSS" | "DAMAGE" | "ADJUSTMENT" | "TRANSFER";
+  source: "POS" | "RETURN" | "EXCHANGE" | "MANUAL" | "RESTOCK" | "POS_CANCEL" | "ORDER_EDIT_RESTORE" | "ORDER_EDIT_DEDUCT" | "ORDER_DELETE" | "POS_DELETE" | "LOSS" | "DAMAGE" | "ADJUSTMENT" | "TRANSFER" | "REPACK";
   referenceId?: mongoose.Types.ObjectId; // Order ID or special marker
   previousStock: number;
   newStock: number;
@@ -55,7 +55,9 @@ const StockLedgerSchema = new Schema<IStockLedger>(
         "LOSS",
         "DAMAGE",
         "ADJUSTMENT",
-        "TRANSFER"
+        "TRANSFER",
+        // bulk stock repacked into smaller packs (an internal movement, not a sale or purchase)
+        "REPACK"
       ],
       required: true,
     },

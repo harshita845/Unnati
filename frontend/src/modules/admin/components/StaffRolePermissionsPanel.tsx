@@ -192,6 +192,7 @@ const ADMIN_SIDEBAR_SECTIONS: Array<{
       { label: 'Product', path: '/admin/product' },
       { label: 'Product List', path: '/admin/product/list' },
       { label: 'Stock Transfer', path: '/admin/product/stock-transfer' },
+      { label: 'Repacking', path: '/admin/product/repacking' },
       { label: 'Taxes', path: '/admin/product/taxes' },
       { label: 'Attribute Setup', path: '/admin/product/attribute-setup' },
       { label: 'Variation Setup', path: '/admin/product/variation-setup' },

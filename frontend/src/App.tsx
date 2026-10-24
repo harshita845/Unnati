@@ -96,6 +96,7 @@ const SellerTaxes = lazy(() => import("./modules/seller/pages/SellerTaxes"));
 const SellerProductList = lazy(() => import("./modules/seller/pages/SellerProductList"));
 const SellerStockManagement = lazy(() => import("./modules/seller/pages/SellerStockManagement"));
 const SellerStockTransfers = lazy(() => import("./modules/seller/pages/SellerStockTransfers"));
+const SellerRepacking = lazy(() => import("./modules/seller/pages/SellerRepacking"));
 const SellerGstReturns = lazy(() => import("./modules/seller/pages/SellerGstReturns"));
 const SellerWallet = lazy(() => import("./modules/seller/pages/SellerWallet"));
 const SellerSubscriptions = lazy(() => import("./modules/seller/pages/SellerSubscriptions"));
@@ -242,6 +243,7 @@ const AdminGSTReport = lazy(() => import("./modules/admin/pages/AdminGSTReport")
 const AdminGstReturns = lazy(() => import("./modules/admin/pages/AdminGstReturns"));
 const AdminDataBackup = lazy(() => import("./modules/admin/pages/AdminDataBackup"));
 const AdminStockTransfer = lazy(() => import("./modules/admin/pages/AdminStockTransfer"));
+const AdminRepacking = lazy(() => import("./modules/admin/pages/AdminRepacking"));
 const AdminPaymentReport = lazy(() => import("./modules/admin/pages/AdminPaymentReport"));
 const AdminOnlineOrderReport = lazy(() => import("./modules/admin/pages/AdminOnlineOrderReport"));
 const AdminPOSInvoiceReport = lazy(() => import("./modules/admin/pages/AdminPOSInvoiceReport"));
@@ -507,6 +509,7 @@ function App() {
                               <Route path="product/storage-location" element={<SellerStorageLocationSetup />} />
                               <Route path="product/stock" element={<SellerStockManagement />} />
                               <Route path="product/stock-transfers" element={<SellerStockTransfers />} />
+                              <Route path="product/repacking" element={<SellerRepacking />} />
                               <Route path="wallet" element={<SellerWallet />} />
                               <Route path="subscriptions" element={<SellerSubscriptions />} />
                               <Route path="support" element={<SellerSupport />} />
@@ -590,6 +593,7 @@ function App() {
                              <Route path="product/storage-location" element={<AdminStorageLocationSetup />} />
                              <Route path="product/list" element={<AdminStockManagement />} />
                              <Route path="product/stock-transfer" element={<AdminStockTransfer />} />
+                             <Route path="product/repacking" element={<AdminRepacking />} />
                             <Route path="product/add" element={<AdminAddProduct />} />
                             <Route path="product/edit/:id" element={<AdminAddProduct />} />
                             <Route path="manage-seller/add" element={<AdminAddSeller />} />
