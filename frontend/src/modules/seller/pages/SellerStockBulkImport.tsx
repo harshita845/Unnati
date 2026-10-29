@@ -636,6 +636,26 @@ export default function SellerStockBulkImport({
 
             const rawData = mapRowToProduct(row);
 
+            // A category written in the sheet that doesn't exist here has to fail the row, by name.
+            // Sent with no category, the server filed the product under the oldest category in the
+            // system (Bridal & Wedding Wear) and then refused it for lacking a plan for *that*
+            // category, which is what a hardware sheet showed on every row: "This category needs an
+            // active subscription plan". If the category list didn't load there is nothing to compare with.
+            const categoryText = (rowCell(row, ["Category", "1. Category", "PRODUCT_CATEGORY", "product_category"]) || "").trim();
+            if (categories.length > 0 && categoryText && categoryText !== "-" && !isValidObjectIdString(rawData.categoryId)) {
+              failures.push({
+                row: i + 1,
+                label:
+                  rowCell(row, ["5. SKU", "SKU", "sku", "ITEM_CODE", "PRODUCT_SKU"]) ||
+                  rowCell(row, ["4. Product Name", "Product Name", "PRODUCT_NAME"]) ||
+                  "—",
+                message: `Category "${categoryText}" doesn't exist yet. Ask the admin to add it (or correct the name in your sheet), then import again.`,
+              });
+              failedCount++;
+              setProgress((prev) => ({ ...prev, current: i + 1, success: successCount, failed: failedCount }));
+              continue;
+            }
+
             // Construct proper CreateProductData payload
             // We need to ensure variations array is populated correctly with price/stock/mrp
             let price = safeNonNegativeNumber(

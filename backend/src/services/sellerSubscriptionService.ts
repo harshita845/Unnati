@@ -371,7 +371,21 @@ export const assertSellerCanListProduct = async (sellerId: unknown, categoryId: 
   const access = await getCategoryAccess(sellerId, categoryId);
   if (!access.required) return;
   if (!access.allowed) {
-    throw new SubscriptionError(403, "This category needs an active subscription plan. Go to Subscriptions to buy or renew a plan.");
+    // Name the category: "this category" alone sent a seller hunting through their plan when the
+    // real problem was a different category than the one they meant (see the bulk import)
+    let which = "This category";
+    try {
+      const cat: any = mongoose.isValidObjectId(String(categoryId))
+        ? await Category.findById(String(categoryId)).select("name headerCategoryId").lean()
+        : null;
+      if (cat?.name) {
+        const header: any = cat.headerCategoryId ? await HeaderCategory.findById(cat.headerCategoryId).select("name").lean() : null;
+        which = `The category "${cat.name}"${header?.name ? ` (${header.name})` : ""}`;
+      }
+    } catch {
+      /* the plain message below is still correct */
+    }
+    throw new SubscriptionError(403, `${which} needs an active subscription plan. Go to Subscriptions to buy or renew a plan that includes it.`);
   }
   const maxProducts = access.subscription?.planSnapshot?.limits?.maxProducts;
   if (maxProducts) {

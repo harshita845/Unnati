@@ -91,6 +91,9 @@ export default function SellerProductList() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  // The shared catalogue, which is what a product's category has to come from (the Add Product form
+  // uses it too). `categories` above can be the seller's own private list, which the bulk import can't use.
+  const [catalogueCategories, setCatalogueCategories] = useState<Category[]>([]);
   const [canCreateCategories, setCanCreateCategories] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -143,6 +146,16 @@ export default function SellerProductList() {
       const categoriesResponse = isCatPermOff ? await getSellerOwnCategories() : await getCategories();
       if (categoriesResponse.success) {
         setCategories(categoriesResponse.data);
+      }
+
+      // The bulk import files each row under a real catalogue category. For sellers who may also keep
+      // their own categories (the default) the list above has none of them, so no category in a sheet
+      // could ever match and every row fell back to the oldest category in the system.
+      try {
+        const catalogueResponse = isCatPermOff ? await getCategories() : categoriesResponse;
+        if (catalogueResponse.success) setCatalogueCategories(catalogueResponse.data as Category[]);
+      } catch (e) {
+        console.error("Could not load the category catalogue for bulk import:", e);
       }
 
       // Fetch products using Seller API
@@ -1501,7 +1514,7 @@ export default function SellerProductList() {
           }
         >
           <SellerStockBulkImport
-            categories={categories}
+            categories={catalogueCategories}
             onClose={() => setShowBulkImport(false)}
             onSuccess={() => {
               fetchData();
