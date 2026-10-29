@@ -33,6 +33,7 @@ export interface ISeller extends Document {
 
   // Store Location Info
   city: string;
+  storeSlug?: string;
   serviceableArea?: string;
   searchLocation?: string;
   latitude?: string;
@@ -132,6 +133,14 @@ const SellerSchema = new Schema<ISeller>(
       type: String,
       required: [true, 'Store name is required'],
       trim: true,
+    },
+    /** Friendly store link: /store/<storeSlug>. Optional; the store id link always works. */
+    storeSlug: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      unique: true,
+      sparse: true,
     },
     panCard: {
       type: String,

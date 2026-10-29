@@ -852,8 +852,13 @@ export const getLowestPricesProducts = async (req: Request, res: Response) => {
 // Fetch products based on store configuration from database
 export const getStoreProducts = async (req: Request, res: Response) => {
   try {
-    const { storeId } = req.params;
+    let { storeId } = req.params;
     const { latitude, longitude } = req.query; // User location for filtering
+    // A friendly link (/store/<storeSlug>) points at the same seller as its id link
+    if (!mongoose.Types.ObjectId.isValid(storeId)) {
+      const bySlug = await Seller.findOne({ storeSlug: String(storeId).toLowerCase() }).select("_id").lean();
+      if (bySlug) storeId = bySlug._id.toString();
+    }
     let query: any = {
       status: "Active",
       publish: true, subscriptionHidden: { $ne: true },
