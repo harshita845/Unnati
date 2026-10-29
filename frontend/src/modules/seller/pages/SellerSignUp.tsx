@@ -229,7 +229,7 @@ export default function SellerSignUp() {
   };
 
   return (
-    <div className="login-page-wrapper">
+    <div className="login-page-wrapper customer-auth-wrapper">
       <div className="login-card">
         {/* Back Button */}
         <button
@@ -243,11 +243,11 @@ export default function SellerSignUp() {
         </button>
 
         {/* Banner Image Section */}
-        <div className="login-video-container">
+        <div className="login-video-container md:!h-auto md:self-stretch md:!bg-[var(--brand-cream-soft,#F6EFE2)]">
           <img
             src="/assets/login/login_banner.png"
             alt="Seller Portal"
-            className="login-video"
+            className="login-video md:!h-auto md:!w-full"
           />
           {/* Subtle decorative overlay on desktop */}
           <div className="hidden md:block absolute inset-0 bg-gradient-to-r from-transparent to-white/5 pointer-events-none" />
@@ -268,12 +268,7 @@ export default function SellerSignUp() {
             </div>
 
             {/* Sign Up Form */}
-            <div className="p-3 w-full space-y-2 seller-signup-form" style={{ maxHeight: '280px', overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              <style>{`
-                .seller-signup-form::-webkit-scrollbar {
-                  display: none;
-                }
-              `}</style>
+            <div className="p-3 w-full space-y-2 seller-signup-form">
           {!showOTP ? (
             <form onSubmit={handleSubmit} className="space-y-2 md:space-y-4">
               {/* Required Fields Section */}

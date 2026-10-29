@@ -94,7 +94,7 @@ export default function SellerLogin() {
   };
 
   return (
-    <div className="login-page-wrapper">
+    <div className="login-page-wrapper customer-auth-wrapper">
       <div className="login-card">
         {/* Back Button */}
         <button
