@@ -170,7 +170,7 @@ export default function StorePage() {
                         </button>
 
                         <div className="flex-1 min-w-0 px-2">
-                            {loading && !storeName ? (
+                            {bannerImage && !imageError ? null : loading && !storeName ? (
                                 <div className="h-4 w-32 bg-white/70 rounded animate-pulse" />
                             ) : (
                                 <h1 className="text-sm font-display font-bold text-[var(--brand-ink,#1C2B20)] drop-shadow-sm truncate">
