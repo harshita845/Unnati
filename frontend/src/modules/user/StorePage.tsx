@@ -19,6 +19,8 @@ export default function StorePage() {
     const [products, setProducts] = useState<Product[]>([]);
     const [shopData, setShopData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    // Why the store can't be shown (e.g. outside its delivery area), taken from the server's own message
+    const [notice, setNotice] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const limit = 1000;
@@ -28,6 +30,7 @@ export default function StorePage() {
             if (!slug) return;
             try {
                 setLoading(true);
+                setNotice(null);
 
                 // Fetch shop data and products using the shop API endpoint
                 const response = await getStoreProducts(
@@ -52,12 +55,14 @@ export default function StorePage() {
                 } else {
                     setProducts([]);
                     setShopData(null);
+                    setNotice(response.message || null);
                 }
             } catch (error: any) {
                 console.error('Failed to fetch store data:', error);
                 console.error('Error details:', error.response?.data || error.message);
                 setProducts([]);
                 setShopData(null);
+                setNotice(error.response?.data?.message || null);
             } finally {
                 setLoading(false);
             }
@@ -230,7 +235,8 @@ export default function StorePage() {
                   </>
                 ) : (
                     <div className="text-center py-20 text-[var(--brand-ink-muted,#5B6B60)]">
-                        <p>No products found in this store yet.</p>
+                        <p>{notice || 'No products found in this store yet.'}</p>
+                        {notice && !location && <p className="text-sm mt-1">Set your delivery location to see this store.</p>}
                         <Link to="/" className="text-[var(--brand-green,#236B34)] font-medium mt-2 inline-block hover:underline">Explore other categories</Link>
                     </div>
                 )}
