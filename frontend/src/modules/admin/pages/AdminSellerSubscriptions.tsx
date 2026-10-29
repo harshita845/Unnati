@@ -44,7 +44,7 @@ const emptyPlan: PlanInput = {
   headerCategories: [],
   categories: [],
   features: [""],
-  limits: { maxProducts: null, commissionPercent: null, featuredStore: false },
+  limits: { maxProducts: null, commissionPercent: null, featuredStore: false, scanBillEnabled: false, scanBillMonthlyLimit: 100 },
   accessibleModules: ALL_SELLER_MODULE_KEYS,
   isActive: true,
   sortOrder: 0,
@@ -251,6 +251,8 @@ export default function AdminSellerSubscriptions() {
       maxProducts: plan.limits?.maxProducts ?? null,
       commissionPercent: plan.limits?.commissionPercent ?? null,
       featuredStore: !!plan.limits?.featuredStore,
+      scanBillEnabled: !!plan.limits?.scanBillEnabled,
+      scanBillMonthlyLimit: plan.limits?.scanBillMonthlyLimit || 100,
     },
     accessibleModules:
       plan.accessibleModules && plan.accessibleModules.length > 0
@@ -512,6 +514,7 @@ export default function AdminSellerSubscriptions() {
                     {plan.limits?.maxProducts ? <li>• Up to {plan.limits.maxProducts} products</li> : <li>• Unlimited products</li>}
                     {plan.limits?.commissionPercent != null && <li>• {plan.limits.commissionPercent}% commission</li>}
                     {plan.limits?.featuredStore && <li>• Featured store</li>}
+                    {plan.limits?.scanBillEnabled && <li>• Scan Bill ({plan.limits.scanBillMonthlyLimit || 100} scans/month)</li>}
                     {plan.features.map((f, i) => <li key={i}>• {f}</li>)}
                   </ul>
                   <div className="mt-3 flex items-center justify-between text-xs text-neutral-600 bg-neutral-50 px-2.5 py-1.5 rounded-lg border border-neutral-200">
@@ -951,6 +954,25 @@ export default function AdminSellerSubscriptions() {
                     onChange={(e) => setPlanField({ limits: { ...editing.data.limits, featuredStore: e.target.checked } })} />
                   Featured store (shown first in Shop by Store)
                 </label>
+                <div className="border-t border-neutral-200 pt-3 space-y-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={!!editing.data.limits.scanBillEnabled}
+                      onChange={(e) => setPlanField({ limits: { ...editing.data.limits, scanBillEnabled: e.target.checked, scanBillMonthlyLimit: editing.data.limits.scanBillMonthlyLimit || 100 } })} />
+                    Scan Bill in the seller panel (premium)
+                  </label>
+                  {editing.data.limits.scanBillEnabled && (
+                    <div className="max-w-[220px]">
+                      <label className={labelClass}>Scans per month, per store</label>
+                      <input type="number" min={1} step={1} className={inputClass}
+                        value={editing.data.limits.scanBillMonthlyLimit ?? ""}
+                        onChange={(e) => setPlanField({ limits: { ...editing.data.limits, scanBillMonthlyLimit: e.target.value === "" ? undefined : Number(e.target.value) } })} />
+                    </div>
+                  )}
+                  <p className="text-xs text-neutral-500">
+                    Sellers on this plan get POS → Scan Bill for their own products and suppliers. Each scan is a paid AI read, so the
+                    allowance resets every month. Applies to sellers who already bought this plan too.
+                  </p>
+                </div>
               </div>
 
               {/* ================= SELLER ACCESSIBILITY (MODULE PERMISSIONS FOR THIS PLAN) ================= */}

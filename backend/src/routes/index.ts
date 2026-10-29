@@ -202,8 +202,9 @@ router.use("/admin/customer-display", adminCustomerDisplayRoutes);
 router.use("/customer-display", publicCustomerDisplayRoutes);
 
 // Admin POS → Scan Bill (AI bill reading)
-import ocrRoutes from "./ocrRoutes";
+import ocrRoutes, { sellerOcrRoutes } from "./ocrRoutes";
 router.use("/admin/pos/ocr", ocrRoutes);
+router.use("/seller/pos/ocr", sellerOcrRoutes);
 
 router.use("/admin", adminRoutes);
 

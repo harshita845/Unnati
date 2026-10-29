@@ -25,8 +25,12 @@ import {
   storeInline,
   uploadSignature,
 } from "../../services/ocr/storage";
+import { getSellerScanBillAccess, ownerFields, ownerFilter, ScanOwner, scanOwnerFrom } from "../../services/ocr/owner";
 
-/** Admin POS → Scan Bill. All routes need an admin login (see routes/ocrRoutes.ts). */
+/**
+ * Scan Bill: Admin POS (admin login) and, for sellers whose plan includes it, the seller panel
+ * (see routes/ocrRoutes.ts). Every handler works only on the logged-in owner's scans and data.
+ */
 
 const fail = (res: Response, status: number, message: string, extra: Record<string, unknown> = {}) =>
   res.status(status).json({ success: false, message, ...extra });
@@ -34,12 +38,36 @@ const fail = (res: Response, status: number, message: string, extra: Record<stri
 const monthlyLimit = () => Math.max(0, Number(process.env.OCR_MONTHLY_LIMIT) || 500);
 const monthStart = (d = new Date()) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
 
-async function aiCallsThisMonth(): Promise<number> {
+/** AI calls this month: everyone's (the server-wide cap), or one seller's (their plan allowance). */
+async function aiCallsThisMonth(match: Record<string, unknown> = {}): Promise<number> {
   const [row] = await ScannedDocument.aggregate([
-    { $match: { createdAt: { $gte: monthStart() } } },
+    { $match: { createdAt: { $gte: monthStart() }, ...match } },
     { $group: { _id: null, calls: { $sum: "$aiCalls" } } },
   ]);
   return row?.calls || 0;
+}
+
+/** The owner from the login, or a 401 already sent. */
+function requireOwner(req: Request, res: Response): ScanOwner | null {
+  const owner = scanOwnerFrom(req);
+  if (!owner) fail(res, 401, "Login required");
+  return owner;
+}
+
+/** This owner's limit for the month: the server-wide cap, and for a seller their plan's allowance. */
+async function scanLimitFor(owner: ScanOwner): Promise<{ used: number; limit: number; message: string } | null> {
+  const used = await aiCallsThisMonth();
+  if (used >= monthlyLimit()) {
+    return { used, limit: monthlyLimit(), message: `Monthly scan limit reached (${monthlyLimit()}). Enter bills manually until next month, or raise OCR_MONTHLY_LIMIT.` };
+  }
+  if (owner.kind === "seller") {
+    const access = await getSellerScanBillAccess(owner.sellerId);
+    const mine = await aiCallsThisMonth({ seller: new mongoose.Types.ObjectId(owner.sellerId) });
+    if (mine >= access.monthlyLimit) {
+      return { used: mine, limit: access.monthlyLimit, message: `You've used all ${access.monthlyLimit} scans in your plan this month. Enter bills manually until next month.` };
+    }
+  }
+  return null;
 }
 
 const isDocType = (v: unknown): v is DocType => typeof v === "string" && (DOC_TYPES as readonly string[]).includes(v);
@@ -80,10 +108,10 @@ function summaryFields(e: Pick<Extraction, "party" | "invoiceNumber" | "invoiceD
 }
 
 /** Flag a probable re-scan of a bill already in the system. */
-async function duplicateCheck(scanId: mongoose.Types.ObjectId, e: Extraction): Promise<{ fingerprint?: string; duplicateOf?: any; warning?: ScanWarning }> {
+async function duplicateCheck(scanId: mongoose.Types.ObjectId, e: Extraction, owner: ScanOwner): Promise<{ fingerprint?: string; duplicateOf?: any; warning?: ScanWarning }> {
   const fingerprint = duplicateFingerprint(e) || undefined;
   if (!fingerprint) return {};
-  const other: any = await ScannedDocument.findOne({ fingerprint, _id: { $ne: scanId }, status: { $in: ["draft", "confirmed", "syncing"] } })
+  const other: any = await ScannedDocument.findOne({ fingerprint, _id: { $ne: scanId }, status: { $in: ["draft", "confirmed", "syncing"] }, ...ownerFilter(owner) })
     .sort({ createdAt: -1 })
     .select("_id status createdAt invoiceNumber")
     .lean();
@@ -123,10 +151,10 @@ function withDefaultActions(e: Extraction, matches: Awaited<ReturnType<typeof co
   };
 }
 
-async function fillFromExtraction(scan: IScannedDocument, outcome: Awaited<ReturnType<typeof runExtraction>>) {
+async function fillFromExtraction(scan: IScannedDocument, outcome: Awaited<ReturnType<typeof runExtraction>>, owner: ScanOwner) {
   const e = outcome.extraction;
-  const matches = await computeMatches(e).catch(() => null);
-  const dup = await duplicateCheck(scan._id as mongoose.Types.ObjectId, e);
+  const matches = await computeMatches(e, owner).catch(() => null);
+  const dup = await duplicateCheck(scan._id as mongoose.Types.ObjectId, e, owner);
   scan.set({
     status: "draft",
     docType: e.docType,
@@ -184,7 +212,7 @@ function logScanFailure(scanId: unknown, error: unknown) {
 
 // ---------------------------------------------------------------------------------------------
 
-export const getConfig = asyncHandler(async (_req: Request, res: Response) => {
+export const getConfig = asyncHandler(async (req: Request, res: Response) => {
   let model: string | null = null;
   let configError: string | null = null;
   try {
@@ -204,6 +232,8 @@ export const getConfig = asyncHandler(async (_req: Request, res: Response) => {
       maxFileMb: maxFileBytes() / 1024 / 1024,
       allowedTypes: ALLOWED_MIME,
       timeoutMs: ocrTimeoutMs(),
+      // Sales bills become POS orders against shared customer accounts: admin only for now
+      salesEnabled: req.user?.userType !== "Seller",
     },
   });
 });
@@ -213,13 +243,17 @@ export const getUploadSignature = asyncHandler(async (_req: Request, res: Respon
   return res.json({ success: true, data: uploadSignature() });
 });
 
-export const getUsage = asyncHandler(async (_req: Request, res: Response) => {
-  const used = await aiCallsThisMonth();
-  const limit = monthlyLimit();
+export const getUsage = asyncHandler(async (req: Request, res: Response) => {
+  const owner = requireOwner(req, res);
+  if (!owner) return;
+  // A seller sees their own plan allowance; the admin sees the server-wide total
+  const mine = owner.kind === "seller" ? { seller: new mongoose.Types.ObjectId(owner.sellerId) } : {};
+  const used = await aiCallsThisMonth(mine);
+  const limit = owner.kind === "seller" ? (await getSellerScanBillAccess(owner.sellerId)).monthlyLimit : monthlyLimit();
   const next = monthStart();
   next.setUTCMonth(next.getUTCMonth() + 1);
   const [counts] = await ScannedDocument.aggregate([
-    { $match: { createdAt: { $gte: monthStart() } } },
+    { $match: { createdAt: { $gte: monthStart() }, ...mine } },
     {
       $group: {
         _id: null,
@@ -255,8 +289,8 @@ export const getUsage = asyncHandler(async (_req: Request, res: Response) => {
  * AI failures still return the scan (status "failed") so the person can type it in instead.
  */
 export const scanBill = asyncHandler(async (req: Request, res: Response) => {
-  const adminId = req.user?.userId;
-  if (!adminId || !mongoose.Types.ObjectId.isValid(adminId)) return fail(res, 401, "Admin login required");
+  const owner = requireOwner(req, res);
+  if (!owner) return;
   const rawFiles: any[] = Array.isArray(req.body?.files) ? req.body.files : [];
   const docTypeHint: DocType | null = isDocType(req.body?.docType) ? req.body.docType : null;
   const manual = req.body?.manual === true;
@@ -294,10 +328,8 @@ export const scanBill = asyncHandler(async (req: Request, res: Response) => {
   if (inline.length && stored.length) return fail(res, 400, "Send either uploaded file references or inline files, not both.");
 
   if (!manual) {
-    const used = await aiCallsThisMonth();
-    if (used >= monthlyLimit()) {
-      return fail(res, 429, `Monthly scan limit reached (${monthlyLimit()}). Enter bills manually until next month, or raise OCR_MONTHLY_LIMIT.`, { code: "MONTHLY_LIMIT" });
-    }
+    const over = await scanLimitFor(owner);
+    if (over) return fail(res, 429, over.message, { code: "MONTHLY_LIMIT" });
   }
 
   // Keep inline uploads too (for the preview and audit), if storage is configured
@@ -307,7 +339,7 @@ export const scanBill = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const scan = await ScannedDocument.create({
-    admin: adminId,
+    ...ownerFields(owner),
     status: manual ? "draft" : "processing",
     docType: docTypeHint || "unknown",
     files: stored,
@@ -320,7 +352,7 @@ export const scanBill = asyncHandler(async (req: Request, res: Response) => {
   try {
     const files = inline.length ? inline.map(({ mimeType, data }) => ({ mimeType, data })) : await filesForAi(scan);
     const outcome = await runExtraction(files, { docTypeHint, onAiCall: () => sent++ });
-    await fillFromExtraction(scan, outcome);
+    await fillFromExtraction(scan, outcome, owner);
   } catch (error) {
     aiError = markFailed(scan, error, docTypeHint || "purchase");
     logScanFailure(scan._id, error);
@@ -333,17 +365,20 @@ export const scanBill = asyncHandler(async (req: Request, res: Response) => {
 
 /** POST /:id/rescan — read the stored files again (e.g. after a bad first read). */
 export const rescanBill = asyncHandler(async (req: Request, res: Response) => {
+  const owner = requireOwner(req, res);
+  if (!owner) return;
   const scan = await findScan(req, res);
   if (!scan) return;
   if (!["draft", "failed"].includes(scan.status)) return fail(res, 409, "Only unsaved scans can be re-scanned.");
   if (!scan.files.some((f) => f.publicId)) return fail(res, 400, "No stored files to re-scan. Upload the bill again.");
-  if ((await aiCallsThisMonth()) >= monthlyLimit()) return fail(res, 429, "Monthly scan limit reached.", { code: "MONTHLY_LIMIT" });
+  const over = await scanLimitFor(owner);
+  if (over) return fail(res, 429, over.message, { code: "MONTHLY_LIMIT" });
   const hint: DocType | null = isDocType(req.body?.docType) ? req.body.docType : scan.docType !== "unknown" ? scan.docType : null;
   let aiError: string | null = null;
   let sent = 0;
   try {
     const outcome = await runExtraction(await filesForAi(scan), { docTypeHint: hint, onAiCall: () => sent++ });
-    await fillFromExtraction(scan, outcome);
+    await fillFromExtraction(scan, outcome, owner);
   } catch (error) {
     aiError = markFailed(scan, error, hint || "purchase");
     logScanFailure(scan._id, error);
@@ -353,13 +388,15 @@ export const rescanBill = asyncHandler(async (req: Request, res: Response) => {
   return res.json({ success: true, data: present(scan), ...(aiError ? { aiError } : {}) });
 });
 
+/** The scan, only if it belongs to the logged-in owner (anything else is "not found"). */
 async function findScan(req: Request, res: Response): Promise<IScannedDocument | null> {
   const { id } = req.params;
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  const owner = scanOwnerFrom(req);
+  if (!owner || !mongoose.Types.ObjectId.isValid(id)) {
     fail(res, 404, "Scan not found");
     return null;
   }
-  const scan = await ScannedDocument.findById(id);
+  const scan = await ScannedDocument.findOne({ _id: id, ...ownerFilter(owner) });
   if (!scan) {
     fail(res, 404, "Scan not found");
     return null;
@@ -394,9 +431,11 @@ async function purgeEmptyDrafts() {
 
 /** GET / — scan history. ?status=&docType=&q=&from=YYYY-MM-DD&to=&page=&limit= */
 export const listScans = asyncHandler(async (req: Request, res: Response) => {
+  const owner = requireOwner(req, res);
+  if (!owner) return;
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
-  const filter: any = {};
+  const filter: any = { ...ownerFilter(owner) };
   const status = String(req.query.status || "");
   if (status && status !== "all") filter.status = { $in: status.split(",") };
   else filter.status = { $ne: "discarded" };
@@ -444,6 +483,8 @@ export const getScan = asyncHandler(async (req: Request, res: Response) => {
 
 /** PUT /:id — save the person's edits (draft). Re-runs the checks and returns fresh warnings. */
 export const updateScan = asyncHandler(async (req: Request, res: Response) => {
+  const owner = requireOwner(req, res);
+  if (!owner) return;
   const scan = await findScan(req, res);
   if (!scan) return;
   if (!["draft", "failed"].includes(scan.status)) return fail(res, 409, "This scan is already saved and can't be edited.");
@@ -457,7 +498,7 @@ export const updateScan = asyncHandler(async (req: Request, res: Response) => {
     ...asExtraction,
     confidence: { overall: null, invoiceNumber: null, invoiceDate: null, party: null, items: null, totals: null },
   });
-  const dup = await duplicateCheck(scan._id as mongoose.Types.ObjectId, asExtraction);
+  const dup = await duplicateCheck(scan._id as mongoose.Types.ObjectId, asExtraction, owner);
   scan.set({
     data: bill,
     docType: bill.docType,
@@ -473,11 +514,13 @@ export const updateScan = asyncHandler(async (req: Request, res: Response) => {
 
 /** POST /:id/rematch — fuzzy-match the (edited) items and party again. */
 export const rematchScan = asyncHandler(async (req: Request, res: Response) => {
+  const owner = requireOwner(req, res);
+  if (!owner) return;
   const scan = await findScan(req, res);
   if (!scan) return;
   const bill = ReviewBillSchema.safeParse(req.body?.data ?? scan.data);
   if (!bill.success) return fail(res, 400, "Some fields are invalid.");
-  const matches = await computeMatches(bill.data as unknown as Extraction);
+  const matches = await computeMatches(bill.data as unknown as Extraction, owner);
   if (["draft", "failed"].includes(scan.status)) {
     scan.matches = matches;
     await scan.save();
@@ -487,10 +530,10 @@ export const rematchScan = asyncHandler(async (req: Request, res: Response) => {
 
 /** POST /:id/confirm — { data?, syncLedger? }. Idempotent: confirming twice returns the first result. */
 export const confirmScanHandler = asyncHandler(async (req: Request, res: Response) => {
-  const adminId = req.user?.userId;
-  if (!adminId) return fail(res, 401, "Admin login required");
+  const owner = requireOwner(req, res);
+  if (!owner) return;
   try {
-    const result = await confirmScan(req.params.id, adminId, { data: req.body?.data, syncLedger: req.body?.syncLedger });
+    const result = await confirmScan(req.params.id, owner, { data: req.body?.data, syncLedger: req.body?.syncLedger });
     return res.status(result.alreadyConfirmed ? 200 : 201).json({
       success: true,
       message: result.alreadyConfirmed ? "Already saved earlier. Nothing was added again." : "Bill saved.",
@@ -506,9 +549,11 @@ export const confirmScanHandler = asyncHandler(async (req: Request, res: Respons
 
 /** POST /:id/sync-ledger — { supplierId? } post a confirmed purchase to the supplier ledger. */
 export const syncLedgerHandler = asyncHandler(async (req: Request, res: Response) => {
+  const owner = requireOwner(req, res);
+  if (!owner) return;
   try {
     const supplierId = typeof req.body?.supplierId === "string" && mongoose.Types.ObjectId.isValid(req.body.supplierId) ? req.body.supplierId : undefined;
-    const result = await syncScanToLedger(req.params.id, supplierId);
+    const result = await syncScanToLedger(req.params.id, owner, supplierId);
     return res.json({
       success: true,
       message: result.alreadyConfirmed ? "Already in the supplier ledger." : "Added to the supplier ledger.",

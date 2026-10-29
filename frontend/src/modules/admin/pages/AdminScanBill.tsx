@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { useToast } from '../../../context/ToastContext';
-import { getCategories } from '../../../services/api/admin/adminProductService';
+import { adminScanScope, ScanScope, scanScope, setScanScope } from '../scanBill/scanScope';
 import {
   blobToBase64,
   DOC_TYPE_LABEL,
@@ -79,7 +79,9 @@ const DOC_TYPES: ScanDocType[] = ['purchase', 'sales', 'stock_slip', 'expense'];
 const INLINE_LIMIT_BYTES = 3 * 1024 * 1024;
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-export default function AdminScanBill() {
+export default function AdminScanBill({ scope = adminScanScope }: { scope?: ScanScope } = {}) {
+  // Before any part renders or loads: they read the scope for their API and links
+  setScanScope(scope);
   const { showToast } = useToast();
   const [params, setParams] = useSearchParams();
   const [tab, setTab] = useState<'scan' | 'history'>(params.get('tab') === 'history' ? 'history' : 'scan');
@@ -117,8 +119,9 @@ export default function AdminScanBill() {
       .then(setConfig)
       .catch((e) => setConfigError(apiMessage(e, "Couldn't reach the server")));
     refreshUsage();
-    getCategories({ status: 'Active' } as any)
-      .then((res: any) => setCategories((res?.data || []).filter((c: any) => !c.parentId).map((c: any) => ({ _id: c._id, name: c.name }))))
+    scanScope()
+      .loadCategories()
+      .then((rows) => setCategories(rows.filter((c: any) => !c.parentId).map((c: any) => ({ _id: c._id, name: c.name }))))
       .catch(() => undefined);
   }, [refreshUsage]);
 
@@ -476,7 +479,7 @@ export default function AdminScanBill() {
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="mr-auto text-sm font-bold text-gray-900">1. Add the bill</h2>
               <div className="flex flex-wrap gap-1" role="radiogroup" aria-label="Bill type">
-                {DOC_TYPES.map((t) => (
+                {DOC_TYPES.filter((t) => t !== 'sales' || scanScope().kind === 'admin').map((t) => (
                   <button
                     key={t}
                     type="button"

@@ -4,10 +4,14 @@ import Customer from "../../models/Customer";
 import { variantsFromProductDoc } from "../../modules/product/variantHelpers";
 import { CatalogEntry, ItemMatch, matchItems, matchParty, PartyEntry, PartyMatch } from "./match";
 import type { Extraction } from "./schema";
+import type { ScanOwner } from "./owner";
 
-/** Same product set the POS sells and purchases against (all active products), one row per variant. */
-export async function loadCatalog(): Promise<CatalogEntry[]> {
-  const products: any[] = await Product.find({ status: "Active" })
+/**
+ * Same product set the POS sells and purchases against, one row per variant: all active products
+ * for the admin, only the seller's own for a seller.
+ */
+export async function loadCatalog(owner: ScanOwner): Promise<CatalogEntry[]> {
+  const products: any[] = await Product.find({ status: "Active", ...(owner.kind === "seller" ? { seller: owner.sellerId } : {}) })
     .select("productName variations hsnCode gst barcode sku")
     .lean();
   const rows: CatalogEntry[] = [];
@@ -34,8 +38,8 @@ export async function loadCatalog(): Promise<CatalogEntry[]> {
   return rows;
 }
 
-export async function loadSuppliers(): Promise<PartyEntry[]> {
-  const rows: any[] = await SupplierLedger.find({ isAdmin: true }).select("name phone gstNumber address currentBalance").lean();
+export async function loadSuppliers(owner: ScanOwner): Promise<PartyEntry[]> {
+  const rows: any[] = await SupplierLedger.find(owner.kind === "seller" ? { sellerId: owner.sellerId, isAdmin: false } : { isAdmin: true }).select("name phone gstNumber address currentBalance").lean();
   return rows.map((s) => ({ id: String(s._id), name: s.name, phone: s.phone, gstin: s.gstNumber, address: s.address, balance: s.currentBalance }));
 }
 
@@ -59,11 +63,12 @@ export interface ScanMatches {
   party: PartyMatch;
 }
 
-export async function computeMatches(e: Extraction): Promise<ScanMatches> {
+export async function computeMatches(e: Extraction, owner: ScanOwner): Promise<ScanMatches> {
   if (e.docType === "expense") return { items: [], party: { status: "new", candidates: [] } };
   const [catalog, parties] = await Promise.all([
-    e.items.length ? loadCatalog() : Promise.resolve([]),
-    e.docType === "sales" ? loadCustomers(e.party) : loadSuppliers(),
+    e.items.length ? loadCatalog(owner) : Promise.resolve([]),
+    // Customers are shared app accounts: sales bills stay admin-only
+    e.docType === "sales" ? (owner.kind === "seller" ? Promise.resolve([]) : loadCustomers(e.party)) : loadSuppliers(owner),
   ]);
   return {
     items: matchItems(e.items, catalog),

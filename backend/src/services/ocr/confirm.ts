@@ -7,6 +7,9 @@ import StockLedger from "../../models/StockLedger";
 import SupplierLedger from "../../models/SupplierLedger";
 import SupplierTransaction, { SupplierTransactionType } from "../../models/SupplierTransaction";
 import AdminPurchaseEntry from "../../models/AdminPurchaseEntry";
+import SellerPurchaseEntry from "../../models/SellerPurchaseEntry";
+import { assertSellerCanListProduct, isProductHiddenForSeller, SubscriptionError } from "../sellerSubscriptionService";
+import { ownerFilter, ScanOwner } from "./owner";
 import { decrementVariantStock, incrementVariantStock } from "../../modules/product/variantStockService";
 import { findVariantById, resolveLedgerSku, variantsFromProductDoc } from "../../modules/product/variantHelpers";
 import { confirmBlockers, resolvePaid, ReviewBill, ReviewBillSchema, ReviewItem } from "./review";
@@ -47,16 +50,27 @@ async function adminStoreSellerId(): Promise<string> {
  * builds a search embedding, too slow to hold a transaction open for) and writes the new ids back
  * onto the scan, so a retried confirm links to them instead of creating duplicates.
  */
-async function createNewProducts(scan: IScannedDocument, bill: ReviewBill): Promise<mongoose.Types.ObjectId[]> {
+async function createNewProducts(scan: IScannedDocument, bill: ReviewBill, owner: ScanOwner): Promise<mongoose.Types.ObjectId[]> {
   const toCreate = bill.items.map((it, i) => ({ it, i })).filter(({ it }) => it.action === "create" && !it.productId);
   if (!toCreate.length) return [];
-  const sellerId = await adminStoreSellerId();
-  const fallbackCategory: any = await Category.findOne({ status: "Active" }).sort({ createdAt: 1 }).select("_id").lean();
+  const forSeller = owner.kind === "seller";
+  const sellerId = forSeller ? owner.sellerId : await adminStoreSellerId();
+  // A seller always picks the category (a guessed one could need a plan they don't have)
+  const fallbackCategory: any = forSeller ? null : await Category.findOne({ status: "Active" }).sort({ createdAt: 1 }).select("_id").lean();
   const created: mongoose.Types.ObjectId[] = [];
 
   for (const { it, i } of toCreate) {
     const category = it.categoryId || (fallbackCategory ? String(fallbackCategory._id) : null);
     if (!category) throw new ConfirmError(`Line ${i + 1}: choose a category for the new product.`, 400);
+    if (forSeller) {
+      // Same plan rules as adding a product by hand (category covered, under the product limit)
+      try {
+        await assertSellerCanListProduct(sellerId, category);
+      } catch (error) {
+        if (error instanceof SubscriptionError) throw new ConfirmError(`Line ${i + 1}: ${error.message}`, error.statusCode);
+        throw error;
+      }
+    }
     const rate = num(it.rate);
     const mrp = num(it.mrp) || rate;
     const selling = num(it.sellingPrice) || mrp || rate;
@@ -67,7 +81,9 @@ async function createNewProducts(scan: IScannedDocument, bill: ReviewBill): Prom
       hsnCode: it.hsn || undefined,
       gst: typeof it.taxRate === "number" ? it.taxRate : undefined,
       status: "Active",
-      publish: true,
+      // A seller's new products start unpublished (as when added by hand): they add photos, then publish
+      publish: !forSeller,
+      ...(forSeller ? { subscriptionHidden: await isProductHiddenForSeller(sellerId, category) } : {}),
       variations: [
         {
           variationType: "Standard",
@@ -103,12 +119,16 @@ interface StockLine {
 }
 
 /** Check every linked line points at a real product/variant (inside the transaction). */
-async function resolveStockLines(items: ReviewItem[], session: ClientSession): Promise<StockLine[]> {
+async function resolveStockLines(items: ReviewItem[], owner: ScanOwner, session: ClientSession): Promise<StockLine[]> {
   const lines: StockLine[] = [];
   for (const [i, item] of items.entries()) {
     if (item.action === "skip" || !item.productId) continue;
     const product: any = await Product.findById(item.productId).session(session).lean();
     if (!product) throw new ConfirmError(`Line ${i + 1}: the linked product no longer exists. Pick another.`, 409);
+    // A seller can only move stock of their own products
+    if (owner.kind === "seller" && String(product.seller) !== owner.sellerId) {
+      throw new ConfirmError(`Line ${i + 1}: that product isn't in your store. Pick one of yours.`, 403);
+    }
     const variants = variantsFromProductDoc(product);
     let variantId = item.variationId && findVariantById(variants, item.variationId) ? item.variationId : undefined;
     if (!variantId && variants.length === 1) variantId = String(variants[0]._id);
@@ -123,7 +143,7 @@ async function moveStock(
   lines: StockLine[],
   direction: "IN" | "OUT",
   source: "RESTOCK" | "MANUAL" | "POS",
-  ctx: { scanId: mongoose.Types.ObjectId; adminId: string; session: ClientSession; updatePurchasePrice?: boolean }
+  ctx: { scanId: mongoose.Types.ObjectId; owner: ScanOwner; session: ClientSession; updatePurchasePrice?: boolean }
 ): Promise<number> {
   let moved = 0;
   for (const line of lines) {
@@ -156,7 +176,7 @@ async function moveStock(
           referenceId: ctx.scanId,
           previousStock: prev,
           newStock: direction === "IN" ? prev + line.qty : Math.max(0, prev - line.qty),
-          admin: ctx.adminId,
+          ...(ctx.owner.kind === "seller" ? { seller: ctx.owner.sellerId } : { admin: ctx.owner.adminId }),
         },
       ],
       { session: ctx.session }
@@ -237,8 +257,11 @@ function purchaseEntryRecord(scan: IScannedDocument, bill: ReviewBill, lines: St
 }
 
 /** Find or create the supplier, then post the bill (and any payment) to the supplier ledger. */
-async function postSupplierLedger(scan: IScannedDocument, bill: ReviewBill, session: ClientSession) {
-  let supplier: any = bill.party.supplierId ? await SupplierLedger.findById(bill.party.supplierId).session(session) : null;
+async function postSupplierLedger(scan: IScannedDocument, bill: ReviewBill, owner: ScanOwner, session: ClientSession) {
+  // A seller only ever uses their own suppliers (the admin's lookup is unchanged)
+  const mine = owner.kind === "seller" ? { sellerId: owner.sellerId, isAdmin: false } : { isAdmin: true };
+  const lookup = owner.kind === "seller" ? mine : {};
+  let supplier: any = bill.party.supplierId ? await SupplierLedger.findOne({ _id: bill.party.supplierId, ...lookup }).session(session) : null;
   if (bill.party.supplierId && !supplier) throw new ConfirmError("The chosen supplier no longer exists. Pick another.", 409);
   if (!supplier) {
     const phone = (bill.party.phone || "").replace(/\D/g, "").slice(-10);
@@ -249,7 +272,7 @@ async function postSupplierLedger(scan: IScannedDocument, bill: ReviewBill, sess
           phone: phone || "0000000000",
           address: bill.party.address || undefined,
           gstNumber: bill.party.gstin || undefined,
-          isAdmin: true,
+          ...mine,
           notes: "Added from Scan Bill",
         },
       ],
@@ -290,11 +313,11 @@ async function postSupplierLedger(scan: IScannedDocument, bill: ReviewBill, sess
 
 export async function confirmScan(
   scanId: string,
-  adminId: string,
+  owner: ScanOwner,
   body: { data?: unknown; syncLedger?: boolean }
 ): Promise<ConfirmResult> {
   if (!mongoose.Types.ObjectId.isValid(scanId)) throw new ConfirmError("Scan not found", 404);
-  const scan = await ScannedDocument.findById(scanId);
+  const scan = await ScannedDocument.findOne({ _id: scanId, ...ownerFilter(owner) });
   if (!scan) throw new ConfirmError("Scan not found", 404);
   if (scan.status === "confirmed") return { alreadyConfirmed: true, scan };
   if (scan.status === "discarded") throw new ConfirmError("This scan was discarded.", 409);
@@ -311,9 +334,12 @@ export async function confirmScan(
   const bill = parsed.data;
   const blockers = confirmBlockers(bill);
   if (blockers.length) throw new ConfirmError("Fix these before saving.", 400, blockers);
+  if (owner.kind === "seller" && bill.docType === "sales") {
+    throw new ConfirmError("Sales bills can't be saved from the seller panel yet. Change the bill type, or use POS Orders.", 400);
+  }
 
   const syncLedger = bill.docType === "purchase" && body.syncLedger !== false;
-  const createdProducts = await createNewProducts(scan, bill);
+  const createdProducts = await createNewProducts(scan, bill, owner);
 
   const session = await mongoose.startSession();
   let alreadyConfirmed = false;
@@ -331,34 +357,42 @@ export async function confirmScan(
         return;
       }
 
-      const ctx = { scanId: scan._id as mongoose.Types.ObjectId, adminId, session };
+      const ctx = { scanId: scan._id as mongoose.Types.ObjectId, owner, session };
       const sync: Record<string, any> = {
         target: bill.docType,
         at: new Date(),
-        by: adminId,
+        ...(owner.kind === "admin" ? { by: owner.adminId } : {}),
         createdProducts: [...(scan.sync?.createdProducts || []), ...createdProducts],
       };
 
       if (bill.docType === "purchase") {
-        const lines = await resolveStockLines(bill.items, session);
+        const lines = await resolveStockLines(bill.items, owner, session);
         sync.stockMovements = await moveStock(lines, "IN", "RESTOCK", { ...ctx, updatePurchasePrice: true });
         const record = purchaseEntryRecord(claimed, bill, lines);
-        await AdminPurchaseEntry.create(
-          [{ admin: adminId, entryId: record.id, type: "purchase", date: record.date, data: record }],
-          { session }
-        );
+        // Lands in the owner's own Purchase Report
+        if (owner.kind === "seller") {
+          await SellerPurchaseEntry.create(
+            [{ seller: owner.sellerId, entryId: record.id, type: "purchase", date: record.date, data: record }],
+            { session }
+          );
+        } else {
+          await AdminPurchaseEntry.create(
+            [{ admin: owner.adminId, entryId: record.id, type: "purchase", date: record.date, data: record }],
+            { session }
+          );
+        }
         sync.purchaseEntryId = record.id;
         if (syncLedger) {
-          const ledger = await postSupplierLedger(claimed, bill, session);
+          const ledger = await postSupplierLedger(claimed, bill, owner, session);
           sync.supplierId = ledger.supplierId;
           sync.ledgerAmount = ledger.amount;
         }
       } else if (bill.docType === "stock_slip") {
-        const lines = await resolveStockLines(bill.items, session);
+        const lines = await resolveStockLines(bill.items, owner, session);
         sync.stockMovements = await moveStock(lines, bill.stockDirection === "out" ? "OUT" : "IN", "MANUAL", ctx);
-      } else if (bill.docType === "sales") {
-        const lines = await resolveStockLines(bill.items, session);
-        const sale = await createScannedSale(claimed, bill, lines, { adminId, session });
+      } else if (bill.docType === "sales" && owner.kind === "admin") {
+        const lines = await resolveStockLines(bill.items, owner, session);
+        const sale = await createScannedSale(claimed, bill, lines, { adminId: owner.adminId, session });
         sync.orderId = sale.orderId;
         sync.orderNumber = sale.orderNumber;
         sync.customerId = sale.customerId;
@@ -386,13 +420,13 @@ export async function confirmScan(
 }
 
 /** Post a confirmed purchase to the supplier ledger later (confirmed earlier with the ledger off). */
-export async function syncScanToLedger(scanId: string, supplierId?: string): Promise<ConfirmResult> {
+export async function syncScanToLedger(scanId: string, owner: ScanOwner, supplierId?: string): Promise<ConfirmResult> {
   if (!mongoose.Types.ObjectId.isValid(scanId)) throw new ConfirmError("Scan not found", 404);
   const session = await mongoose.startSession();
   let already = false;
   try {
     await session.withTransaction(async () => {
-      const scan = await ScannedDocument.findById(scanId).session(session);
+      const scan = await ScannedDocument.findOne({ _id: scanId, ...ownerFilter(owner) }).session(session);
       if (!scan) throw new ConfirmError("Scan not found", 404);
       if (scan.status !== "confirmed") throw new ConfirmError("Confirm the bill first.", 409);
       if (scan.docType !== "purchase") throw new ConfirmError("Only purchase bills go to the supplier ledger.", 400);
@@ -403,7 +437,7 @@ export async function syncScanToLedger(scanId: string, supplierId?: string): Pro
       const bill = ReviewBillSchema.parse(scan.data);
       if (supplierId) bill.party.supplierId = supplierId;
       if (!bill.party.supplierId && !bill.party.name) throw new ConfirmError("Enter the supplier name or pick a saved supplier.", 400);
-      const ledger = await postSupplierLedger(scan, bill, session);
+      const ledger = await postSupplierLedger(scan, bill, owner, session);
       scan.set({ "sync.supplierId": ledger.supplierId, "sync.ledgerAmount": ledger.amount, data: bill });
       await scan.save({ session });
     });

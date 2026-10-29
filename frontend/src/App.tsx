@@ -110,6 +110,7 @@ const SellerLogin = lazy(() => import("./modules/seller/pages/SellerLogin"));
 const SellerSignUp = lazy(() => import("./modules/seller/pages/SellerSignUp"));
 const SellerBillSettings = lazy(() => import("./modules/seller/pages/SellerBillSettings"));
 const SellerPOSOrders = lazy(() => import("./modules/seller/pages/SellerPOSOrders"));
+const SellerScanBill = lazy(() => import("./modules/seller/pages/SellerScanBill"));
 const SellerPOSSuccess = lazy(() => import("./modules/seller/pages/SellerPOSSuccess"));
 const SellerPOSCustomers = lazy(() => import("./modules/seller/pages/SellerPOSCustomers"));
 const SellerPOSCustomerDetail = lazy(() => import("./modules/seller/pages/SellerPOSCustomerDetail"));
@@ -523,6 +524,7 @@ function App() {
                               <Route path="app-settings" element={<AdminAppSettings />} />
                               <Route path="sms-gateway" element={<AdminSmsGateway />} />
                               <Route path="pos/orders" element={<SellerPOSOrders />} />
+                              <Route path="pos/scan-bill" element={<SellerScanBill />} />
                               <Route path="pos/success" element={<SellerPOSSuccess />} />
                               <Route path="pos/credit/verify" element={<POSCreditVerify portal="seller" />} />
                               <Route path="pos/customers" element={<SellerPOSCustomers />} />

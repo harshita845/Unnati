@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { canStaffAccessPath, getStaffSession } from "../../../utils/staffSession";
 import { getModuleUserData } from "../../../utils/moduleAuth";
+
+const SCAN_BILL_PATH = "/seller/pos/scan-bill";
 import { isSellerModuleAllowed, SELLER_ACCESSIBILITY_UPDATED_EVENT } from "../../../constants/sellerModules";
 
 interface SubMenuItem {
@@ -120,6 +122,14 @@ const menuItems: MenuItem[] = [
         path: "/seller/pos/orders",
         icon: (
            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+        ),
+      },
+      {
+        // Premium plans only: removed below unless the seller's plan includes it
+        label: "Scan Bill",
+        path: SCAN_BILL_PATH,
+        icon: (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><line x1="7" y1="12" x2="17" y2="12"></line></svg>
         ),
       },
       {
@@ -549,10 +559,17 @@ export default function SellerSidebar({ onClose }: SellerSidebarProps) {
   const user = getModuleUserData("seller");
   const accessibleModules = Array.isArray(user?.accessibleModules) ? user.accessibleModules : null;
 
+  // Scan Bill shows only when the seller's plan includes it
+  const planMenuItems = user?.scanBill?.enabled
+    ? menuItems
+    : menuItems.map((item) =>
+        item.submenuItems ? { ...item, submenuItems: item.submenuItems.filter((sub) => sub.path !== SCAN_BILL_PATH) } : item
+      );
+
   // Filter modules based on admin accessibility permissions for this seller
   const sellerAllowedMenuItems = accessibleModules !== null
-    ? menuItems.filter((item) => isSellerModuleAllowed(item.label, accessibleModules))
-    : menuItems;
+    ? planMenuItems.filter((item) => isSellerModuleAllowed(item.label, accessibleModules))
+    : planMenuItems;
 
   const visibleMenuItems = isStaffMode
     ? sellerAllowedMenuItems.reduce<MenuItem[]>((acc, item) => {

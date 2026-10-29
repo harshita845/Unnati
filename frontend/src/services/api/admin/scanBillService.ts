@@ -2,7 +2,10 @@ import api from '../config';
 
 /** Admin POS → Scan Bill (AI bill reading). Backend: /api/v1/admin/pos/ocr */
 
-const BASE = '/admin/pos/ocr';
+import { scanScope } from '../../../modules/admin/scanBill/scanScope';
+
+/** Admin POS or the seller panel, whichever Scan Bill page is open */
+const base = () => scanScope().apiBase;
 /** One scan can take up to ~45 s of AI time; the shared client times out at 20 s */
 const SCAN_TIMEOUT_MS = 90_000;
 
@@ -198,6 +201,8 @@ export interface ScanConfig {
   maxFileMb: number;
   allowedTypes: string[];
   timeoutMs: number;
+  /** False in the seller panel: sales bills are admin-only */
+  salesEnabled?: boolean;
 }
 
 export interface ScanUsage {
@@ -221,8 +226,8 @@ interface ApiResponse<T> {
   pagination?: { page: number; limit: number; total: number; pages: number };
 }
 
-export const getScanConfig = () => api.get<ApiResponse<ScanConfig>>(`${BASE}/config`).then((r) => r.data.data);
-export const getScanUsage = () => api.get<ApiResponse<ScanUsage>>(`${BASE}/usage`).then((r) => r.data.data);
+export const getScanConfig = () => api.get<ApiResponse<ScanConfig>>(`${base()}/config`).then((r) => r.data.data);
+export const getScanUsage = () => api.get<ApiResponse<ScanUsage>>(`${base()}/usage`).then((r) => r.data.data);
 
 export interface UploadedScanFile {
   publicId: string;
@@ -237,7 +242,7 @@ export interface UploadedScanFile {
 export async function uploadScanFile(file: Blob, originalName: string, onProgress?: (pct: number) => void): Promise<UploadedScanFile> {
   let sig: { uploadUrl: string; apiKey: string; folder: string; type: string; timestamp: number; signature: string };
   try {
-    const { data } = await api.post<ApiResponse<typeof sig>>(`${BASE}/upload-signature`);
+    const { data } = await api.post<ApiResponse<typeof sig>>(`${base()}/upload-signature`);
     sig = data.data;
   } catch (e: any) {
     const status = e?.response?.status;
@@ -294,29 +299,29 @@ export type ScanFileInput = UploadedScanFile | { mimeType: string; dataBase64: s
 
 export const scanBill = (files: ScanFileInput[], docType?: ScanDocType) =>
   api
-    .post<ApiResponse<ScannedDocument>>(`${BASE}/scan`, { files, ...(docType && docType !== 'unknown' ? { docType } : {}) }, { timeout: SCAN_TIMEOUT_MS })
+    .post<ApiResponse<ScannedDocument>>(`${base()}/scan`, { files, ...(docType && docType !== 'unknown' ? { docType } : {}) }, { timeout: SCAN_TIMEOUT_MS })
     .then((r) => r.data);
 
 /** Type a bill in by hand. Pages, if given, are kept with it so the photo shows beside the form. */
 export const startManualEntry = (docType: ScanDocType, files: ScanFileInput[] = []) =>
-  api.post<ApiResponse<ScannedDocument>>(`${BASE}/scan`, { manual: true, docType, files }).then((r) => r.data.data);
+  api.post<ApiResponse<ScannedDocument>>(`${base()}/scan`, { manual: true, docType, files }).then((r) => r.data.data);
 
 export const rescanBill = (id: string, docType?: ScanDocType) =>
-  api.post<ApiResponse<ScannedDocument>>(`${BASE}/${id}/rescan`, docType && docType !== 'unknown' ? { docType } : {}, { timeout: SCAN_TIMEOUT_MS }).then((r) => r.data);
+  api.post<ApiResponse<ScannedDocument>>(`${base()}/${id}/rescan`, docType && docType !== 'unknown' ? { docType } : {}, { timeout: SCAN_TIMEOUT_MS }).then((r) => r.data);
 
-export const getScan = (id: string) => api.get<ApiResponse<ScannedDocument>>(`${BASE}/${id}`).then((r) => r.data.data);
+export const getScan = (id: string) => api.get<ApiResponse<ScannedDocument>>(`${base()}/${id}`).then((r) => r.data.data);
 
-export const saveScan = (id: string, data: ReviewBill) => api.put<ApiResponse<ScannedDocument>>(`${BASE}/${id}`, { data }).then((r) => r.data.data);
+export const saveScan = (id: string, data: ReviewBill) => api.put<ApiResponse<ScannedDocument>>(`${base()}/${id}`, { data }).then((r) => r.data.data);
 
-export const rematchScan = (id: string, data: ReviewBill) => api.post<ApiResponse<ScanMatches>>(`${BASE}/${id}/rematch`, { data }).then((r) => r.data.data);
+export const rematchScan = (id: string, data: ReviewBill) => api.post<ApiResponse<ScanMatches>>(`${base()}/${id}/rematch`, { data }).then((r) => r.data.data);
 
 export const confirmScan = (id: string, data: ReviewBill, syncLedger: boolean) =>
-  api.post<ApiResponse<ScannedDocument>>(`${BASE}/${id}/confirm`, { data, syncLedger }, { timeout: 60_000 }).then((r) => r.data);
+  api.post<ApiResponse<ScannedDocument>>(`${base()}/${id}/confirm`, { data, syncLedger }, { timeout: 60_000 }).then((r) => r.data);
 
 export const syncScanLedger = (id: string, supplierId?: string) =>
-  api.post<ApiResponse<ScannedDocument>>(`${BASE}/${id}/sync-ledger`, supplierId ? { supplierId } : {}).then((r) => r.data);
+  api.post<ApiResponse<ScannedDocument>>(`${base()}/${id}/sync-ledger`, supplierId ? { supplierId } : {}).then((r) => r.data);
 
-export const discardScan = (id: string) => api.delete<ApiResponse<unknown>>(`${BASE}/${id}`).then((r) => r.data);
+export const discardScan = (id: string) => api.delete<ApiResponse<unknown>>(`${base()}/${id}`).then((r) => r.data);
 
 export interface ScanHistoryQuery {
   status?: string;
@@ -329,11 +334,11 @@ export interface ScanHistoryQuery {
 }
 
 export const listScans = (params: ScanHistoryQuery) =>
-  api.get<ApiResponse<ScanHistoryRow[]>>(BASE, { params }).then((r) => ({ rows: r.data.data, pagination: r.data.pagination! }));
+  api.get<ApiResponse<ScanHistoryRow[]>>(base(), { params }).then((r) => ({ rows: r.data.data, pagination: r.data.pagination! }));
 
 /** Download the CSV with the admin token (a plain link wouldn't carry it). */
 export async function downloadScanCsv(id: string, fileName: string) {
-  const res = await api.get(`${BASE}/${id}/export`, { params: { format: 'csv' }, responseType: 'blob' });
+  const res = await api.get(`${base()}/${id}/export`, { params: { format: 'csv' }, responseType: 'blob' });
   const url = URL.createObjectURL(res.data as Blob);
   const a = document.createElement('a');
   a.href = url;

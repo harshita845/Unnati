@@ -86,6 +86,12 @@ const parsePlanBody = async (body: any) => {
     errors.push("Commission must be between 0 and 100 (leave empty to use the seller's normal rate)");
   }
 
+  const scanBillEnabled = !!body.limits?.scanBillEnabled;
+  const scanBillMonthlyLimit = toNumberOrNull(body.limits?.scanBillMonthlyLimit);
+  if (scanBillEnabled && (Number.isNaN(scanBillMonthlyLimit) || scanBillMonthlyLimit === null || !Number.isInteger(scanBillMonthlyLimit) || scanBillMonthlyLimit < 1)) {
+    errors.push("Scans per month must be a whole number of at least 1");
+  }
+
   // Modules this plan unlocks in the seller panel; Dashboard + Subscriptions are always included
   const chosenModules = Array.isArray(body.accessibleModules)
     ? body.accessibleModules.filter((k: string) => ALL_SELLER_MODULE_KEYS.includes(k))
@@ -105,7 +111,13 @@ const parsePlanBody = async (body: any) => {
       headerCategories: headerCategoryIds,
       categories: categoryIds,
       features,
-      limits: { maxProducts, commissionPercent, featuredStore: !!body.limits?.featuredStore },
+      limits: {
+        maxProducts,
+        commissionPercent,
+        featuredStore: !!body.limits?.featuredStore,
+        scanBillEnabled,
+        scanBillMonthlyLimit: scanBillEnabled ? scanBillMonthlyLimit : 100,
+      },
       accessibleModules,
       isActive: body.isActive === undefined ? true : !!body.isActive,
       sortOrder: Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : 0,

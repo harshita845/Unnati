@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Loader2, Plus, Search, SkipForward } from 'lucide-react';
-import { getPOSProducts } from '../../../../services/api/admin/adminProductService';
+import { scanScope } from '../../scanBill/scanScope';
 import type { BillItem, ItemMatch, MatchCandidate } from '../../../../services/api/admin/scanBillService';
 import { MatchBadge, inputCls } from './scanBillUi';
 
@@ -71,9 +71,9 @@ export default function ProductPicker({ item, match, labels, categories, disable
     const t = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await getPOSProducts({ search: query.trim() } as any);
+        const products = await scanScope().searchProducts(query.trim());
         const rows: ProductOption[] = [];
-        for (const p of (res.data || []).slice(0, 15) as any[]) {
+        for (const p of products.slice(0, 15)) {
           const variants: any[] = Array.isArray(p.variations) && p.variations.length ? p.variations : [{}];
           for (const v of variants) {
             rows.push({

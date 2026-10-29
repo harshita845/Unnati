@@ -9,6 +9,7 @@ import {
   verifyOTP as verifyOTPService,
 } from "../../../services/otpService";
 import { generateToken } from "../../../services/jwtService";
+import { getSellerScanBillAccess } from "../../../services/ocr/owner";
 import { asyncHandler } from "../../../utils/asyncHandler";
 
 /** Max simultaneous seller login sessions (devices) allowed per account. */
@@ -16,11 +17,12 @@ const MAX_SELLER_ACTIVE_DEVICES = 5;
 
 /** Plan-based access for the seller panel (plan only; no plan + rule on = Dashboard + Subscriptions). */
 async function getPanelAccess(sellerId: unknown) {
-  const access = await getSellerPlanAccess(sellerId, { fresh: true });
+  const [access, scanBill] = await Promise.all([getSellerPlanAccess(sellerId, { fresh: true }), getSellerScanBillAccess(sellerId)]);
   return {
     accessibleModules: access.modules,
     subscriptionRequired: access.required,
     subscriptionLocked: access.locked,
+    scanBill,
   };
 }
 

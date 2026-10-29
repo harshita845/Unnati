@@ -37,6 +37,7 @@ import {
 import { amountToIndianWords } from '../../../../utils/amountInWords';
 import { inr, inToIso, isoToIN, lineAmount, liveChecks, r2, summarize } from '../../scanBill/billMath';
 import { exportBillPdf } from '../../scanBill/exportPdf';
+import { scanScope } from '../../scanBill/scanScope';
 import { confirmIssues } from '../../scanBill/confirmChecks';
 import MatchStatusPanel from './MatchStatusPanel';
 import PartyField from './PartyField';
@@ -377,7 +378,7 @@ export default function ReviewForm({ scan, localPreviews = [], categories, onUpd
               aria-label="Bill type"
               data-field="docType"
             >
-              {(['purchase', 'sales', 'stock_slip', 'expense', 'unknown'] as ScanDocType[]).map((t) => (
+              {(['purchase', 'sales', 'stock_slip', 'expense', 'unknown'] as ScanDocType[]).filter((t) => t !== 'sales' || scanScope().kind === 'admin' || bill.docType === 'sales').map((t) => (
                 <option key={t} value={t}>
                   {DOC_TYPE_LABEL[t]}
                 </option>
@@ -895,7 +896,7 @@ function SavedSummary({ scan }: { scan: ScannedDocument }) {
     lines.push(
       <span key="pe">
         Purchase entry {s.purchaseEntryId} ·{' '}
-        <Link to="/admin/purchase/report" className="font-semibold underline">
+        <Link to={scanScope().links.purchaseReport} className="font-semibold underline">
           Purchase Report
         </Link>
       </span>
@@ -904,7 +905,7 @@ function SavedSummary({ scan }: { scan: ScannedDocument }) {
     lines.push(
       <span key="sl">
         Supplier ledger {typeof s.ledgerAmount === 'number' ? `+${inr(s.ledgerAmount)} due` : 'updated'} ·{' '}
-        <Link to={`/admin/pos/suppliers/${s.supplierId}`} className="font-semibold underline">
+        <Link to={scanScope().links.supplier(String(s.supplierId))} className="font-semibold underline">
           Open supplier
         </Link>
       </span>
@@ -913,7 +914,7 @@ function SavedSummary({ scan }: { scan: ScannedDocument }) {
     lines.push(
       <span key="or">
         POS order #{s.orderNumber} ·{' '}
-        <Link to="/admin/pos/report" className="font-semibold underline">
+        <Link to={scanScope().links.posReport} className="font-semibold underline">
           POS Report
         </Link>
       </span>

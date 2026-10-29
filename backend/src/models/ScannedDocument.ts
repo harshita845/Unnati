@@ -24,7 +24,10 @@ export interface IScanFile {
 }
 
 export interface IScannedDocument extends Document {
-  admin: mongoose.Types.ObjectId;
+  /** Set for admin scans (the admin's own store) */
+  admin?: mongoose.Types.ObjectId;
+  /** Set for a seller's own scans (Scan Bill in the seller panel) */
+  seller?: mongoose.Types.ObjectId;
   status: ScanStatus;
   docType: ScanDocType;
   files: IScanFile[];
@@ -83,7 +86,14 @@ const ScanFileSchema = new Schema<IScanFile>(
 
 const ScannedDocumentSchema = new Schema<IScannedDocument>(
   {
-    admin: { type: Schema.Types.ObjectId, ref: "Admin", required: true },
+    admin: {
+      type: Schema.Types.ObjectId,
+      ref: "Admin",
+      required: function (this: any) {
+        return !this.seller;
+      },
+    },
+    seller: { type: Schema.Types.ObjectId, ref: "Seller", default: undefined },
     status: {
       type: String,
       enum: ["processing", "draft", "failed", "syncing", "confirmed", "discarded"],
@@ -129,6 +139,7 @@ const ScannedDocumentSchema = new Schema<IScannedDocument>(
 );
 
 ScannedDocumentSchema.index({ createdAt: -1 });
+ScannedDocumentSchema.index({ seller: 1, createdAt: -1 });
 ScannedDocumentSchema.index({ status: 1, createdAt: -1 });
 ScannedDocumentSchema.index({ fingerprint: 1 });
 

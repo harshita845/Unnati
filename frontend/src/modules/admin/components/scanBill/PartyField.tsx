@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link2, Loader2, X } from 'lucide-react';
-import { getAllSuppliers } from '../../../../services/api/admin/supplierService';
-import { getAllCustomers } from '../../../../services/api/admin/adminCustomerService';
+import { scanScope } from '../../scanBill/scanScope';
 import type { ReviewBill, ScanMatches } from '../../../../services/api/admin/scanBillService';
 import { ConfidenceDot, MatchBadge, inputCls } from './scanBillUi';
 
@@ -57,12 +56,13 @@ export default function PartyField({ kind, party, match, confidence, disabled, o
       setLoading(true);
       try {
         let found: Option[] = [];
+        const scope = scanScope();
         if (kind === 'supplier') {
-          const res: any = await getAllSuppliers(name.trim());
-          found = (res?.data || []).slice(0, 8).map((s: any) => ({ id: s._id, name: s.name, phone: s.phone, gstin: s.gstNumber, address: s.address, balance: s.currentBalance }));
-        } else {
-          const res: any = await getAllCustomers({ search: name.trim(), limit: 8 });
-          found = (res?.data || [])
+          const rows = await scope.searchSuppliers(name.trim());
+          found = rows.slice(0, 8).map((s: any) => ({ id: s._id, name: s.name, phone: s.phone, gstin: s.gstNumber, address: s.address, balance: s.currentBalance }));
+        } else if (scope.searchCustomers) {
+          const rows = await scope.searchCustomers(name.trim());
+          found = rows
             .filter((c: any) => c.email !== 'walkin@pos.com')
             .map((c: any) => ({ id: c._id, name: c.name, phone: c.phone, address: [c.address, c.city].filter(Boolean).join(', '), balance: c.creditBalance }));
         }

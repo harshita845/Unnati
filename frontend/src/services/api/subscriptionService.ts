@@ -6,6 +6,9 @@ export interface PlanLimits {
   maxProducts?: number | null;
   commissionPercent?: number | null;
   featuredStore: boolean;
+  /** Premium: Scan Bill in the seller panel, with a monthly scan allowance per store */
+  scanBillEnabled?: boolean;
+  scanBillMonthlyLimit?: number;
 }
 
 export interface SubscriptionPlan {
@@ -44,7 +47,7 @@ export interface PlanInput {
   /** Individually picked main category ids (kept from older plans) */
   categories: string[];
   features: string[];
-  limits: { maxProducts: number | null; commissionPercent: number | null; featuredStore: boolean };
+  limits: { maxProducts: number | null; commissionPercent: number | null; featuredStore: boolean; scanBillEnabled?: boolean; scanBillMonthlyLimit?: number };
   accessibleModules?: string[];
   isActive: boolean;
   sortOrder?: number;
@@ -173,7 +176,7 @@ export interface CurrentPlan {
   durationValue?: number;
   durationUnit?: PlanDurationUnit;
   features: string[];
-  limits: { maxProducts?: number | null; commissionPercent?: number | null; featuredStore?: boolean };
+  limits: { maxProducts?: number | null; commissionPercent?: number | null; featuredStore?: boolean; scanBillEnabled?: boolean; scanBillMonthlyLimit?: number };
   accessibleModules: string[];
   groups: string[];
   startDate: string;

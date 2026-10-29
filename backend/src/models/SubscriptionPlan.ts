@@ -22,6 +22,9 @@ export interface ISubscriptionPlan extends Document {
     maxProducts?: number | null; // null/undefined = unlimited
     commissionPercent?: number | null; // null/undefined = seller's normal commission
     featuredStore: boolean;
+    /** Premium: Scan Bill in the seller panel, with its own monthly scan allowance per store */
+    scanBillEnabled?: boolean;
+    scanBillMonthlyLimit?: number;
   };
   accessibleModules?: string[];
   isActive: boolean;
@@ -56,6 +59,12 @@ const SubscriptionPlanSchema = new Schema<ISubscriptionPlan>(
         default: null,
       },
       featuredStore: { type: Boolean, default: false },
+      scanBillEnabled: { type: Boolean, default: false },
+      scanBillMonthlyLimit: {
+        type: Number,
+        min: [1, "Scans per month must be at least 1"],
+        default: 100,
+      },
     },
     accessibleModules: { type: [{ type: String, trim: true }], default: undefined },
     isActive: { type: Boolean, default: true },
