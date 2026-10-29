@@ -183,20 +183,20 @@ export default function SellerWithdrawalRequests() {
         <div className="p-4 sm:p-6 border-b border-neutral-200 bg-neutral-50/30">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Date Range */}
-            <div className="flex gap-2 items-center">
+            <div className="flex flex-col sm:flex-row gap-1 sm:gap-2 sm:items-center min-w-0">
               <label className="text-neutral-700 text-sm font-medium whitespace-nowrap">From - To Date:</label>
-              <div className="flex gap-2 flex-1">
+              <div className="flex gap-2 flex-1 min-w-0">
                 <input
                   type="date"
                   value={fromDate}
                   onChange={(e) => setFromDate(e.target.value)}
-                  className="flex-1 px-3 py-2 bg-white border border-neutral-300 rounded text-sm focus:ring-2 focus:ring-[var(--primary-color)]/20 focus:border-[var(--primary-color)] outline-none"
+                  className="flex-1 min-w-0 w-full px-3 py-2 bg-white border border-neutral-300 rounded text-sm focus:ring-2 focus:ring-[var(--primary-color)]/20 focus:border-[var(--primary-color)] outline-none"
                 />
                 <input
                   type="date"
                   value={toDate}
                   onChange={(e) => setToDate(e.target.value)}
-                  className="flex-1 px-3 py-2 bg-white border border-neutral-300 rounded text-sm focus:ring-2 focus:ring-[var(--primary-color)]/20 focus:border-[var(--primary-color)] outline-none"
+                  className="flex-1 min-w-0 w-full px-3 py-2 bg-white border border-neutral-300 rounded text-sm focus:ring-2 focus:ring-[var(--primary-color)]/20 focus:border-[var(--primary-color)] outline-none"
                 />
               </div>
             </div>
@@ -223,7 +223,7 @@ export default function SellerWithdrawalRequests() {
               <select
                 value={entriesPerPage}
                 onChange={(e) => setEntriesPerPage(Number(e.target.value))}
-                className="flex-1 px-3 py-2 bg-white border border-neutral-300 rounded text-sm focus:ring-2 focus:ring-[var(--primary-color)]/20 focus:border-[var(--primary-color)] outline-none"
+                className="flex-1 min-w-0 w-full px-3 py-2 bg-white border border-neutral-300 rounded text-sm focus:ring-2 focus:ring-[var(--primary-color)]/20 focus:border-[var(--primary-color)] outline-none"
               >
                 <option value="10">10</option>
                 <option value="25">25</option>
@@ -255,7 +255,7 @@ export default function SellerWithdrawalRequests() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search..."
-                className="flex-1 px-3 py-2 bg-white border border-neutral-300 rounded text-sm focus:ring-2 focus:ring-[var(--primary-color)]/20 focus:border-[var(--primary-color)] outline-none"
+                className="flex-1 min-w-0 w-full px-3 py-2 bg-white border border-neutral-300 rounded text-sm focus:ring-2 focus:ring-[var(--primary-color)]/20 focus:border-[var(--primary-color)] outline-none"
               />
             </div>
           </div>

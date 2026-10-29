@@ -1046,9 +1046,9 @@ export default function SellerStockBulkImport({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 bg-[var(--primary-color)] text-white rounded-t-lg">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl h-[92vh] sm:h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-neutral-200 bg-[var(--primary-color)] text-white rounded-t-lg">
           <div>
             <h2 className="text-lg font-semibold">Bulk Import Products</h2>
             <p className="text-[10px] text-white/85 font-normal tracking-wide mt-0.5">
@@ -1058,9 +1058,9 @@ export default function SellerStockBulkImport({
           <button onClick={onClose} className="text-white hover:bg-[var(--primary-dark)] p-2 rounded">✕</button>
         </div>
 
-        <div className="flex-1 overflow-auto p-6 flex flex-col gap-6">
+        <div className="flex-1 overflow-auto p-3 sm:p-6 flex flex-col gap-6 min-w-0">
           {!file ? (
-            <div className="border-2 border-dashed border-neutral-300 rounded-lg p-12 flex flex-col items-center justify-center text-center hover:bg-neutral-50 transition-colors">
+            <div className="border-2 border-dashed border-neutral-300 rounded-lg p-5 sm:p-12 flex flex-col items-center justify-center text-center hover:bg-neutral-50 transition-colors">
               <svg className="w-16 h-16 text-neutral-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
               <h3 className="text-lg font-medium text-neutral-900 mb-2">Select Excel File</h3>
               <p className="text-neutral-500 mb-6 max-w-md">Upload an Excel file (.xlsx, .xls) containing your product data. Ensure columns match the Product List structure.</p>
@@ -1090,9 +1090,9 @@ export default function SellerStockBulkImport({
                 accept=".xlsx, .xls, .csv"
                 className="hidden"
               />
-              <div className="mt-8 text-left text-sm text-neutral-500 bg-neutral-100 p-4 rounded w-full max-w-lg">
+              <div className="mt-8 text-left text-sm text-neutral-500 bg-neutral-100 p-3 sm:p-4 rounded w-full max-w-lg">
                 <p className="font-semibold mb-2">Expected Columns ({40 + extraFieldHeaders(true).length} Total):</p>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1.5 [&>span]:break-words">
                    <span>1. Category</span>
                    <span>2. Sub Cat</span>
                    <span>3. Sub Sub Cat</span>

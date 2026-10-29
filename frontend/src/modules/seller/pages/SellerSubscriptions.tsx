@@ -459,9 +459,9 @@ export default function SellerSubscriptions() {
                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${displayCls[s.display.key] || ""}`}>{s.display.label}</span>
                     ) : s.isTrial && s.status === "Active" ? "Free trial" : s.status}
                   </td>
-                  <td className="px-4 py-3">{s.payment.totalAmount ? formatINR(s.payment.totalAmount) : "—"}</td>
+                  <td className="px-4 py-3">{s.payment?.totalAmount ? formatINR(s.payment.totalAmount) : "—"}</td>
                   <td className="px-4 py-3">
-                    {s.payment.paidAt && s.payment.method !== "Trial" && s.payment.totalAmount > 0 && (
+                    {s.payment?.paidAt && s.payment.method !== "Trial" && s.payment.totalAmount > 0 && (
                       <button onClick={() => downloadInvoice(s)} className="text-[var(--primary-color)] hover:underline whitespace-nowrap">
                         {s.billType === "receipt" ? "Receipt" : "GST invoice"}
                       </button>
