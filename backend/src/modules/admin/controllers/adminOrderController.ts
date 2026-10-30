@@ -18,6 +18,7 @@ import Product from "../../../models/Product";
 import Customer from "../../../models/Customer";
 import AppSettings from "../../../models/AppSettings";
 import { Server as SocketIOServer } from "socket.io";
+import { getSocketIO } from "../../../socket/socketService";
 import StockLedger from "../../../models/StockLedger";
 import CreditTransaction from "../../../models/CreditTransaction";
 import {
@@ -541,12 +542,45 @@ export const updateOrderStatus = asyncHandler(
       });
     }
 
-    // Trigger notification if status is "Processed" (Confirmed), "Ready for pickup" (dispatches
-    // to riders), or if paymentStatus changed to "Paid"
-    if (status === "Processed" || status === "Ready for pickup" || order.paymentStatus === "Paid") {
-      const io: SocketIOServer = req.app.get("io");
-      if (io) notifySellersOfOrderUpdate(io, order, "STATUS_UPDATE");
-      // Awaited so it completes on serverless hosting too (no socket there)
+    // Notify customer, sellers, and delivery partners in real time
+    const io: SocketIOServer = req.app.get("io") || getSocketIO();
+    if (io) {
+      // 1. Customer live tracking room
+      io.to(`order-${targetOrderId}`).emit("order-status-updated", {
+        orderId: targetOrderId,
+        status: order.status,
+      });
+      io.to(`order-${targetOrderId}`).emit("orderUpdated", {
+        orderId: targetOrderId,
+        status: order.status,
+        order,
+      });
+
+      // 2. Notify all sellers involved in this order
+      notifySellersOfOrderUpdate(io, order, "STATUS_UPDATE");
+
+      // 3. Notify assigned delivery boy
+      if (order.deliveryBoy) {
+        const dBoyId = (order.deliveryBoy as any)?._id || order.deliveryBoy;
+        io.to(`delivery-${dBoyId}`).emit("order-status-updated", {
+          orderId: targetOrderId,
+          status: order.status,
+        });
+        io.to(`delivery-${dBoyId}`).emit("orderUpdated", {
+          orderId: targetOrderId,
+          status: order.status,
+          order,
+        });
+      }
+
+      // 4. Admin room broadcast
+      io.to("admin-notifications").emit("orderUpdated", {
+        orderId: targetOrderId,
+        status: order.status,
+        order,
+      });
+
+      // Awaited dispatch to riders if ready
       if (dispatchNow) {
         await notifyDeliveryBoysOfNewOrder(io || null, order.toObject()).catch((err: any) =>
           console.error("Error dispatching admin-accepted order to riders:", err)
@@ -955,6 +989,15 @@ export const updateOrderItems = asyncHandler(
         ]
       });
 
+      if (updatedOrder) {
+        const io: SocketIOServer = req.app.get("io") || getSocketIO();
+        if (io) {
+          io.to(`order-${id}`).emit("orderUpdated", { orderId: id, order: updatedOrder });
+          notifySellersOfOrderUpdate(io, updatedOrder, "STATUS_UPDATE");
+          io.to("admin-notifications").emit("orderUpdated", { orderId: id, order: updatedOrder });
+        }
+      }
+
       return res.status(200).json({
         success: true,
         message: "Order items updated successfully",
@@ -1050,6 +1093,43 @@ export const assignDeliveryBoy = asyncHandler(
       .populate("customer", "name email phone")
       .populate("deliveryBoy", "name mobile email")
       .populate("items");
+
+    // Real-time notification broadcast across Delivery, User, Seller and Admin
+    const io: SocketIOServer = req.app.get("io") || getSocketIO();
+    if (io) {
+      // 1. Notify assigned delivery boy
+      io.to(`delivery-${deliveryBoyId}`).emit("new-order", {
+        orderId: id,
+        orderNumber: order.orderNumber,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        deliveryAddress: order.deliveryAddress,
+        total: order.total,
+        status: order.status,
+        assignedAt: new Date(),
+      });
+      io.to(`delivery-${deliveryBoyId}`).emit("order-assigned", {
+        orderId: id,
+        orderNumber: order.orderNumber,
+      });
+
+      // 2. Notify customer tracking page
+      io.to(`order-${id}`).emit("delivery-partner-assigned", {
+        orderId: id,
+        deliveryBoy: {
+          _id: deliveryBoy._id,
+          name: deliveryBoy.name,
+          mobile: deliveryBoy.mobile,
+        },
+      });
+      io.to(`order-${id}`).emit("orderUpdated", { orderId: id, order: updatedOrder });
+
+      // 3. Notify sellers
+      notifySellersOfOrderUpdate(io, order, "STATUS_UPDATE");
+
+      // 4. Admin room broadcast
+      io.to("admin-notifications").emit("orderUpdated", { orderId: id, order: updatedOrder });
+    }
 
     return res.status(200).json({
       success: true,

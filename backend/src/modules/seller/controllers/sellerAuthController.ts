@@ -11,6 +11,7 @@ import {
 import { generateToken } from "../../../services/jwtService";
 import { getSellerScanBillAccess } from "../../../services/ocr/owner";
 import { asyncHandler } from "../../../utils/asyncHandler";
+import { resolveAllCategoryNamesForHeader } from "../../../utils/categoryHierarchy";
 
 /** Max simultaneous seller login sessions (devices) allowed per account. */
 const MAX_SELLER_ACTIVE_DEVICES = 5;
@@ -327,6 +328,12 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     coordinates: [longitude, latitude],
   };
 
+  const selectedCategoryInput = category || req.body.categories || "";
+  const resolved = await resolveAllCategoryNamesForHeader(selectedCategoryInput);
+  const extraCats: string[] = Array.isArray(req.body.categories) ? req.body.categories : [];
+  const finalCategories = Array.from(new Set([...resolved.allCategoryNames, ...extraCats]));
+  const primaryCategory = resolved.headerNames[0] || category;
+
   // Create new seller with GeoJSON location (password not required during signup)
   const seller = await Seller.create({
     sellerName,
@@ -334,7 +341,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     email,
     // password field removed - sellers don't need password during signup
     storeName,
-    category,
+    category: primaryCategory,
     address,
     city,
     ...(serviceableArea && { serviceableArea }),
@@ -348,7 +355,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     viewCustomerDetails: false,
     commission: 0,
     balance: 0,
-    categories: req.body.categories || [],
+    categories: finalCategories,
     selectedPlan: selectedPlan?._id || null,
     // Rule on: no plan yet, so the store starts locked until the chosen plan is paid
     subscriptionLocked: !!subscriptionSettings.requirePlanForAllSellers,
@@ -451,6 +458,14 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
       return res.status(502).json({ success: false, message: error.message });
     }
     throw error;
+  }
+
+  if (updates.category) {
+    const resolved = await resolveAllCategoryNamesForHeader(updates.category);
+    if (resolved.allCategoryNames.length > 0) {
+      updates.category = resolved.headerNames[0] || updates.category;
+      updates.categories = resolved.allCategoryNames;
+    }
   }
 
   const seller = await Seller.findByIdAndUpdate(sellerId, updates, {

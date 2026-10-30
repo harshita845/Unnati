@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getSellerProfile, updateSellerProfile } from '../../../services/api/auth/sellerAuthService';
 import { useAuth } from '../../../context/AuthContext';
-import { getCategories, Category } from '../../../services/api/categoryService';
+import { getHeaderCategoriesPublic, HeaderCategory } from '../../../services/api/headerCategoryService';
 import GoogleMapsAutocomplete from '../../../components/GoogleMapsAutocomplete';
 // Reuses the same map picker the admin uses for sellers — already supports
 // click-to-pin, drag-marker, and a service-radius preview circle.
@@ -26,7 +26,7 @@ const SellerAccountSettings = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<HeaderCategory[]>([]);
   const [saveLoading, setSaveLoading] = useState(false);
 
   useEffect(() => {
@@ -77,8 +77,17 @@ const SellerAccountSettings = () => {
 
   const fetchCategories = async () => {
     try {
-      const res = await getCategories();
-      if (res.success) setCategories(res.data);
+      const res = await getHeaderCategoriesPublic();
+      if (Array.isArray(res)) {
+        setCategories(
+          res.filter(
+            cat =>
+              cat.status === 'Published' &&
+              cat.slug !== 'all' &&
+              cat.name?.toLowerCase() !== 'all'
+          )
+        );
+      }
     } catch (err) {
       console.error('Error fetching categories:', err);
     }

@@ -86,10 +86,16 @@ import * as promoStripController from "../modules/admin/controllers/adminPromoSt
 // Staff Controllers
 import * as staffController from "../modules/admin/controllers/adminStaffController";
 
+// Search Controllers
+import * as searchController from "../modules/admin/controllers/adminSearchController";
+
 const router = Router();
 
 // All routes require authentication
 router.use(authenticate);
+
+// Global Search (Accessible to Admin)
+router.get("/global-search", requireUserType("Admin", "Seller"), searchController.globalSearch);
 
 // Settings Routes (Accessible to all authenticated users - Sellers need this)
 router.get("/settings", settingsController.getAppSettings);

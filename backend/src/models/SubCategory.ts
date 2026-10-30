@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema } from "mongoose";
+import { announceChangesOn } from "../socket/contentBroadcast";
 
 export interface ISubCategory extends Document {
   name: string;
@@ -39,6 +40,8 @@ const SubCategorySchema = new Schema<ISubCategory>(
 // Index for faster queries
 SubCategorySchema.index({ category: 1, order: 1 });
 SubCategorySchema.index({ name: 1 });
+
+announceChangesOn(SubCategorySchema, "categories");
 
 const SubCategory = mongoose.model<ISubCategory>(
   "SubCategory",

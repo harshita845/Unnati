@@ -2,6 +2,7 @@ import Admin from '../models/Admin';
 import Seller from '../models/Seller';
 import Delivery from '../models/Delivery';
 import Customer from '../models/Customer';
+import { resolveAllCategoryNamesForHeader } from './categoryHierarchy';
 
 const DEFAULT_ADMIN_MOBILE = process.env.DEFAULT_ADMIN_MOBILE || '9876543210';
 const DEFAULT_ADMIN_EMAIL = process.env.DEFAULT_ADMIN_EMAIL || 'admin@Unnatistores.com';
@@ -143,6 +144,26 @@ export async function ensureDefaultAdmin() {
       location: { type: "Point", coordinates: [0, 0] },
     });
     console.log("Admin Store (Seller) account created as Approved/Enabled.");
+  }
+
+  // Ensure sellers' categories include all subcategories under their header category
+  try {
+    const sellers = await Seller.find({}).lean();
+    for (const s of sellers) {
+      if (s.category && s.category !== "Admin") {
+        const resolved = await resolveAllCategoryNamesForHeader(s.category);
+        if (resolved.allCategoryNames.length > 0) {
+          const currentSet = new Set(s.categories || []);
+          const needsUpdate = resolved.allCategoryNames.some((c) => !currentSet.has(c));
+          if (needsUpdate) {
+            const merged = Array.from(new Set([...(s.categories || []), ...resolved.allCategoryNames]));
+            await Seller.updateOne({ _id: s._id }, { categories: merged });
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Seller categories backfill warning:", err);
   }
 }
 

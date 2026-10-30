@@ -209,15 +209,6 @@ export default function CategoryTreeView({
                           })()
                         ) : null}
 
-                        {/* Subscription Plans Badge */}
-                        {category.subscriptionEnabled && (
-                            <span
-                              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[var(--primary-alpha-20)] text-[var(--primary-darker)]"
-                              title="Subscription plans">
-                              Subscription required
-                            </span>
-                          )}
-
                         {/* Children Count Badge */}
                         {hasChildren && (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[var(--primary-color)]/20 text-[var(--primary-color)]">

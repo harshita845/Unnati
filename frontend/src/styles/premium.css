@@ -466,10 +466,10 @@
 }
 
 
-/* Ensure inner cards and tables take full width and wrap properly */
+/* Ensure inner cards and tables take full width and wrap properly (exclude popups, modals, dropdowns) */
 .premium-theme div.card,
-.premium-theme div[class*="bg-white"][class*="rounded-"],
-.premium-theme div[class*="bg-white"][class*="shadow-"] {
+.premium-theme div[class*="bg-white"][class*="rounded-"]:not([class*="absolute"]):not([class*="fixed"]),
+.premium-theme div[class*="bg-white"][class*="shadow-"]:not([class*="absolute"]):not([class*="fixed"]) {
   width: 100% !important;
   max-width: 100% !important;
   margin-left: 0 !important;

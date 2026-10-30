@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { createSeller } from "../../../services/api/admin/adminSellerService";
 import { getCategories, Category } from "../../../services/api/admin/adminProductService";
+import { getHeaderCategoriesAdmin, HeaderCategory } from "../../../services/api/headerCategoryService";
+import { getHeaderCategoryForCategory } from "../../../utils/categoryUtils";
 import { toast } from "react-hot-toast";
 import GoogleLocationPickerMap from "../components/GoogleLocationPickerMap";
 import GoogleMapsAutocomplete from "../../../components/GoogleMapsAutocomplete";
@@ -77,7 +79,8 @@ interface FormData {
 export default function AdminAddSeller() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [headerCategories, setHeaderCategories] = useState<HeaderCategory[]>([]);
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [useCommissionSlabs, setUseCommissionSlabs] = useState(false);
   const [commissionSlabs, setCommissionSlabs] = useState<CommissionSlabInput[]>([
     { minPrice: "0", maxPrice: "", commission: "" },
@@ -117,9 +120,22 @@ export default function AdminAddSeller() {
 
   const fetchCategories = async () => {
     try {
-      const res = await getCategories({ status: 'Active' });
-      if (res && res.data) {
-        setCategories(res.data);
+      const [headerRes, catRes] = await Promise.all([
+        getHeaderCategoriesAdmin(),
+        getCategories({ status: "Active" }),
+      ]);
+      if (Array.isArray(headerRes)) {
+        setHeaderCategories(
+          headerRes.filter(
+            (cat) =>
+              cat.status === "Published" &&
+              cat.slug !== "all" &&
+              cat.name?.toLowerCase() !== "all"
+          )
+        );
+      }
+      if (catRes && catRes.data) {
+        setAllCategories(catRes.data);
       }
     } catch (error) {
       console.error("Failed to fetch categories", error);
@@ -239,6 +255,28 @@ export default function AdminAddSeller() {
           data.append(key, value as string);
         }
       });
+
+      // When a main header category is selected, automatically all categories and its subcategories are included
+      const selectedHeader = headerCategories.find(
+        (h) => h.name.toLowerCase() === formData.selectCategory.trim().toLowerCase() || h._id === formData.selectCategory
+      );
+      let includedCategoryNames: string[] = [formData.selectCategory];
+      if (selectedHeader) {
+        const matchingCats = allCategories.filter((cat) => {
+          const catHeaderId =
+            typeof cat.headerCategoryId === "object" && cat.headerCategoryId !== null
+              ? (cat.headerCategoryId as any)._id
+              : cat.headerCategoryId;
+          if (catHeaderId && String(catHeaderId) === String(selectedHeader._id)) return true;
+          const resolvedHeaderId = getHeaderCategoryForCategory(cat._id, allCategories);
+          if (resolvedHeaderId && String(resolvedHeaderId) === String(selectedHeader._id)) return true;
+          return false;
+        });
+        includedCategoryNames = Array.from(
+          new Set([selectedHeader.name, ...matchingCats.map((c) => c.name)])
+        );
+      }
+      data.append("categories", JSON.stringify(includedCategoryNames));
 
       // Commission (required by backend)
       let commissionForApi = formData.commission;
@@ -408,7 +446,7 @@ export default function AdminAddSeller() {
                   className="w-full px-4 py-2.5 bg-white border border-neutral-300 rounded outline-none text-sm"
                 >
                   <option value="">Select Categories</option>
-                  {categories.map(cat => (
+                  {headerCategories.map(cat => (
                     <option key={cat._id} value={cat.name}>{cat.name}</option>
                   ))}
                 </select>

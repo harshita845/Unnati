@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema } from "mongoose";
+import { announceChangesOn } from "../socket/contentBroadcast";
 
 export interface ICoupon extends Document {
   code: string;
@@ -152,6 +153,8 @@ const CouponSchema = new Schema<ICoupon>(
 // Indexes for faster queries
 CouponSchema.index({ isActive: 1, startDate: 1, endDate: 1 });
 CouponSchema.index({ status: 1 });
+
+announceChangesOn(CouponSchema, "deals");
 
 const Coupon = mongoose.model<ICoupon>("Coupon", CouponSchema);
 

@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
+import { announceChangesOn } from "../socket/contentBroadcast";
 
 export interface ILowestPricesProduct extends Document {
     product: mongoose.Types.ObjectId;
@@ -36,6 +37,8 @@ LowestPricesProductSchema.index({ order: 1, isActive: 1 });
 LowestPricesProductSchema.index({ isActive: 1 });
 // Prevent duplicate products with unique index
 LowestPricesProductSchema.index({ product: 1 }, { unique: true });
+
+announceChangesOn(LowestPricesProductSchema, "home");
 
 const LowestPricesProduct = mongoose.model<ILowestPricesProduct>("LowestPricesProduct", LowestPricesProductSchema);
 

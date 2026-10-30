@@ -93,6 +93,15 @@ export default function SellerCategory() {
     const [editingCategory, setEditingCategory] = useState<Category | null>(null);
     const [subcategoryParent, setSubcategoryParent] = useState<Category | null>(null);
     const [navigationStack, setNavigationStack] = useState<Category[]>([]);
+    const [categoriesSyncTick, setCategoriesSyncTick] = useState(0);
+
+    useEffect(() => {
+        const handleCategoriesSync = () => {
+            setCategoriesSyncTick(t => t + 1);
+        };
+        window.addEventListener('unnati_categories_updated', handleCategoriesSync);
+        return () => window.removeEventListener('unnati_categories_updated', handleCategoriesSync);
+    }, []);
 
     // Initial Data Loading
     useEffect(() => {
@@ -159,7 +168,7 @@ export default function SellerCategory() {
         };
 
         fetchCategories();
-    }, [searchTerm]);
+    }, [searchTerm, categoriesSyncTick]);
 
     const normalizeParentId = (cat: any): string | null => {
         const raw = cat?.parentId;
@@ -547,9 +556,16 @@ export default function SellerCategory() {
                                                     My Category
                                                 </span>
                                             ) : (
-                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
-                                                    Store Catalog
-                                                </span>
+                                                <div className="flex flex-col items-center gap-1">
+                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                                                        Store Catalog
+                                                    </span>
+                                                    {category.subscriptionEnabled && (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                                            Subscription required
+                                                        </span>
+                                                    )}
+                                                </div>
                                             )}
                                         </td>
 

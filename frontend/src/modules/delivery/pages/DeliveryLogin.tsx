@@ -79,7 +79,7 @@ export default function DeliveryLogin() {
 
 
   return (
-    <div className="login-page-wrapper">
+    <div className="login-page-wrapper customer-auth-wrapper">
       <div className="login-card">
         {/* Back Button */}
         <button
@@ -93,11 +93,11 @@ export default function DeliveryLogin() {
         </button>
 
         {/* Banner Image Section */}
-        <div className="login-video-container">
+        <div className="login-video-container md:!h-auto md:self-stretch md:!bg-[var(--brand-cream-soft,#F6EFE2)]">
           <img
             src="/assets/login/login_banner.png"
             alt="Delivery Portal"
-            className="login-video"
+            className="login-video md:!h-auto md:!w-full"
           />
           {/* Subtle decorative overlay on desktop */}
           <div className="hidden md:block absolute inset-0 bg-gradient-to-r from-transparent to-white/5 pointer-events-none" />
@@ -110,7 +110,7 @@ export default function DeliveryLogin() {
             <div className="flex flex-col items-center mb-6">
               <img
                 src={config?.appLogo || "/assets/unnati_logo.png"}
-                alt={config?.appName || "Ecommerce"}
+                alt={config?.appName || "Unnati"}
                 className="h-16 w-auto object-contain mb-2"
               />
               <h1 className="text-xl font-bold text-neutral-800">Delivery Login</h1>

@@ -665,19 +665,19 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
             </motion.div>
           </motion.div>
 
-          {/* Lang & Notif Icons */}
+          {/* Menu & Notif Icons */}
           <div className="flex items-center gap-2.5">
-            {/* Language / Hamburger Button */}
+            {/* Drawer Menu Button */}
             <motion.button
               onClick={() => setIsMenuOpen(true)}
               whileTap={tap}
               className="w-8 h-8 rounded-full border border-neutral-200/80 flex items-center justify-center hover:bg-neutral-50 transition-colors text-neutral-600 shadow-sm"
               aria-label="Open menu"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="2" y1="12" x2="22" y2="12" />
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="4" y1="7" x2="20" y2="7" />
+                <line x1="4" y1="12" x2="20" y2="12" />
+                <line x1="4" y1="17" x2="20" y2="17" />
               </svg>
             </motion.button>
 
@@ -926,7 +926,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
               {/* Group 2: Account & Settings */}
               <div className="flex flex-col gap-1.5">
                 {[
-                  { to: '/account', label: 'Profile Settings', icon: (
+                  { to: '/account?edit=true', label: 'Profile Settings', icon: (
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                       <circle cx="12" cy="7" r="4"></circle>
@@ -951,7 +951,8 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                     </svg>
                   )}
                 ].map((item) => {
-                  const isCurrent = window.location.pathname.startsWith(item.to);
+                  const targetPath = item.to.split('?')[0];
+                  const isCurrent = window.location.pathname.startsWith(targetPath);
                   return (
                     <Link
                       key={item.to}
@@ -992,7 +993,11 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
 
             {/* Eden-Style Bottom Profile Block */}
             <div className="pt-4 border-t border-neutral-100 flex items-center justify-between gap-3 mt-4">
-              <div className="flex items-center gap-3 min-w-0">
+              <Link
+                to="/account"
+                onClick={() => setIsMenuOpen(false)}
+                className="flex items-center gap-3 min-w-0 hover:opacity-85 transition-opacity"
+              >
                 <div className="w-10 h-10 rounded-full bg-[var(--customer-primary-alpha-10)] border border-[var(--customer-primary)] flex items-center justify-center font-bold text-sm text-[var(--customer-primary-dark)] flex-shrink-0">
                   {isAuthenticated && user?.name ? user.name.charAt(0).toUpperCase() : 'G'}
                 </div>
@@ -1004,7 +1009,7 @@ export default function HomeHero({ activeTab = 'all', onTabChange }: HomeHeroPro
                     {isAuthenticated ? (user?.phone || user?.email) : 'Welcome to Store'}
                   </span>
                 </div>
-              </div>
+              </Link>
 
               {isAuthenticated ? (
                 <button

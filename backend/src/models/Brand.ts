@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema } from "mongoose";
+import { announceChangesOn } from "../socket/contentBroadcast";
 
 export interface IBrand extends Document {
   name: string;
@@ -25,6 +26,8 @@ const BrandSchema = new Schema<IBrand>(
   }
 );
 
+
+announceChangesOn(BrandSchema, "categories");
 
 const Brand = mongoose.model<IBrand>("Brand", BrandSchema);
 

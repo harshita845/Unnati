@@ -3,6 +3,7 @@ import { getSellerPlanAccess } from "../../../services/sellerSubscriptionService
 import Seller from "../../../models/Seller";
 import { offloadInlineImages, InlineImageUploadError } from "../../../services/inlineImageService";
 import { asyncHandler } from "../../../utils/asyncHandler";
+import { resolveAllCategoryNamesForHeader } from "../../../utils/categoryHierarchy";
 
 /**
  * Get all sellers (Admin only)
@@ -182,6 +183,18 @@ export const updateSeller = asyncHandler(
     ) {
       // If empty string or null is sent, remove it from updates to keep existing value
       delete updateData.serviceRadiusKm;
+    }
+
+    if (updateData.category || updateData.selectCategory) {
+      const catInput = updateData.category || updateData.selectCategory;
+      const resolved = await resolveAllCategoryNamesForHeader(catInput);
+      if (resolved.allCategoryNames.length > 0) {
+        updateData.category = resolved.headerNames[0] || catInput;
+        updateData.categories = Array.from(new Set([
+          ...resolved.allCategoryNames,
+          ...(Array.isArray(updateData.categories) ? updateData.categories : [])
+        ]));
+      }
     }
 
     const seller = await Seller.findByIdAndUpdate(id, updateData, {

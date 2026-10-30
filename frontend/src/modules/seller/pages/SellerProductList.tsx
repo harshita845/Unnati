@@ -122,6 +122,19 @@ export default function SellerProductList() {
   // Barcode Selection Modal State
   const [showBarcodeSelectModal, setShowBarcodeSelectModal] = useState(false);
   const [barcodeSelectData, setBarcodeSelectData] = useState<{barcodes: string[], name: string, sp: number, mrp: number} | null>(null);
+  const [productSyncTick, setProductSyncTick] = useState(0);
+
+  useEffect(() => {
+    const handleSync = () => {
+      setProductSyncTick(t => t + 1);
+    };
+    window.addEventListener('productUpdated', handleSync);
+    window.addEventListener('unnati_categories_updated', handleSync);
+    return () => {
+      window.removeEventListener('productUpdated', handleSync);
+      window.removeEventListener('unnati_categories_updated', handleSync);
+    };
+  }, []);
 
   // Fetch products and categories
   const fetchData = async () => {
@@ -214,6 +227,7 @@ export default function SellerProductList() {
     filterCategory,
     filterStatus,
     location.key,
+    productSyncTick,
   ]);
 
   // Handle Barcode Scan

@@ -269,7 +269,7 @@ export default function DeliverySignUp() {
   };
 
   return (
-    <div className="login-page-wrapper">
+    <div className="login-page-wrapper customer-auth-wrapper">
       <div className="login-card">
         {/* Back Button */}
         <button
@@ -283,11 +283,11 @@ export default function DeliverySignUp() {
         </button>
 
         {/* Banner Image Section */}
-        <div className="login-video-container">
+        <div className="login-video-container md:!h-auto md:self-stretch md:!bg-[var(--brand-cream-soft,#F6EFE2)]">
           <img
             src="/assets/login/login_banner.png"
             alt="Delivery Portal"
-            className="login-video"
+            className="login-video md:!h-auto md:!w-full"
           />
           {/* Subtle decorative overlay on desktop */}
           <div className="hidden md:block absolute inset-0 bg-gradient-to-r from-transparent to-white/5 pointer-events-none" />
@@ -295,43 +295,31 @@ export default function DeliverySignUp() {
 
         {/* Sign Up Section */}
         <div className="login-section-container">
-          <div className="w-full max-w-sm flex flex-col items-center">
+          <div className="w-full max-w-sm sm:max-w-md flex flex-col items-center">
             {/* Header / Logo */}
-            <div className="flex flex-col items-center mb-4">
+            <div className="flex flex-col items-center mb-4 sm:mb-6">
               <img
                 src={config?.appLogo || "/assets/unnati_logo.png"}
-                alt={config?.appName || "Ecommerce"}
-                className="h-12 w-auto object-contain mb-1"
+                alt={config?.appName || "Unnati"}
+                className="h-12 w-auto object-contain mb-1.5"
               />
-              <h1 className="text-lg font-bold text-neutral-800">Delivery Sign Up</h1>
-              <p className="text-neutral-500 text-[10px] mt-0.5">Create your delivery partner account</p>
+              <h1 className="text-xl sm:text-2xl font-bold text-neutral-800">Delivery Sign Up</h1>
+              <p className="text-neutral-500 text-xs mt-0.5">Create your delivery partner account</p>
             </div>
 
             {/* Sign Up Form */}
-            <div
-              className="p-3 w-full space-y-3 delivery-signup-form"
-              style={{
-                maxHeight: "280px",
-                overflowY: "auto",
-                scrollbarWidth: "none",
-                msOverflowStyle: "none",
-              }}
-            >
-              <style>{`
-                .delivery-signup-form::-webkit-scrollbar {
-                  display: none;
-                }
-              `}</style>
+            <div className="w-full space-y-4 delivery-signup-form py-1">
           {!showOTP ? (
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Personal Information */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-neutral-700 border-b pb-2">
+              <div className="space-y-3.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-600 border-b border-neutral-200 pb-2 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[var(--primary-color)]"></span>
                   Personal Information
                 </h3>
 
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-neutral-700 mb-1.5">
                     Name <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -341,17 +329,17 @@ export default function DeliverySignUp() {
                     onChange={handleInputChange}
                     placeholder="Enter your full name"
                     required
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-alpha-30)] transition-all"
                     disabled={loading}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-neutral-700 mb-1.5">
                     Mobile Number <span className="text-red-500">*</span>
                   </label>
-                  <div className="flex items-center bg-white border border-neutral-300 rounded-lg overflow-hidden focus-within:border-[var(--primary-color)] focus-within:ring-2 focus-within:ring-teal-200">
-                    <div className="px-3 py-2.5 text-sm font-medium text-neutral-600 border-r border-neutral-300 bg-neutral-50">
+                  <div className="flex items-center bg-white border border-neutral-300 rounded-xl overflow-hidden focus-within:border-[var(--primary-color)] focus-within:ring-2 focus-within:ring-[var(--primary-alpha-30)] transition-all">
+                    <div className="px-3.5 py-2.5 text-sm font-semibold text-neutral-600 border-r border-neutral-300 bg-neutral-50">
                       +91
                     </div>
                     <input
@@ -362,14 +350,14 @@ export default function DeliverySignUp() {
                       placeholder="Enter mobile number"
                       required
                       maxLength={10}
-                      className="flex-1 px-3 py-2.5 text-sm placeholder:text-neutral-400 focus:outline-none"
+                      className="flex-1 px-3.5 py-2.5 text-sm placeholder:text-neutral-400 focus:outline-none bg-transparent"
                       disabled={loading}
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-neutral-700 mb-1.5">
                     Email <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -379,13 +367,13 @@ export default function DeliverySignUp() {
                     onChange={handleInputChange}
                     placeholder="Enter email address"
                     required
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-alpha-30)] transition-all"
                     disabled={loading}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-neutral-700 mb-1.5">
                     Date of Birth
                   </label>
                   <input
@@ -393,13 +381,13 @@ export default function DeliverySignUp() {
                     name="dateOfBirth"
                     value={formData.dateOfBirth}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-alpha-30)] transition-all text-neutral-700"
                     disabled={loading}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-neutral-700 mb-1.5">
                     Password <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -410,13 +398,13 @@ export default function DeliverySignUp() {
                     placeholder="Enter password (min 6 characters)"
                     required
                     minLength={4}
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-alpha-30)] transition-all"
                     disabled={loading}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-neutral-700 mb-1.5">
                     Address <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -426,13 +414,13 @@ export default function DeliverySignUp() {
                     onChange={handleInputChange}
                     placeholder="Enter your address"
                     required
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-alpha-30)] transition-all"
                     disabled={loading}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-neutral-700 mb-1.5">
                     City <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
@@ -443,18 +431,18 @@ export default function DeliverySignUp() {
                       onChange={handleInputChange}
                       placeholder="Enter your city"
                       required
-                      className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-teal-200"
+                      className="w-full px-3.5 py-2.5 pr-10 text-sm bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-alpha-30)] transition-all"
                       disabled={loading || isCityLoading}
                     />
                     <button
                       type="button"
                       onClick={fetchCityFromLocation}
                       disabled={isCityLoading || loading}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-[var(--primary-dark)] hover:bg-[var(--primary-alpha-10)] rounded-md transition-colors disabled:text-neutral-400"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-[var(--primary-color)] hover:bg-[var(--primary-alpha-10)] rounded-lg transition-colors disabled:text-neutral-400"
                       title="Fetch current location"
                     >
                       {isCityLoading ? (
-                        <div className="w-4 h-4 border-2 border-[var(--primary-dark)] border-t-transparent rounded-full animate-spin"></div>
+                        <div className="w-4 h-4 border-2 border-[var(--primary-color)] border-t-transparent rounded-full animate-spin"></div>
                       ) : (
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
@@ -466,7 +454,7 @@ export default function DeliverySignUp() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-neutral-700 mb-1.5">
                     Pincode
                   </label>
                   <input
@@ -475,20 +463,21 @@ export default function DeliverySignUp() {
                     value={formData.pincode}
                     onChange={handleInputChange}
                     placeholder="Enter pincode"
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-alpha-30)] transition-all"
                     disabled={loading}
                   />
                 </div>
               </div>
 
               {/* Bank Information */}
-              <div className="space-y-4 pt-4 border-t">
-                <h3 className="text-sm font-semibold text-neutral-700 border-b pb-2">
+              <div className="space-y-3.5 pt-3 border-t border-neutral-200">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-600 border-b border-neutral-200 pb-2 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[var(--primary-color)]"></span>
                   Bank Account Information (Optional)
                 </h3>
 
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-neutral-700 mb-1.5">
                     Account Name
                   </label>
                   <input
@@ -497,13 +486,13 @@ export default function DeliverySignUp() {
                     value={formData.accountName}
                     onChange={handleInputChange}
                     placeholder="Account holder name"
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-alpha-30)] transition-all"
                     disabled={loading}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-neutral-700 mb-1.5">
                     Bank Name
                   </label>
                   <input
@@ -512,13 +501,13 @@ export default function DeliverySignUp() {
                     value={formData.bankName}
                     onChange={handleInputChange}
                     placeholder="Bank name"
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-alpha-30)] transition-all"
                     disabled={loading}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-neutral-700 mb-1.5">
                     Account Number
                   </label>
                   <input
@@ -527,13 +516,13 @@ export default function DeliverySignUp() {
                     value={formData.accountNumber}
                     onChange={handleInputChange}
                     placeholder="Account number"
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-alpha-30)] transition-all"
                     disabled={loading}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-neutral-700 mb-1.5">
                     IFSC Code
                   </label>
                   <input
@@ -542,20 +531,20 @@ export default function DeliverySignUp() {
                     value={formData.ifscCode}
                     onChange={handleInputChange}
                     placeholder="IFSC code"
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-alpha-30)] transition-all"
                     disabled={loading}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-neutral-700 mb-1.5">
                     Bonus Type
                   </label>
                   <select
                     name="bonusType"
                     value={formData.bonusType}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-teal-200"
+                    className="w-full px-3.5 py-2.5 text-sm bg-white border border-neutral-300 rounded-xl focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-alpha-30)] transition-all cursor-pointer"
                     disabled={loading}>
                     {bonusTypes.map((type) => (
                       <option
@@ -569,48 +558,49 @@ export default function DeliverySignUp() {
               </div>
 
               {/* Documents Section */}
-              <div className="space-y-4 pt-4 border-t">
-                <h3 className="text-sm font-semibold text-neutral-700 border-b pb-2">
-                  Documents (Optional - Can be uploaded later)
+              <div className="space-y-3.5 pt-3 border-t border-neutral-200">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-600 border-b border-neutral-200 pb-2 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[var(--primary-color)]"></span>
+                  Documents (Optional)
                 </h3>
 
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-neutral-700 mb-1.5">
                     Driving License
                   </label>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <input
                       type="file"
                       name="drivingLicense"
                       onChange={handleFileChange}
                       accept="image/*,.pdf"
-                      className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-teal-200"
+                      className="w-full px-3 py-2 text-xs text-neutral-700 bg-neutral-50 border border-neutral-300 rounded-xl focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-alpha-30)] file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[var(--primary-color)] file:text-white hover:file:bg-[var(--primary-dark)] transition-all cursor-pointer"
                       disabled={loading || uploadingDocs}
                     />
                     {drivingLicenseFile && (
-                      <p className="text-xs text-neutral-600">
-                        {drivingLicenseFile.name}
+                      <p className="text-xs text-[var(--primary-color)] font-medium flex items-center gap-1">
+                        <span>✓</span> {drivingLicenseFile.name}
                       </p>
                     )}
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
+                  <label className="block text-xs sm:text-sm font-semibold text-neutral-700 mb-1.5">
                     National Identity Card
                   </label>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <input
                       type="file"
                       name="nationalIdentityCard"
                       onChange={handleFileChange}
                       accept="image/*,.pdf"
-                      className="w-full px-3 py-2.5 text-sm border border-neutral-300 rounded-lg focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-teal-200"
+                      className="w-full px-3 py-2 text-xs text-neutral-700 bg-neutral-50 border border-neutral-300 rounded-xl focus:outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-alpha-30)] file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[var(--primary-color)] file:text-white hover:file:bg-[var(--primary-dark)] transition-all cursor-pointer"
                       disabled={loading || uploadingDocs}
                     />
                     {nationalIdentityCardFile && (
-                      <p className="text-xs text-neutral-600">
-                        {nationalIdentityCardFile.name}
+                      <p className="text-xs text-[var(--primary-color)] font-medium flex items-center gap-1">
+                        <span>✓</span> {nationalIdentityCardFile.name}
                       </p>
                     )}
                   </div>
@@ -618,7 +608,7 @@ export default function DeliverySignUp() {
               </div>
 
               {error && (
-                <div className="text-sm text-red-600 bg-red-50 p-2 rounded text-center">
+                <div className="text-sm text-red-600 bg-red-50 border border-red-200 p-3 rounded-xl text-center">
                   {error}
                 </div>
               )}
@@ -626,10 +616,11 @@ export default function DeliverySignUp() {
               <button
                 type="submit"
                 disabled={loading || uploadingDocs}
-                className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-colors ${!loading && !uploadingDocs
-                  ? "bg-[var(--primary-dark)] text-white hover:bg-[var(--primary-darker)] shadow-md"
-                  : "bg-neutral-300 text-neutral-500 cursor-not-allowed"
-                  }`}>
+                className={`w-full py-3 rounded-xl font-bold text-sm shadow-md transition-all active:scale-[0.99] ${
+                  !loading && !uploadingDocs
+                    ? "bg-[var(--primary-color)] text-white hover:bg-[var(--primary-dark)] shadow-[var(--primary-alpha-20)]"
+                    : "bg-neutral-300 text-neutral-500 cursor-not-allowed"
+                }`}>
                 {uploadingDocs
                   ? "Uploading Documents..."
                   : loading
@@ -638,13 +629,13 @@ export default function DeliverySignUp() {
               </button>
 
               {/* Login Link */}
-              <div className="text-center pt-2 border-t border-neutral-200">
+              <div className="text-center pt-3 border-t border-neutral-200">
                 <p className="text-sm text-neutral-600">
                   Already have a delivery partner account?{" "}
                   <button
                     type="button"
                     onClick={() => navigate("/delivery/login")}
-                    className="text-[var(--primary-dark)] hover:text-[var(--primary-darker)] font-semibold">
+                    className="text-[var(--primary-color)] hover:text-[var(--primary-dark)] font-bold transition-colors">
                     Login
                   </button>
                 </p>
@@ -657,7 +648,7 @@ export default function DeliverySignUp() {
                 <p className="text-sm text-neutral-600 mb-2">
                   Enter the 4-digit OTP sent via voice call to
                 </p>
-                <p className="text-sm font-semibold text-neutral-800">
+                <p className="text-base font-bold text-neutral-800">
                   +91 {formData.mobile}
                 </p>
               </div>
@@ -665,19 +656,19 @@ export default function DeliverySignUp() {
               <OTPInput onComplete={handleOTPComplete} disabled={loading} />
 
               {error && (
-                <div className="text-sm text-red-600 bg-red-50 p-2 rounded text-center">
+                <div className="text-sm text-red-600 bg-red-50 border border-red-200 p-3 rounded-xl text-center">
                   {error}
                 </div>
               )}
 
-              <div className="flex gap-2">
+              <div className="flex gap-2.5">
                 <button
                   onClick={() => {
                     setShowOTP(false);
                     setError("");
                   }}
                   disabled={loading}
-                  className="flex-1 py-2.5 rounded-lg font-semibold text-sm bg-neutral-100 text-neutral-700 hover:bg-neutral-200 transition-colors border border-neutral-300">
+                  className="flex-1 py-2.5 rounded-xl font-semibold text-sm bg-neutral-100 text-neutral-700 hover:bg-neutral-200 transition-colors border border-neutral-300">
                   Back
                 </button>
                 <button
@@ -696,7 +687,7 @@ export default function DeliverySignUp() {
                     }
                   }}
                   disabled={loading}
-                  className="flex-1 py-2.5 rounded-lg font-semibold text-sm bg-[var(--primary-dark)] text-white hover:bg-[var(--primary-darker)] transition-colors">
+                  className="flex-1 py-2.5 rounded-xl font-bold text-sm bg-[var(--primary-color)] text-white hover:bg-[var(--primary-dark)] transition-colors shadow-sm">
                   {loading ? "Calling..." : "Resend OTP"}
                 </button>
               </div>
@@ -705,7 +696,7 @@ export default function DeliverySignUp() {
             </div>
 
             {/* Footer Text */}
-            <p className="mt-4 text-[9px] sm:text-[10px] text-neutral-500 text-center max-w-sm leading-tight">
+            <p className="mt-4 text-[10px] text-neutral-400 text-center max-w-sm leading-relaxed">
               By continuing, you agree to Unnati Stores's Terms of Service and Privacy Policy
             </p>
           </div>

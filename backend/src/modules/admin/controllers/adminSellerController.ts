@@ -3,6 +3,7 @@ import { asyncHandler } from "../../../utils/asyncHandler";
 import Seller from "../../../models/Seller";
 import { CLOUDINARY_FOLDERS } from "../../../config/cloudinary";
 import { uploadDocumentFromBuffer, uploadImageFromBuffer } from "../../../services/cloudinaryService";
+import { resolveAllCategoryNamesForHeader } from "../../../utils/categoryHierarchy";
 
 /**
  * Get all sellers (for dropdowns/lists)
@@ -90,6 +91,23 @@ export const createSeller = asyncHandler(async (req: Request, res: Response) => 
         addressProofUrl = result.secureUrl;
     }
 
+    // Resolve all categories and subcategories under the header category
+    const selectedCategoryInput = body.selectCategory || body.category || "";
+    const resolved = await resolveAllCategoryNamesForHeader(selectedCategoryInput);
+
+    let extraCats: string[] = [];
+    if (body.categories) {
+        try {
+            extraCats = typeof body.categories === "string" ? JSON.parse(body.categories) : body.categories;
+            if (!Array.isArray(extraCats)) extraCats = [String(extraCats)];
+        } catch {
+            extraCats = typeof body.categories === "string" ? body.categories.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
+        }
+    }
+
+    const finalCategories = Array.from(new Set([...resolved.allCategoryNames, ...extraCats]));
+    const primaryCategory = resolved.headerNames[0] || selectedCategoryInput;
+
     // Prepare seller data
     // Map frontend fields to backend schema
     const newSeller = await Seller.create({
@@ -101,7 +119,8 @@ export const createSeller = asyncHandler(async (req: Request, res: Response) => 
 
         // Store Info
         storeName: body.storeName,
-        category: body.selectCategory,
+        category: primaryCategory,
+        categories: finalCategories,
         address: body.address,
         panCard: body.panCard,
         taxName: body.taxName,

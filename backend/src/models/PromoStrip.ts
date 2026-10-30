@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
+import { announceChangesOn } from "../socket/contentBroadcast";
 
 export interface IPromoStrip extends Document {
   headerCategorySlug: string; // Links to HeaderCategory slug (e.g., "all", "grocery", "fashion")
@@ -114,6 +115,8 @@ const PromoStripSchema = new Schema<IPromoStrip>(
 // Compound index for the most common query: headerCategorySlug + isActive + date range
 PromoStripSchema.index({ headerCategorySlug: 1, isActive: 1, startDate: 1, endDate: 1 });
 PromoStripSchema.index({ order: 1 });
+
+announceChangesOn(PromoStripSchema, "promo");
 
 const PromoStrip = mongoose.model<IPromoStrip>("PromoStrip", PromoStripSchema);
 

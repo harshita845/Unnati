@@ -462,17 +462,17 @@ export const emitLocationUpdate = (
 };
 
 export const notifyContentUpdated = (
-    type: 'categories' | 'products' | 'banners' | 'promo' | 'home' | 'deals'
+    type: 'categories' | 'products' | 'banners' | 'promo' | 'home' | 'deals' | 'all'
 ) => {
     const io = globalIO;
     if (io) {
         const timestamp = Date.now();
         io.emit('contentUpdated', { type, timestamp });
-        if (type === 'categories') io.emit('categoriesUpdated', { timestamp });
-        if (type === 'products') io.emit('productUpdated', { timestamp });
-        if (type === 'banners') io.emit('bannersUpdated', { timestamp });
-        if (type === 'promo') io.emit('promoUpdated', { timestamp });
-        if (type === 'deals') io.emit('dealsUpdated', { timestamp });
-        if (type === 'home') io.emit('homeUpdated', { timestamp });
+        if (type === 'categories' || type === 'all') io.emit('categoriesUpdated', { timestamp });
+        if (type === 'products' || type === 'all') io.emit('productUpdated', { timestamp });
+        if (type === 'banners' || type === 'all') io.emit('bannersUpdated', { timestamp });
+        if (type === 'promo' || type === 'all') io.emit('promoUpdated', { timestamp });
+        if (type === 'deals' || type === 'all') io.emit('dealsUpdated', { timestamp });
+        if (type === 'home' || type === 'all') io.emit('homeUpdated', { timestamp });
     }
 };

@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema } from 'mongoose';
+import { announceChangesOn } from '../socket/contentBroadcast';
 
 export interface IBanner extends Document {
   position: 'Main Banner' | 'Popup Banner' | 'Main Section Banner' | 'Deal of the Day' | 'Flash Deals' | 'Footer Banner';
@@ -70,6 +71,8 @@ const bannerSchema = new Schema<IBanner>(
     timestamps: true,
   }
 );
+
+announceChangesOn(bannerSchema, "banners");
 
 export const Banner = mongoose.model<IBanner>('Banner', bannerSchema);
 export default Banner;

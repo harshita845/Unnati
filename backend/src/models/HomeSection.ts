@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
+import { announceChangesOn } from "../socket/contentBroadcast";
 
 export interface IHomeSection extends Document {
     title: string;
@@ -81,6 +82,8 @@ const HomeSectionSchema = new Schema<IHomeSection>(
 // Indexes for better query performance
 HomeSectionSchema.index({ order: 1, isActive: 1 });
 HomeSectionSchema.index({ categories: 1 });
+
+announceChangesOn(HomeSectionSchema, "home");
 
 const HomeSection = mongoose.model<IHomeSection>("HomeSection", HomeSectionSchema);
 

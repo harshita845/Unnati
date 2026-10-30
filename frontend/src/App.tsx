@@ -154,6 +154,7 @@ const SellerStorageLocationSetup = lazy(() => import("./modules/seller/pages/Sel
 // Lazy load admin routes
 const AdminLayout = lazy(() => import("./modules/admin/components/AdminLayout"));
 const AdminDashboard = lazy(() => import("./modules/admin/pages/AdminDashboard"));
+const AdminSearchPage = lazy(() => import("./modules/admin/pages/AdminSearchPage"));
 const AdminLogin = lazy(() => import("./modules/admin/pages/AdminLogin"));
 const AdminCategory = lazy(() => import("./modules/admin/pages/AdminCategory"));
 const AdminHeaderCategory = lazy(() => import("./modules/admin/pages/AdminHeaderCategory"));
@@ -583,6 +584,7 @@ function App() {
                              <Route path="customer-display/banners" element={<AdminCustomerDisplayBanners />} />
                              <Route path="customer-display/settings" element={<AdminCustomerDisplaySettings />} />
                              <Route path="" element={<AdminDashboard />} />
+                            <Route path="search" element={<AdminSearchPage />} />
                             <Route path="profile" element={<AdminProfile />} />
                             <Route path="category" element={<AdminCategory />} />
                             <Route path="category/header" element={<AdminHeaderCategory />} />

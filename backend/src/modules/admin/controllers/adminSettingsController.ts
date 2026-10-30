@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import AppSettings from "../../../models/AppSettings";
 import PaymentMethod from "../../../models/PaymentMethod";
+import { getSocketIO } from "../../../socket/socketService";
 
 /**
  * Get app settings
@@ -58,6 +59,12 @@ export const updateAppSettings = asyncHandler(
           runValidators: true,
         }
       ).lean();
+    }
+
+    const io = req.app.get("io") || getSocketIO();
+    if (io) {
+      io.emit("appSettingsUpdated", { settings, timestamp: Date.now() });
+      io.emit("contentUpdated", { type: "home", timestamp: Date.now() });
     }
 
     return res.status(200).json({

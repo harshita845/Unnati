@@ -5,10 +5,38 @@ import EcommerceStoresLogo from '@assets/unnati_logo.png';
 import { io, Socket } from 'socket.io-client';
 import { getSocketBaseURL, isRealtimeAvailable } from '../../../services/api/config';
 import { getNotifications, markAsRead, Notification as AdminNotificationData } from '../../../services/api/admin/adminNotificationService';
+import {
+  adminGlobalSearch,
+  GlobalSearchResult,
+  AdminSearchOrder,
+  AdminSearchProduct,
+  AdminSearchCustomer,
+  AdminSearchSeller,
+  AdminSearchCategory,
+  AdminSearchSubCategory,
+} from '../../../services/api/admin/adminSearchService';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'react-hot-toast';
 import { useAppContext } from '../../../context/AppContext';
 import AdminNotificationAlert, { AdminNotificationData as AlertNotificationData } from './AdminNotificationAlert';
+
+const ADMIN_NAV_PAGES = [
+  { title: "Orders (All Orders)", path: "/admin/orders", category: "Sales", icon: "📦" },
+  { title: "POS Orders", path: "/admin/pos/orders", category: "POS", icon: "🧾" },
+  { title: "Scan Bill / Billing", path: "/admin/pos/scan-bill", category: "POS", icon: "⚡" },
+  { title: "Product List & Stock", path: "/admin/product/list", category: "Products", icon: "🛍️" },
+  { title: "Add Product", path: "/admin/product/add", category: "Products", icon: "➕" },
+  { title: "Manage Categories", path: "/admin/category", category: "Catalog", icon: "📁" },
+  { title: "Header Category", path: "/admin/category/header", category: "Catalog", icon: "🏷️" },
+  { title: "Sub Category", path: "/admin/subcategory", category: "Catalog", icon: "📂" },
+  { title: "Manage Customer", path: "/admin/customers", category: "Customers", icon: "👤" },
+  { title: "Manage Seller List", path: "/admin/manage-seller/list", category: "Sellers", icon: "🏪" },
+  { title: "Add Seller", path: "/admin/manage-seller/add", category: "Sellers", icon: "➕" },
+  { title: "Seller Subscriptions", path: "/admin/seller-subscriptions", category: "Sellers", icon: "💳" },
+  { title: "Coupons", path: "/admin/coupons", category: "Marketing", icon: "🎟️" },
+  { title: "Delivery Boys", path: "/admin/delivery-boys", category: "Delivery", icon: "🛵" },
+  { title: "Manage Staff", path: "/admin/manage-staff", category: "Staff", icon: "👥" },
+];
 
 const getRoleBadge = (msg: string) => {
   if (!msg) return null;
@@ -37,10 +65,20 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<GlobalSearchResult>({
+    orders: [],
+    products: [],
+    customers: [],
+    sellers: [],
+    categories: [],
+    subcategories: [],
+  });
+  const [isSearching, setIsSearching] = useState(false);
   const [notifications, setNotifications] = useState<AdminNotificationData[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [currentAlert, setCurrentAlert] = useState<AlertNotificationData | null>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
 
   const isActive = (path: string) => location.pathname.includes(path);
@@ -51,13 +89,62 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
       if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
         setShowNotificationsDropdown(false);
       }
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSearchModal(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowSearchModal(false);
+        setShowNotificationsDropdown(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
+
+  useEffect(() => {
+    if (!showSearchModal || !searchQuery.trim()) {
+      setSearchResults({
+        orders: [],
+        products: [],
+        customers: [],
+        sellers: [],
+        categories: [],
+        subcategories: [],
+      });
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    const timer = setTimeout(() => {
+      adminGlobalSearch(searchQuery.trim())
+        .then((data) => {
+          setSearchResults(data);
+        })
+        .catch((err) => {
+          console.error('Search fetch error:', err);
+        })
+        .finally(() => {
+          setIsSearching(false);
+        });
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, showSearchModal]);
+
+  const handleSelectSearchResult = (path: string) => {
+    navigate(path);
+    setShowSearchModal(false);
+    setSearchQuery('');
+  };
 
   // Fetch admin notifications
   const fetchNotificationsList = async () => {
@@ -249,11 +336,17 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
         {/* Action Icons */}
         <div className="flex items-center gap-2 md:gap-4 relative">
           {/* Search Button */}
-          <div className="relative">
+          <div className="relative" ref={searchRef}>
             <button
-              onClick={() => setShowSearchModal(!showSearchModal)}
-              className="p-2 text-neutral-600 hover:text-neutral-900 transition-colors"
+              onClick={() => {
+                setShowSearchModal(!showSearchModal);
+                setShowNotificationsDropdown(false);
+              }}
+              className={`p-2 rounded-lg transition-colors ${
+                showSearchModal ? 'text-[#236B34] bg-neutral-100' : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+              }`}
               aria-label="Search"
+              title="Search"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -261,25 +354,20 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
               </svg>
             </button>
             {showSearchModal && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-neutral-200 p-4 z-50">
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && searchQuery.trim()) {
-                        // Navigate to search results or perform search
-                        navigate(`/admin?search=${encodeURIComponent(searchQuery)}`);
-                        setShowSearchModal(false);
-                        setSearchQuery('');
-                      }
-                    }}
-                    placeholder="Search orders, customers, products..."
-                    className="w-full px-4 py-2 pl-10 border border-neutral-300 rounded-lg text-sm focus:outline-none focus:ring-2"
-                    style={{ '--tw-ring-color': 'var(--primary-color, var(--primary-color))' } as any}
-                    autoFocus
-                  />
+              <div
+                className="absolute right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-neutral-200 p-3.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150"
+                style={{ width: '420px', minWidth: '320px', maxWidth: 'calc(100vw - 32px)' }}
+              >
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (searchQuery.trim()) {
+                      navigate(`/admin/search?q=${encodeURIComponent(searchQuery.trim())}`);
+                      setShowSearchModal(false);
+                    }
+                  }}
+                  className="relative flex items-center w-full"
+                >
                   <svg
                     width="18"
                     height="18"
@@ -287,29 +375,295 @@ export default function AdminHeader({ onMenuClick, isSidebarOpen }: AdminHeaderP
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2"
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none"
                   >
                     <circle cx="11" cy="11" r="8"></circle>
                     <path d="M21 21L16.65 16.65"></path>
                   </svg>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search orders, customers, products..."
+                    className="w-full pl-10 pr-9 py-2 border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-[#236B34] focus:ring-2 focus:ring-[#236B34]/20 transition-all bg-white"
+                    style={{ height: '42px', width: '100%' }}
+                    autoFocus
+                  />
+                  {isSearching ? (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <div className="animate-spin h-4 w-4 border-2 border-neutral-300 border-t-[#236B34] rounded-full"></div>
+                    </div>
+                  ) : searchQuery ? (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-600 rounded-full hover:bg-neutral-100 transition-colors"
+                      title="Clear text"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                    </button>
+                  ) : null}
+                </form>
+
+                {/* Live Results or Quick Suggestions */}
+                <div className="mt-3 max-h-[360px] overflow-y-auto divide-y divide-neutral-100 pr-0.5">
+                  {!searchQuery.trim() ? (
+                    <div className="py-2">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 px-1 mb-2">
+                        Quick Shortcuts
+                      </p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {ADMIN_NAV_PAGES.slice(0, 6).map((page, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleSelectSearchResult(page.path)}
+                            className="flex items-center gap-2 p-2 rounded-lg text-left text-xs font-medium text-neutral-700 hover:text-[#236B34] hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-colors"
+                          >
+                            <span>{page.icon}</span>
+                            <span className="truncate">{page.title}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 py-1">
+                      {/* Matching Navigation Pages */}
+                      {ADMIN_NAV_PAGES.filter(
+                        (p) =>
+                          p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          p.category.toLowerCase().includes(searchQuery.toLowerCase())
+                      ).length > 0 && (
+                        <div>
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 px-1 mb-1.5">
+                            Pages & Navigation
+                          </p>
+                          <div className="space-y-1">
+                            {ADMIN_NAV_PAGES.filter(
+                              (p) =>
+                                p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                p.category.toLowerCase().includes(searchQuery.toLowerCase())
+                            )
+                              .slice(0, 3)
+                              .map((page, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => handleSelectSearchResult(page.path)}
+                                  className="w-full flex items-center justify-between p-2 rounded-lg text-left text-xs hover:bg-[#236B34]/5 text-neutral-800 hover:text-[#236B34] transition-colors group"
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span>{page.icon}</span>
+                                    <span className="font-medium truncate">{page.title}</span>
+                                  </div>
+                                  <span className="text-[10px] text-neutral-400 group-hover:text-[#236B34]">
+                                    {page.category} →
+                                  </span>
+                                </button>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Matching Orders */}
+                      {searchResults.orders.length > 0 && (
+                        <div className="pt-2">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 px-1 mb-1.5 flex items-center justify-between">
+                            <span>Orders</span>
+                            <span className="text-[10px] bg-neutral-100 text-neutral-600 px-1.5 py-0.5 rounded-full font-semibold">
+                              {searchResults.orders.length}
+                            </span>
+                          </p>
+                          <div className="space-y-1">
+                            {searchResults.orders.slice(0, 3).map((ord) => (
+                              <button
+                                key={ord._id}
+                                type="button"
+                                onClick={() => handleSelectSearchResult(`/admin/orders/${ord._id}`)}
+                                className="w-full flex items-center justify-between p-2 rounded-lg text-left hover:bg-neutral-50 transition-colors"
+                              >
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-bold text-neutral-900">
+                                      #{ord.orderNumber}
+                                    </span>
+                                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-neutral-100 text-neutral-700 font-medium">
+                                      {ord.status}
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-neutral-500 mt-0.5">
+                                    {ord.customerName}
+                                  </p>
+                                </div>
+                                <span className="text-xs font-bold text-neutral-900">
+                                  ₹{ord.total?.toFixed(2)}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Matching Products */}
+                      {searchResults.products.length > 0 && (
+                        <div className="pt-2">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 px-1 mb-1.5 flex items-center justify-between">
+                            <span>Products</span>
+                            <span className="text-[10px] bg-neutral-100 text-neutral-600 px-1.5 py-0.5 rounded-full font-semibold">
+                              {searchResults.products.length}
+                            </span>
+                          </p>
+                          <div className="space-y-1">
+                            {searchResults.products.slice(0, 3).map((prod) => (
+                              <button
+                                key={prod._id}
+                                type="button"
+                                onClick={() => handleSelectSearchResult('/admin/product/list')}
+                                className="w-full flex items-center gap-2.5 p-2 rounded-lg text-left hover:bg-neutral-50 transition-colors"
+                              >
+                                <div className="w-8 h-8 rounded bg-neutral-100 flex-shrink-0 overflow-hidden flex items-center justify-center border border-neutral-200">
+                                  {prod.image ? (
+                                    <img src={prod.image} alt={prod.productName} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <span className="text-xs">🛍️</span>
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-medium text-neutral-900 truncate">
+                                    {prod.productName}
+                                  </p>
+                                  <p className="text-[10px] text-neutral-400">
+                                    ₹{prod.price} • Stock: {prod.stock}
+                                  </p>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Matching Customers */}
+                      {searchResults.customers.length > 0 && (
+                        <div className="pt-2">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 px-1 mb-1.5 flex items-center justify-between">
+                            <span>Customers</span>
+                            <span className="text-[10px] bg-neutral-100 text-neutral-600 px-1.5 py-0.5 rounded-full font-semibold">
+                              {searchResults.customers.length}
+                            </span>
+                          </p>
+                          <div className="space-y-1">
+                            {searchResults.customers.slice(0, 2).map((cust) => (
+                              <button
+                                key={cust._id}
+                                type="button"
+                                onClick={() => handleSelectSearchResult('/admin/customers')}
+                                className="w-full flex items-center justify-between p-2 rounded-lg text-left hover:bg-neutral-50 transition-colors"
+                              >
+                                <div>
+                                  <p className="text-xs font-semibold text-neutral-900">
+                                    {cust.name}
+                                  </p>
+                                  <p className="text-[11px] text-neutral-500">
+                                    {cust.phone} {cust.email ? `• ${cust.email}` : ''}
+                                  </p>
+                                </div>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 font-medium">
+                                  Customer
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Matching Sellers */}
+                      {searchResults.sellers.length > 0 && (
+                        <div className="pt-2">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 px-1 mb-1.5 flex items-center justify-between">
+                            <span>Sellers</span>
+                            <span className="text-[10px] bg-neutral-100 text-neutral-600 px-1.5 py-0.5 rounded-full font-semibold">
+                              {searchResults.sellers.length}
+                            </span>
+                          </p>
+                          <div className="space-y-1">
+                            {searchResults.sellers.slice(0, 2).map((sel) => (
+                              <button
+                                key={sel._id}
+                                type="button"
+                                onClick={() => handleSelectSearchResult('/admin/manage-seller/list')}
+                                className="w-full flex items-center justify-between p-2 rounded-lg text-left hover:bg-neutral-50 transition-colors"
+                              >
+                                <div>
+                                  <p className="text-xs font-semibold text-neutral-900">
+                                    {sel.storeName}
+                                  </p>
+                                  <p className="text-[11px] text-neutral-500">
+                                    {sel.city ? `${sel.city} • ` : ''}{sel.mobile || sel.email}
+                                  </p>
+                                </div>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-medium border border-amber-200">
+                                  Seller
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* No Results Message */}
+                      {!isSearching &&
+                        searchResults.orders.length === 0 &&
+                        searchResults.products.length === 0 &&
+                        searchResults.customers.length === 0 &&
+                        searchResults.sellers.length === 0 &&
+                        searchResults.categories.length === 0 &&
+                        ADMIN_NAV_PAGES.filter(
+                          (p) =>
+                            p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            p.category.toLowerCase().includes(searchQuery.toLowerCase())
+                        ).length === 0 && (
+                          <div className="py-6 text-center text-neutral-500 text-xs">
+                            <p className="font-medium text-neutral-700">No records found for "{searchQuery}"</p>
+                            <p className="mt-1 text-[11px] text-neutral-400">Press Enter to view the full search page.</p>
+                          </div>
+                        )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer Actions */}
+                <div className="mt-2.5 pt-2 border-t border-neutral-100 flex items-center justify-between text-xs text-neutral-500 px-1">
+                  {searchQuery.trim() ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigate(`/admin/search?q=${encodeURIComponent(searchQuery.trim())}`);
+                        setShowSearchModal(false);
+                      }}
+                      className="text-[#236B34] hover:text-[#1B5128] font-semibold text-xs flex items-center gap-1 transition-colors"
+                    >
+                      <span>View all results for "{searchQuery}"</span>
+                      <span>→</span>
+                    </button>
+                  ) : (
+                    <span>
+                      Press <kbd className="px-1.5 py-0.5 bg-neutral-100 border border-neutral-200 rounded text-[11px] font-mono text-neutral-700 font-medium">Enter ↵</kbd> to search
+                    </span>
+                  )}
                   <button
+                    type="button"
                     onClick={() => {
                       setShowSearchModal(false);
                       setSearchQuery('');
                     }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                    className="text-neutral-400 hover:text-neutral-600 transition-colors text-xs font-medium ml-auto"
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
+                    Close
                   </button>
                 </div>
-                {searchQuery && (
-                  <div className="mt-2 text-xs text-neutral-500">
-                    Press Enter to search
-                  </div>
-                )}
               </div>
             )}
           </div>

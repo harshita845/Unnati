@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
+import { announceChangesOn } from "../socket/contentBroadcast";
 
 export interface IBestsellerCard extends Document {
     name: string;
@@ -42,6 +43,8 @@ const BestsellerCardSchema = new Schema<IBestsellerCard>(
 BestsellerCardSchema.index({ order: 1, isActive: 1 });
 BestsellerCardSchema.index({ category: 1 });
 BestsellerCardSchema.index({ isActive: 1 });
+
+announceChangesOn(BestsellerCardSchema, "home");
 
 const BestsellerCard = mongoose.model<IBestsellerCard>("BestsellerCard", BestsellerCardSchema);
 

@@ -512,6 +512,7 @@ button[class*="border-[#0d055a]"][class*="group"]:hover {
   .customer-auth-wrapper .login-card {
     max-width: 940px;
     min-height: 580px;
+    max-height: 90vh;
     height: auto;
   }
   .login-video-container {
