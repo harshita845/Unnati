@@ -477,7 +477,7 @@ export default function AdminStockManagement() {
 
              // Prepare update data. AdminStockBulkEdit updates:
              // productName, category, compareAtPrice, price, stock, publish.
-            const updateData = {
+            const updateData: any = {
                 productName: product.productName,
                 subCategory: typeof product.subcategory === 'object' ? String(product.subcategory?._id || "") : String(product.subcategory || ""),
                 category: typeof product.category === 'object' && product.category ? product.category._id : product.category,
@@ -485,6 +485,7 @@ export default function AdminStockManagement() {
                 price: product.price,
                 stock: product.stock,
                 publish: product.publish,
+                status: product.publish ? "Active" : "Inactive",
                 discPrice: (product as any).offerPrice || product.price,
             };
 
@@ -506,9 +507,13 @@ export default function AdminStockManagement() {
 
   const handleToggleStatus = async (productId: string, currentStatus: boolean) => {
       try {
-          const response = await updateProduct(productId, { publish: !currentStatus });
+          const nextActive = !currentStatus;
+          const response = await updateProduct(productId, {
+              publish: nextActive,
+              status: nextActive ? "Active" : "Inactive",
+          });
           if (response.success) {
-              setProducts(prev => prev.map(p => p._id === productId ? { ...p, publish: !currentStatus } : p));
+              setProducts(prev => prev.map(p => p._id === productId ? { ...p, publish: nextActive, status: nextActive ? "Active" : "Inactive" } : p));
               fetchData({ force: true, silent: true });
           } else {
               alert("Failed to update status");
@@ -2166,7 +2171,7 @@ export default function AdminStockManagement() {
                             : "bg-white text-gray-500 border border-gray-200"
                         }`}
                       >
-                        {product.publish ? "ACTIVE" : "OFFER"}
+                        {product.publish ? "ACTIVE" : "INACTIVE"}
                       </button>
                     </div>
 

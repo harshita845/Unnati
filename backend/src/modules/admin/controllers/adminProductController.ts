@@ -1438,6 +1438,7 @@ export const approveProductRequest = asyncHandler(
 
     const updateData: any = {
       status,
+      publish: status === "Active",
       approvedBy: req.user?.userId,
       approvedAt: new Date(),
     };

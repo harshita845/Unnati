@@ -23,6 +23,7 @@ export function toCreatePayload(state: ProductFormState): CreateProductPayload {
     taxId: mainInfo.tax || undefined,
     hsnCode: mainInfo.hsnCode || undefined,
     publish: mainInfo.publish === "Yes",
+    status: mainInfo.publish === "Yes" ? "Active" : "Inactive",
     popular: mainInfo.popular === "Yes",
     dealOfDay: mainInfo.dealOfDay === "Yes",
     seoTitle: mainInfo.seoTitle || undefined,

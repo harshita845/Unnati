@@ -158,10 +158,16 @@ export function normalizeCreatePayload(
     gst: parsed.gst != null ? Number(parsed.gst) : undefined,
     tax,
     hsnCode: parsed.hsnCode ? String(parsed.hsnCode) : undefined,
-    publish: parseBool(parsed.publish, defaults.publish),
+    publish: (parsed.status === "Inactive" || parsed.status === "Pending" || parsed.status === "Rejected")
+      ? false
+      : (parsed.publish !== undefined ? parseBool(parsed.publish, defaults.publish) : (parsed.status ? parsed.status === "Active" : defaults.publish)),
     popular: parseBool(parsed.popular, false),
     dealOfDay: parseBool(parsed.dealOfDay, false),
-    status: (parsed.status as NormalizedProductPayload["status"]) || "Active",
+    status: ((parsed.publish !== undefined && !parseBool(parsed.publish, defaults.publish)) || parsed.status === "Inactive")
+      ? "Inactive"
+      : (parsed.status === "Pending" || parsed.status === "Rejected")
+        ? parsed.status
+        : "Active",
     seoTitle: parsed.seoTitle ? String(parsed.seoTitle) : undefined,
     seoKeywords: parsed.seoKeywords ? String(parsed.seoKeywords) : undefined,
     seoDescription: parsed.seoDescription

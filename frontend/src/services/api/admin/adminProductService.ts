@@ -254,6 +254,7 @@ export interface CreateProductData {
   }>;
   variationName?: string;
   publish?: boolean;
+  status?: "Active" | "Inactive" | "Pending" | "Rejected";
   popular?: boolean;
   dealOfDay?: boolean;
   manufacturer?: string;

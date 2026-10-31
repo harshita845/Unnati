@@ -433,7 +433,10 @@ export const updateProductStatus = asyncHandler(
     const { publish, popular, dealOfDay } = req.body;
 
     const updateData: any = {};
-    if (publish !== undefined) updateData.publish = publish;
+    if (publish !== undefined) {
+      updateData.publish = publish;
+      updateData.status = publish ? "Active" : "Inactive";
+    }
     if (popular !== undefined) updateData.popular = popular;
     if (dealOfDay !== undefined) updateData.dealOfDay = dealOfDay;
 

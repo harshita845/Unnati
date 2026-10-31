@@ -186,11 +186,15 @@ export default function SellerStockManagement() {
 
     const handleToggleStatus = async (productId: string, currentStatus: boolean) => {
         try {
-            const response = await updateProduct(productId, { publish: !currentStatus });
+            const nextActive = !currentStatus;
+            const response = await updateProduct(productId, {
+                publish: nextActive,
+                status: nextActive ? "Active" : "Inactive",
+            } as any);
             if (response.success) {
                 setStockItems(prev => prev.map(item =>
                     item.productId === productId
-                        ? { ...item, status: !currentStatus ? 'Published' : 'Unpublished' }
+                        ? { ...item, status: nextActive ? 'Published' : 'Unpublished' }
                         : item
                 ));
             } else {

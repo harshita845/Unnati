@@ -111,7 +111,7 @@ export const getProducts = async (req: Request, res: Response) => {
     const negativeStockSoldOut = inventorySection?.fields?.find(f => f.id === 'negative_stock_sold_out')?.isEnabled;
 
     const query: any = {
-      status: "Active",
+      status: { $in: ["Active", "active", "Published", "published"] },
       publish: true, subscriptionHidden: { $ne: true },
     };
 
@@ -390,7 +390,7 @@ export const getSearchSuggestions = async (req: Request, res: Response) => {
     const activeCategoryIds = activeCategories.map(c => c._id);
 
     const query: any = {
-      status: "Active",
+      status: { $in: ["Active", "active", "Published", "published"] },
       publish: true, subscriptionHidden: { $ne: true },
       category: { $in: activeCategoryIds },
       $or: [
@@ -478,7 +478,7 @@ export const getProductById = async (req: Request, res: Response) => {
     }
 
     const query: any = {
-      status: "Active",
+      status: { $in: ["Active", "active", "Published", "published"] },
       publish: true,
       subscriptionHidden: { $ne: true },
     };
@@ -573,7 +573,7 @@ export const getProductById = async (req: Request, res: Response) => {
 
     const similarProductsQuery: any = {
       _id: { $ne: product._id },
-      status: "Active",
+      status: { $in: ["Active", "active", "Published", "published"] },
       publish: true, subscriptionHidden: { $ne: true },
       $and: [
         {

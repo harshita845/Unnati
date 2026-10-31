@@ -287,7 +287,9 @@ export default function SellerProductList() {
                 [field]: value,
             };
              if (field === 'status') {
-                newProducts[productIndex].publish = value === 'Published';
+                const isPub = value === 'Published' || value === 'Active';
+                newProducts[productIndex].publish = isPub;
+                newProducts[productIndex].status = isPub ? 'Active' : 'Inactive';
              }
         }
         return newProducts;
@@ -317,6 +319,7 @@ export default function SellerProductList() {
                 price: product.price,
                 stock: product.stock,
                 publish: product.publish,
+                status: (product.publish ? "Active" : "Inactive") as "Active" | "Inactive",
                 discPrice: (product as any).offerPrice || product.discPrice,
             };
 
@@ -339,9 +342,17 @@ export default function SellerProductList() {
   const handleToggleStatus = async (productId: string, currentStatus: boolean) => {
       if (!isEnabled) return;
       try {
-          const response = await updateProduct(productId, { publish: !currentStatus });
+          const nextActive = !currentStatus;
+          const response = await updateProduct(productId, {
+            publish: nextActive,
+            status: nextActive ? "Active" : "Inactive"
+          });
           if (response.success) {
-              setProducts(prev => prev.map(p => p._id === productId ? { ...p, publish: !currentStatus } : p));
+              setProducts(prev => prev.map(p => p._id === productId ? {
+                ...p,
+                publish: nextActive,
+                status: nextActive ? "Active" : "Inactive"
+              } : p));
           } else {
               alert("Failed to update status");
           }

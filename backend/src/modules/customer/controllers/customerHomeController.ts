@@ -55,7 +55,7 @@ async function fetchSectionData(
     // If displayType is "products", fetch products
     if (displayType === "products") {
       const query: any = {
-        status: "Active",
+        status: { $in: ["Active", "active", "Published", "published"] },
         publish: true, subscriptionHidden: { $ne: true },
         // Exclude shop-by-store-only products from home sections
         $or: [
@@ -206,7 +206,7 @@ async function fetchLowestPricesProducts(
       select:
         "productName mainImage price discPrice compareAtPrice mrp variations unitPricing discount status publish category subcategory seller",
       match: {
-        status: "Active",
+        status: { $in: ["Active", "active", "Published", "published"] },
         publish: true, subscriptionHidden: { $ne: true },
         seller: { $in: visibleSellerIds },
       },
@@ -323,7 +323,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
         // Preview images come from stores that deliver to the user (when location is known)
         const productQuery: any = {
           category: categoryId,
-          status: "Active",
+          status: { $in: ["Active", "active", "Published", "published"] },
           publish: true, subscriptionHidden: { $ne: true },
           seller: { $in: nearbySellerIds },
         };
@@ -430,7 +430,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
       sellerStores.map(async (seller: any) => {
         const sellerProducts = await Product.find({
           seller: seller._id,
-          status: "Active",
+          status: { $in: ["Active", "active", "Published", "published"] },
           publish: true, subscriptionHidden: { $ne: true },
         })
           .select("title mainImage price regularPrice")
@@ -452,7 +452,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
 
         const totalProductCount = await Product.countDocuments({
           seller: seller._id,
-          status: "Active",
+          status: { $in: ["Active", "active", "Published", "published"] },
           publish: true,
           subscriptionHidden: { $ne: true },
         });
@@ -512,7 +512,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
     const activeCategoryIds = activeCategories.map(c => c._id);
 
     const foodProductsQuery: any = {
-      status: "Active",
+      status: { $in: ["Active", "active", "Published", "published"] },
       publish: true, subscriptionHidden: { $ne: true },
       category: { $in: activeCategoryIds },
       // From stores that deliver to the user (when location is known)
@@ -761,7 +761,7 @@ export const getHomeContent = async (req: Request, res: Response) => {
             if (!catId) return { ...card, productImages: [] };
             const filter: any = {
               $or: [{ category: catId }, { subcategory: catId }],
-              status: "Active",
+              status: { $in: ["Active", "active", "Published", "published"] },
               publish: true,
               subscriptionHidden: { $ne: true },
               mainImage: { $nin: [null, ""] },
@@ -860,7 +860,7 @@ export const getStoreProducts = async (req: Request, res: Response) => {
       if (bySlug) storeId = bySlug._id.toString();
     }
     let query: any = {
-      status: "Active",
+      status: { $in: ["Active", "active", "Published", "published"] },
       publish: true, subscriptionHidden: { $ne: true },
       // Only show shop-by-store-only products in shop by store section
       isShopByStoreOnly: true,
@@ -904,7 +904,7 @@ export const getStoreProducts = async (req: Request, res: Response) => {
 
         const sellerProducts = await Product.find({
           seller: seller._id,
-          status: "Active",
+          status: { $in: ["Active", "active", "Published", "published"] },
           publish: true, subscriptionHidden: { $ne: true },
         })
           .populate("category", "name icon image")

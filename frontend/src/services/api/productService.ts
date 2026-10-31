@@ -41,6 +41,7 @@ export interface Product {
   subSubCategory?: string | any; // Added subSubCategory
   brand?: string | any; // Updated
   publish: boolean;
+  status?: "Active" | "Inactive" | "Pending" | "Rejected";
   popular: boolean;
   dealOfDay: boolean;
   seoTitle?: string;
@@ -98,6 +99,7 @@ export interface CreateProductData {
   subSubCategoryId?: string;
   brandId?: string;
   publish: boolean;
+  status?: "Active" | "Inactive" | "Pending" | "Rejected";
   popular: boolean;
   dealOfDay: boolean;
   seoTitle?: string;
