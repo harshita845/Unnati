@@ -72,7 +72,6 @@ export default function CategoryPage() {
               _id: "all",
               id: "all",
               name: "All",
-              icon: "📦",
               isActive: true,
             } as any,
             ...(subs || []),
@@ -664,7 +663,16 @@ export default function CategoryPage() {
                         ? "ring-2 ring-[var(--brand-green,#236B34)] ring-offset-2 bg-white"
                         : "bg-neutral-50 border border-neutral-100 group-hover:shadow-md"
                     }`}>
-                    {subcat.image && !subcat.image.includes("placehold.co") ? (
+                    {String(subcat.id || subcat._id) === 'all' ? (
+                      <div className="w-full h-full flex items-center justify-center bg-[var(--brand-leaf-tint,#EAF5E0)] text-[var(--brand-green,#236B34)]">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="3" width="7" height="7" rx="2" />
+                          <rect x="14" y="3" width="7" height="7" rx="2" />
+                          <rect x="14" y="14" width="7" height="7" rx="2" />
+                          <rect x="3" y="14" width="7" height="7" rx="2" />
+                        </svg>
+                      </div>
+                    ) : subcat.image && !subcat.image.includes("placehold.co") ? (
                       <img
                         key={subcat.image}
                         src={subcat.image}
@@ -673,15 +681,20 @@ export default function CategoryPage() {
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
                           target.style.display = "none";
-                          const parent = target.parentElement;
-                          if (parent) {
-                            parent.textContent =
-                              subcat.icon || subcat.name?.charAt(0) || "📦";
-                          }
                         }}
                       />
                     ) : (
-                      <span className="text-xl">{subcat.icon || "📦"}</span>
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[var(--brand-leaf-tint,#EAF5E0)] to-[var(--brand-cream-soft,#F6EFE2)] text-[var(--brand-green,#236B34)]">
+                        {subcat.icon ? (
+                          <span className="text-xl">{subcat.icon}</span>
+                        ) : (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+                            <line x1="3" y1="6" x2="21" y2="6" />
+                            <path d="M16 10a4 4 0 0 1-8 0" />
+                          </svg>
+                        )}
+                      </div>
                     )}
                   </div>
 
@@ -809,14 +822,21 @@ export default function CategoryPage() {
                           : "bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
                       }`}>
                       <span className="text-sm flex-shrink-0">
-                        {subcat.image && !subcat.image.includes("placehold.co") ? (
+                        {String(subcat.id || subcat._id) === 'all' ? (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--brand-green,#236B34)]">
+                            <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                            <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                            <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                            <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                          </svg>
+                        ) : subcat.image && !subcat.image.includes("placehold.co") ? (
                           <img
                             src={subcat.image}
                             alt=""
                             className="w-3.5 h-3.5 object-cover rounded-full"
                           />
                         ) : (
-                          subcat.icon || "📦"
+                          subcat.icon || "•"
                         )}
                       </span>
                       <span>{formatSubcatName(subcat.name)}</span>
