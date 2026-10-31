@@ -32,13 +32,14 @@ export default function HomeThreePromoBanners() {
               link = `/category/${encodeURIComponent(b.categoryName)}`;
             }
 
+            const effectiveCategory = b.categoryName && b.categoryName !== 'No Category Selected' ? b.categoryName : b.resourceName;
             return {
               id: b.id,
-              title: b.title || (b.categoryName && b.categoryName !== 'No Category Selected' ? b.categoryName : "Special Offer"),
-              subtitle: b.subtitle || "Handpicked for you",
-              priceText: "Shop",
-              price: "Now",
-              imageUrl: b.image || b.imageUrl,
+              title: b.title || effectiveCategory || "Special Offer",
+              subtitle: b.subtitle || (effectiveCategory ? `Explore top ${effectiveCategory} items` : "Handpicked for you"),
+              priceText: (b as any).priceText || "Explore",
+              price: (b as any).price || "Deals",
+              imageUrl: b.image || b.imageUrl || "/brand/unnati-logo.png",
               bgColor: BG_COLORS[idx % BG_COLORS.length],
               link,
             };

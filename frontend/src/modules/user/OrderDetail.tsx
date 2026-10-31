@@ -1354,8 +1354,8 @@ export default function OrderDetail() {
             profileImage: order?.deliveryPartner?.profileImage,
             vehicleNumber: order?.deliveryPartner?.vehicleNumber,
           }}
-          eta={distance > 0 ? eta : (routeInfo?.durationValue ? Math.ceil(routeInfo.durationValue / 60) : eta)}
-          distance={distance > 0 ? distance : (routeInfo?.distanceValue ?? distance)}
+          eta={routeInfo?.durationValue ? Math.ceil(routeInfo.durationValue / 60) : (eta > 0 ? eta : 1)}
+          distance={routeInfo?.distanceValue !== undefined && routeInfo.distanceValue > 0 ? routeInfo.distanceValue : distance}
           isTracking={!!(isConnected && deliveryLocation)}
           deliveryOtp={order?.deliveryOtp}
           otpExpiryTime={order?.deliveryOtpExpiresAt}

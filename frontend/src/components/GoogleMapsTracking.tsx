@@ -46,6 +46,8 @@ const mapContainerStyle = {
     height: '22rem'
 }
 
+const libraries = ['places']
+
 export default function GoogleMapsTracking({
     storeLocation,
     sellerLocations = [],
@@ -102,7 +104,8 @@ export default function GoogleMapsTracking({
 
     const { isLoaded, loadError } = useJsApiLoader({
         id: 'google-map-script',
-        googleMapsApiKey: apiKey || ''
+        googleMapsApiKey: apiKey || '',
+        libraries: libraries as any,
     })
 
     // Helper to validate coordinates (filters out Null Island / 0,0 and invalid points)
