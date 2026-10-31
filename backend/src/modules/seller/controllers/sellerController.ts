@@ -4,6 +4,7 @@ import Seller from "../../../models/Seller";
 import { offloadInlineImages, InlineImageUploadError } from "../../../services/inlineImageService";
 import { asyncHandler } from "../../../utils/asyncHandler";
 import { resolveAllCategoryNamesForHeader } from "../../../utils/categoryHierarchy";
+import { notifyContentUpdated } from "../../../socket/socketService";
 
 /**
  * Get all sellers (Admin only)
@@ -101,6 +102,9 @@ export const updateSellerStatus = asyncHandler(
         message: "Seller not found",
       });
     }
+
+    notifyContentUpdated('home');
+    notifyContentUpdated('products');
 
     return res.status(200).json({
       success: true,
@@ -267,6 +271,9 @@ export const toggleSellerEnabled = asyncHandler(
         message: "Seller not found",
       });
     }
+
+    notifyContentUpdated('home');
+    notifyContentUpdated('products');
 
     return res.status(200).json({
       success: true,

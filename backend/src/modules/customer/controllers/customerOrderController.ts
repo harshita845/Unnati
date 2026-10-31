@@ -10,6 +10,7 @@ import { notifySellersOfOrderUpdate } from "../../../services/sellerNotification
 import { notifyAdminsOfNewOrder } from "../../../services/adminNotificationService";
 import { generateDeliveryOtp } from "../../../services/deliveryOtpService";
 import { Server as SocketIOServer } from "socket.io";
+import { getSocketIO } from "../../../socket/socketService";
 import { OrderPlacementError, placeOrder, quoteOrder, runInTransaction } from "../../../services/orderPlacementService";
 import { cancelOrderAndRestoreStock, confirmOnlinePayment } from "../../../services/orderLifecycleService";
 import {
@@ -259,8 +260,18 @@ export const cancelOrder = async (req: Request, res: Response) => {
         });
 
         try {
-            const io = (req.app as any).get("io");
-            if (io) await notifySellersOfOrderUpdate(io, order, 'ORDER_CANCELLED');
+            const io = (req.app as any).get("io") || getSocketIO();
+            if (io) {
+                await notifySellersOfOrderUpdate(io, order, 'ORDER_CANCELLED');
+                io.to(`order-${id}`).emit('order-status-updated', { orderId: id, status: 'Cancelled' });
+                io.to(`order-${id}`).emit('orderUpdated', { orderId: id, status: 'Cancelled', order });
+                io.to("admin-notifications").emit("orderUpdated", { orderId: id, status: 'Cancelled', order });
+                if (order.deliveryBoy) {
+                    const dId = String((order.deliveryBoy as any)?._id || order.deliveryBoy);
+                    io.to(`delivery-${dId}`).emit('order-cancelled', { orderId: id, orderNumber: order.orderNumber });
+                    io.to(`delivery-${dId}`).emit('order-status-updated', { orderId: id, status: 'Cancelled' });
+                }
+            }
         } catch (err) {
             console.error("Notification error:", err);
         }

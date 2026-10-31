@@ -15,6 +15,7 @@ import {
   sellerRejectOrder,
 } from "../../../services/orderFlowService";
 import { notifyDeliveryBoysOfNewOrder } from "../../../services/orderNotificationService";
+import { getSocketIO } from "../../../socket/socketService";
 
 // Dates are shown in Indian time, DD/MM/YYYY (en-US formatting showed 2 Oct as "10/02")
 const formatDateIN = (date?: Date | null) =>
@@ -379,10 +380,17 @@ export const updateOrderStatus = asyncHandler(
       throw error;
     }
 
-    const io = req.app.get("io");
+    const io = req.app.get("io") || getSocketIO();
     if (io) {
       io.to(`order-${id}`).emit('order-status-updated', { orderId: id, status: updatedOrder.status });
+      io.to(`order-${id}`).emit('orderUpdated', { orderId: id, status: updatedOrder.status, order: updatedOrder });
+      io.to("admin-notifications").emit("orderUpdated", { orderId: id, status: updatedOrder.status, order: updatedOrder });
       notifySellersOfOrderUpdate(io, updatedOrder, action === 'cancel' || action === 'reject' ? 'ORDER_CANCELLED' : 'STATUS_UPDATE');
+      if (updatedOrder.deliveryBoy) {
+        const dId = String((updatedOrder.deliveryBoy as any)?._id || updatedOrder.deliveryBoy);
+        io.to(`delivery-${dId}`).emit('order-status-updated', { orderId: id, status: updatedOrder.status });
+        io.to(`delivery-${dId}`).emit('orderUpdated', { orderId: id, status: updatedOrder.status, order: updatedOrder });
+      }
     }
     // Every store has accepted: offer the order to delivery partners near the stores. Awaited
     // (not fire-and-forget) so it also completes on serverless hosting, where there's no socket.

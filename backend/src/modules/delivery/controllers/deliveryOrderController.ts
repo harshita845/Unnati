@@ -27,6 +27,7 @@ import Refund from "../../../models/Refund";
 import Customer from "../../../models/Customer";
 import { sendNotification } from "../../../services/notificationService";
 import { completeReturnRequest } from "../../../services/returnCompletionService";
+import { getSocketIO } from "../../../socket/socketService";
 
 // Statuses a delivery partner may set directly; "Delivered" requires the customer's OTP
 // ("Ready for pickup" is set by the store once it has packed the order)
@@ -409,9 +410,11 @@ export const updateOrderStatus = asyncHandler(async (req: Request, res: Response
     }
 
     // Emit socket events for status changes
-    const io = (req.app as any).get("io");
+    const io = (req.app as any).get("io") || getSocketIO();
     if (io) {
         io.to(`order-${id}`).emit('order-status-updated', { orderId: id, status });
+        io.to(`order-${id}`).emit('orderUpdated', { orderId: id, status, order: updated });
+        io.to("admin-notifications").emit("orderUpdated", { orderId: id, status, order: updated });
         if (otpSent) {
             const fresh = await Order.findById(id).select('deliveryOtp deliveryOtpExpiresAt');
             io.to(`order-${id}`).emit('delivery-otp-refreshed', { orderId: id, deliveryOtp: fresh?.deliveryOtp, expiresAt: fresh?.deliveryOtpExpiresAt });
@@ -432,13 +435,15 @@ async function respondToPickup(req: Request, res: Response, orderId: string, rid
     if (!riderId) return res.status(401).json({ success: false, message: "Login required" });
     try {
         const result = await verifyStorePickup(orderId, riderId, pickupCode);
-        const io = (req.app as any).get("io");
+        const io = (req.app as any).get("io") || getSocketIO();
         if (io && !result.alreadyPickedUp) {
             io.to(`order-${orderId}`).emit('store-picked-up', { orderId, sellerId: result.store.sellerId, storeName: result.store.storeName });
             if (result.orderPickedUp) {
                 io.to(`order-${orderId}`).emit('order-taken', { orderId, message: 'Collected from every store' });
                 io.to(`order-${orderId}`).emit('order-status-updated', { orderId, status: 'Picked up' });
             }
+            io.to(`order-${orderId}`).emit('orderUpdated', { orderId, status: result.order.status, order: result.order });
+            io.to("admin-notifications").emit("orderUpdated", { orderId, status: result.order.status, order: result.order });
             notifySellersOfOrderUpdate(io, result.order, 'STATUS_UPDATE');
         }
         const left = result.stores.filter((s) => !s.pickedUp);
@@ -654,18 +659,21 @@ export const verifyDeliveryOtpController = asyncHandler(async (req: Request, res
         const updatedOrder: any = await markOrderDelivered(id, deliveryId);
         await Order.updateOne({ _id: id }, { $set: { deliveryOtpVerified: true } });
 
-        const io = (req.app as any).get("io");
+        const io = (req.app as any).get("io") || getSocketIO();
         if (io) {
             io.to(`order-${id}`).emit('order-delivered', {
                 orderId: id,
                 orderNumber: updatedOrder.orderNumber,
                 message: 'Order has been delivered successfully',
             });
+            io.to(`order-${id}`).emit('order-status-updated', { orderId: id, status: 'Delivered' });
+            io.to(`order-${id}`).emit('orderUpdated', { orderId: id, status: 'Delivered', order: updatedOrder });
             io.to(`delivery-${deliveryId}`).emit('order-delivered', {
                 orderId: id,
                 orderNumber: updatedOrder.orderNumber,
                 message: 'Order delivered successfully',
             });
+            io.to("admin-notifications").emit("orderUpdated", { orderId: id, status: 'Delivered', order: updatedOrder });
             notifySellersOfOrderUpdate(io, updatedOrder, 'STATUS_UPDATE');
         }
 
